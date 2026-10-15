@@ -148,11 +148,6 @@
             placeholder="Pilih Jenis Potongan" label="Jenis Potongan" :check="false"
           />
     </div>
-    <div>
-      <FieldX :bind="{ readonly: !actionText }" class="w-full mt-3" label="" :value="values.jenis_tes"
-        :errorText="formErrors.jenis_tes?'failed':''" @input="v=>values.jenis_tes=v" :hints="formErrors.jenis_tes"
-        placeholder="Tuliskan Jenis Loker" label="Jenis Loker" :check="false" />
-    </div>
 
     <div>
           <FieldX :bind="{ readonly: !actionText , required: true}" class="w-full mt-3"
