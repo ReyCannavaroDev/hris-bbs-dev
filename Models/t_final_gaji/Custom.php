@@ -65,17 +65,22 @@ class t_final_gaji extends \App\Models\BasicModels\t_final_gaji
             foreach($det as $dt){
                 foreach($dt['t_final_gaji_det_rincian'] as $dt1){
                     $potongan = t_potongan::where('id', $dt1['t_potongan_id'])->first();
-                    $create = t_potongan_det_bayar::create([
-                        'm_potongan_id' => $dt1['t_potongan_id'],
-                        't_final_gaji_id' => $request->id,
-                        'percentage' =>  $potongan['percentage'],
-                        'nilai' => $dt1['value'],
-                        'paid_at' => \Carbon::now()
-                    ]) && $create;
+                    if ($potongan) {
+                        $create = t_potongan_det_bayar::create([
+                            't_potongan_id'   => $dt1['t_potongan_id'],
+                            't_final_gaji_id' => $request->id,
+                            'percentage'      => $potongan->percentage ?? 0,
+                            'nilai'           => $dt1['value'],
+                            'paid_at'         => \Carbon\Carbon::now()
+                        ]) && $create;
+
+                        // Periksa apakah total pembayaran sudah melunasi nilai pinjaman
+                        $totalBayar = t_potongan_det_bayar::where('t_potongan_id', $potongan->id)->sum('nilai');
+                        if ($totalBayar >= (float) $potongan->nilai) {
+                            $potongan->update(['is_lunas' => 1]);
+                        }
+                    }
                 }
-                // if($create){
-                //     $cekAngsuran = t_potongan_det_bayar::where('t_potongan_id')
-                // }
             }
 
             if ($update && $create) {

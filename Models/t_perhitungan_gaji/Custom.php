@@ -132,71 +132,64 @@ class t_perhitungan_gaji extends \App\Models\BasicModels\t_perhitungan_gaji
             }
         }
 
-        // check kehadiran karyawan
-        $attendance = \DB::select("select public.employee_attendance(?,?)",[$firstDayOfMonth,@$kary->id ?? 0]);
-        if(count($attendance)){
-            $att = $attendance[0]->employee_attendance;
-            $att = json_decode($att);
+        // check kehadiran & denda/potongan presensi karyawan (MoM BBS 7 Oktober 2026)
+        $gaji_pokok = (float) (@$standart_gaji['gaji_pokok'] ?? 0);
+        $jml_hari_sebulan = 25; // default standar BBS
+        $gaji_per_hari = $gaji_pokok > 0 ? ($gaji_pokok / $jml_hari_sebulan) : 0;
 
-            $jml_hari_sebulan = $att->work_days_in_month;
-            $tidak_masuk_kerja = $att->work_not_present;
-            $cuti_reguler = @$att->cuti_reguler;
-            $sisa_cuti_reguler = @$att->sisa_cuti_reguler;
-            $sisa_cuti_masa_kerja = @$att->sisa_cuti_masa_kerja;
-            $potongan_cuti = @$att->potongan_cuti;
-            $sisa_cuti = @$sisa_cuti_reguler+$sisa_cuti_masa_kerja;
+        try {
+            $coreGaji = new \App\Cores\PerhitunganGaji();
 
-            // gaji perhari
-            $gaji_per_hari = 0;
-            $makan_per_hari = 0;
-            $gaji_pokok = @$standart_gaji['gaji_pokok'] ?? 0;
-            if($gaji_pokok){
-                $gaji_per_hari = $gaji_pokok / $jml_hari_sebulan;
-            }
-            $standart_gaji = @$standart_gaji['uang_makan'];
-            if($standart_gaji){
-                $makan_per_hari = $standart_gaji / $jml_hari_sebulan;
-            }
-
-            // potongan tidak hadir dan jatah semua cuti sudah habis
-            if(($sisa_cuti-$tidak_masuk_kerja) < 0){
-                $sisa_cuti -= $tidak_masuk_kerja;
-                $value = $gaji_per_hari*$tidak_masuk_kerja;
+            // 1. Denda Keterlambatan (MoM 3.B: Rp 25.000 / 30 menit)
+            $dendaTelat = $coreGaji->hitungDendaKeterlambatan($kary->id, $firstDayOfMonth, $lastDayOfMonth);
+            if (!empty($dendaTelat['total_denda']) && $dendaTelat['total_denda'] > 0) {
                 $defaultColumns[] = [
-                    'label'    => "Potongan Tidak Masuk Kerja ($tidak_masuk_kerja)",
-                    'factor'   => '-',
-                    'value'    => $value,
-                    'type'     => 'Bulanan',
-                    'can_adjust' => 1
-                ];
-            }
-            
-
-            // ketika jatah cuti reguler masih ada -> potong uang makan
-            if($sisa_cuti > 0 && $potongan_cuti > 0){
-                $value = $makan_per_hari*$potongan_cuti;
-                $defaultColumns[] = [
-                    'label'    => "Potongan Uang Makan Cuti ($potongan_cuti)",
-                    'factor'   => '-',
-                    'value'    => $value,
-                    'type'     => 'Bulanan',
+                    'label'      => "Denda Keterlambatan ({$dendaTelat['total_menit_telat']} Menit)",
+                    'factor'     => '-',
+                    'value'      => (float) $dendaTelat['total_denda'],
+                    'type'       => 'Bulanan',
                     'can_adjust' => 1
                 ];
             }
 
-            // ketika jatah cuti reguler tidak ada -> potong gaji 
-            if($sisa_cuti <= 0 && $potongan_cuti > 0){
-                $value = $gaji_per_hari*$potongan_cuti;
+            // 2. Akumulasi Izin & Pemotongan Cuti / Gaji Proporsional (MoM 3.B, 3.C, 3.D)
+            $potonganIzin = $coreGaji->hitungAkumulasiIzinDanPotonganCuti($kary->id, $firstDayOfMonth, $lastDayOfMonth, $gaji_per_hari);
+            if (!empty($potonganIzin['nominal_potongan_proporsional']) && $potonganIzin['nominal_potongan_proporsional'] > 0) {
                 $defaultColumns[] = [
-                    'label'    => "Potongan Cuti ($potongan_cuti)",
-                    'factor'   => '-',
-                    'value'    => $value,
-                    'type'     => 'Bulanan',
+                    'label'      => "Potongan Izin & Cuti Habis ({$potonganIzin['hari_potong_gaji']} Hari)",
+                    'factor'     => '-',
+                    'value'      => (float) $potonganIzin['nominal_potongan_proporsional'],
+                    'type'       => 'Bulanan',
                     'can_adjust' => 1
                 ];
             }
+        } catch (\Throwable $e) {
+            // Safe fallback jika table presensi belum ada data
+        }
 
-          
+        // Fallback untuk legacy employee_attendance jika masih ada stored procedure di database
+        try {
+            $attendance = \DB::select("select public.employee_attendance(?,?)", [$firstDayOfMonth, @$kary->id ?? 0]);
+            if (count($attendance)) {
+                $att = $attendance[0]->employee_attendance;
+                $att = json_decode($att);
+
+                $tidak_masuk_kerja = $att->work_not_present ?? 0;
+                $sisa_cuti = (@$att->sisa_cuti_reguler ?? 0) + (@$att->sisa_cuti_masa_kerja ?? 0);
+
+                if (($sisa_cuti - $tidak_masuk_kerja) < 0 && empty($potonganIzin['nominal_potongan_proporsional'])) {
+                    $value = $gaji_per_hari * $tidak_masuk_kerja;
+                    $defaultColumns[] = [
+                        'label'      => "Potongan Tidak Masuk Kerja ($tidak_masuk_kerja)",
+                        'factor'     => '-',
+                        'value'      => $value,
+                        'type'       => 'Bulanan',
+                        'can_adjust' => 1
+                    ];
+                }
+            }
+        } catch (\Throwable $e) {
+            // Abaikan jika function public.employee_attendance tidak ada di server
         }
         
 
@@ -391,14 +384,34 @@ class t_perhitungan_gaji extends \App\Models\BasicModels\t_perhitungan_gaji
         try{
             $m_kary_id = $id;
             $kary = m_kary::find($m_kary_id);
-            if(!@$kary->m_standart_gaji_id) return [
+            if (!$kary) {
+                return [
+                    'm_kary_id'  => $m_kary_id,
+                    'total_gaji' => 0,
+                    'total_tax'  => 0,
+                    'netto'      => 0,
+                    'detail'     => []
+                ];
+            }
+
+            $m_standart_gaji = null;
+            if (@$kary->m_standart_gaji_id) {
+                $m_standart_gaji = m_standart_gaji::find($kary->m_standart_gaji_id);
+            }
+            if (!$m_standart_gaji && @$kary->m_zona_id && @$kary->grading_id) {
+                $m_standart_gaji = m_standart_gaji::where('m_zona_id', $kary->m_zona_id)
+                    ->where('grading_id', $kary->grading_id)
+                    ->where('is_active', true)
+                    ->first();
+            }
+
+            if (!$m_standart_gaji) return [
                 'm_kary_id'  => $m_kary_id,
                 'total_gaji' => 0,
                 'total_tax'  => 0,
                 'netto'      => 0,
                 'detail'     => []
             ];
-            $m_standart_gaji = m_standart_gaji::find($kary->m_standart_gaji_id);
 
             // default summary salary
             $getBasicSalary = $this->factorSalary($m_standart_gaji, $kary, $periode);
@@ -449,9 +462,19 @@ class t_perhitungan_gaji extends \App\Models\BasicModels\t_perhitungan_gaji
             $kary = m_kary::selectRaw("m_kary.*,m_general.value periode_text, m_dir.nama dir, m_divisi.nama divisi, m_dept.nama dept")
                 ->leftJoin('m_dir','m_dir.id','m_kary.m_dir_id')
                 ->leftJoin('m_divisi','m_divisi.id','m_kary.m_divisi_id')
-                ->leftJoin('m_dept','m_dept.id','m_kary.m_divisi_id')
-                ->join('m_general','m_general.id','m_kary.periode_gaji_id')
-                ->whereRaw('m_kary.m_standart_gaji_id in(select s.id from m_standart_gaji s where s.is_active = true)');
+                ->leftJoin('m_dept','m_dept.id','m_kary.m_dept_id')
+                ->leftJoin('m_general','m_general.id','m_kary.periode_gaji_id')
+                ->where('m_kary.is_active', true)
+                ->where(function ($q) {
+                    $q->whereRaw('m_kary.m_standart_gaji_id in(select s.id from m_standart_gaji s where s.is_active = true)')
+                      ->orWhereExists(function ($sq) {
+                          $sq->select(\DB::raw(1))
+                             ->from('m_standart_gaji as s')
+                             ->whereColumn('s.m_zona_id', 'm_kary.m_zona_id')
+                             ->whereColumn('s.grading_id', 'm_kary.grading_id')
+                             ->where('s.is_active', true);
+                      });
+                });
 
             if($req->m_dept_id) $kary = $kary->where('m_kary.m_dept_id', $req->m_dept_id);
             if($req->m_divisi_id) $kary = $kary->where('m_kary.m_divisi_id', $req->m_divisi_id);
