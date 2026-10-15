@@ -170,8 +170,8 @@
                   :value="values.gaji_pokok_periode || 'Bulanan'" @input="v=>values.gaji_pokok_periode=v"
                   :errorText="formErrors.gaji_pokok_periode?'failed':''" 
                   :hints="formErrors.gaji_pokok_periode"
-                  valueField="id" displayField="key"
-                  :options="['Bulanan']"
+                  valueField="key" displayField="key"
+                  :options="['Bulanan', 'Harian']"
                   :check="false"
                   label=""
                   placeholder="Pilih Periode" 
@@ -194,14 +194,14 @@
         <div class="col-span-8 md:col-span-6">
           <div class="flex items-center gap-2">
             <div class="flex flex-col w-[161px] items-start gap-y-2">
-              <label class="col-span-12">Uang Saku<label class="text-red-500 space-x-0 pl-0">*</label></label>
+              <label class="col-span-12">Uang Saku</label>
                 <FieldSelect
                   :bind="{ disabled: !actionText, clearable:false }" class="col-span-12 !mt-0 w-full"
                   :value="values.uang_saku_periode || 'Bulanan'" @input="v=>values.uang_saku_periode=v"
                   :errorText="formErrors.uang_saku_periode?'failed':''" 
                   :hints="formErrors.uang_saku_periode"
-                  valueField="id" displayField="key"
-                  :options="['Bulanan']"
+                  valueField="key" displayField="key"
+                  :options="['Bulanan', 'Harian']"
                   :check="false"
                   label=""
                   placeholder="Pilih Periode" 
@@ -224,14 +224,14 @@
         <div class="col-span-8 md:col-span-6">
           <div class="flex items-center gap-2">
             <div class="flex flex-col w-[161px] items-start gap-y-2">
-              <label class="col-span-12">Tunjangan Posisi<label class="text-red-500 space-x-0 pl-0">*</label></label>
+              <label class="col-span-12">Tunjangan Posisi</label>
                 <FieldSelect
                   :bind="{ disabled: !actionText, clearable:false }" class="col-span-12 !mt-0 w-full"
                   :value="values.tunjangan_posisi_periode || 'Bulanan'" @input="v=>values.tunjangan_posisi_periode=v"
                   :errorText="formErrors.tunjangan_posisi_periode?'failed':''" 
                   :hints="formErrors.tunjangan_posisi_periode"
-                  valueField="id" displayField="key"
-                  :options="['Bulanan']"
+                  valueField="key" displayField="key"
+                  :options="['Bulanan', 'Harian']"
                   :check="false"
                   label=""
                   placeholder="Pilih Periode" 
@@ -255,14 +255,14 @@
         <div class="col-span-8 md:col-span-6">
           <div class="flex items-center gap-2">
             <div class="flex flex-col w-[161px] items-start gap-y-2">
-              <label class="col-span-12">Tunjangan Kemahalan<label class="text-red-500 space-x-0 pl-0">*</label></label>
+              <label class="col-span-12">Tunjangan Kemahalan</label>
                 <FieldSelect
                   :bind="{ disabled: !actionText, clearable:false }" class="col-span-12 !mt-0 w-full"
                   :value="values.tunjangan_kemahalan_periode || 'Bulanan'" @input="v=>values.tunjangan_kemahalan_periode=v"
                   :errorText="formErrors.tunjangan_kemahalan_periode?'failed':''" 
                   :hints="formErrors.tunjangan_kemahalan_periode"
-                  valueField="id" displayField="key"
-                  :options="['Bulanan']"
+                  valueField="key" displayField="key"
+                  :options="['Bulanan', 'Harian']"
                   :check="false"
                   label=""
                   placeholder="Pilih Periode" 
@@ -328,14 +328,14 @@
         <div class="col-span-8 md:col-span-6">
           <div class="flex items-center gap-2">
             <div class="flex flex-col w-[161px] items-start gap-y-2">
-              <label class="col-span-12">Uang Makan<label class="text-red-500 space-x-0 pl-0">*</label></label>
+              <label class="col-span-12">Uang Makan</label>
                 <FieldSelect
                   :bind="{ disabled: !actionText, clearable:false }" class="col-span-12 !mt-0 w-full"
                   :value="values.uang_makan_periode || 'Bulanan'" @input="v=>values.uang_makan_periode=v"
                   :errorText="formErrors.uang_makan_periode?'failed':''" 
                   :hints="formErrors.uang_makan_periode"
-                  valueField="id" displayField="key"
-                  :options="['Bulanan']"
+                  valueField="key" displayField="key"
+                  :options="['Bulanan', 'Harian']"
                   :check="false"
                   label=""
                   placeholder="Pilih Periode" 
@@ -358,14 +358,14 @@
         <div class="col-span-8 md:col-span-6">
           <div class="flex items-center gap-2">
             <div class="flex flex-col w-[161px] items-start gap-y-2">
-              <label class="col-span-12">Tunjangan Masa Kerja<label class="text-red-500 space-x-0 pl-0">*</label></label>
+              <label class="col-span-12">Tunjangan Masa Kerja</label>
                 <FieldSelect
                   :bind="{ disabled: !actionText, clearable:false }" class="col-span-12 !mt-0 w-full"
                   :value="values.tunjangan_tetap_periode || 'Bulanan'" @input="v=>values.tunjangan_tetap_periode=v"
                   :errorText="formErrors.tunjangan_tetap_periode?'failed':''" 
                   :hints="formErrors.tunjangan_tetap_periode"
-                  valueField="id" displayField="key"
-                  :options="['Bulanan']"
+                  valueField="key" displayField="key"
+                  :options="['Bulanan', 'Harian']"
                   :check="false"
                   label=""
                   placeholder="Pilih Periode" 

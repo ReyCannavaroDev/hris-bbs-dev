@@ -279,7 +279,7 @@ const landing = reactive({
     },
     params: {
       simplest: true,
-      searchfield:'this.id, m_dir.nama, this.kode, m_divisi.nama, m_dept.nama, m_zona.nama, m_posisi.desc_kerja',
+      searchfield:'this.id, this.kode, m_general.value, m_zona.nama, m_posisi.desc_kerja',
     },
     onsuccess(response) {
       response.page = response.current_page
@@ -296,16 +296,6 @@ const landing = reactive({
     filter: true,
     cellClass: ['justify-center', 'bg-gray-50', 'border-r', '!border-gray-200']
   },
-  // {
-  //   headerName:"Direktorat",
-  //   field: 'm_dir.nama',
-  //   filter: true,
-  //   sortable: true,
-  //   flex:1,
-  //   filter: 'ColFilter',
-  //   resizable: true,
-  //   cellClass: [ 'border-r', '!border-gray-200', 'justify-start']
-  // },
   {
     headerName:"Kode",
     field: 'kode',
@@ -317,6 +307,17 @@ const landing = reactive({
     cellClass: [ 'border-r', '!border-gray-200', 'justify-start']
   },
   {
+    headerName:"Grading",
+    field: 'grading.value',
+    filter: true,
+    sortable: true,
+    width: 100,
+    filter: 'ColFilter',
+    resizable: true,
+    valueGetter: (p) => p.data['grading.value'] || p.data['grading.code'] || '-',
+    cellClass: [ 'border-r', '!border-gray-200', 'justify-center']
+  },
+  {
     headerName:"Zona",
     field: 'm_zona.nama',
     filter: true,
@@ -326,7 +327,7 @@ const landing = reactive({
     flex:1,
     cellClass: [ 'border-r', '!border-gray-200', 'justify-start']
   },
-    {
+  {
     headerName:"Posisi",
     field: 'm_posisi.desc_kerja',
     filter: true,
@@ -334,7 +335,39 @@ const landing = reactive({
     filter: 'ColFilter',
     resizable: true,
     flex:1,
+    valueGetter: (p) => p.data['m_posisi.desc_kerja'] || '-',
     cellClass: [ 'border-r', '!border-gray-200', 'justify-start']
+  },
+  {
+    headerName:"Gaji Pokok",
+    field: 'gaji_pokok',
+    filter: true,
+    sortable: true,
+    filter: 'ColFilter',
+    resizable: true,
+    flex:1,
+    valueGetter: (p) => p.data.gaji_pokok ? 'Rp ' + Number(p.data.gaji_pokok).toLocaleString('id-ID') : 'Rp 0',
+    cellClass: [ 'border-r', '!border-gray-200', 'justify-end']
+  },
+  {
+    headerName:"Periode",
+    field: 'gaji_pokok_periode',
+    filter: true,
+    sortable: true,
+    filter: 'ColFilter',
+    resizable: true,
+    width: 110,
+    valueGetter: (p) => p.data.gaji_pokok_periode || 'Bulanan',
+    cellClass: [ 'border-r', '!border-gray-200', 'justify-center']
+  },
+  {
+    headerName:"Status",
+    field: 'is_active',
+    filter: true,
+    sortable: true,
+    width: 100,
+    valueGetter: (p) => p.data.is_active ? 'Active' : 'InActive',
+    cellClass: (p) => [ 'border-r', '!border-gray-200', 'justify-center', 'font-semibold', p.data.is_active ? '!text-green-600' : '!text-red-500']
   },
   ]
 })
