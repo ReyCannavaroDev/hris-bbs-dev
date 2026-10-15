@@ -34,8 +34,8 @@
           />
         </div>
         <div>
-          <label class="font-semibold">Karyawan<span class="text-red-500 space-x-0 pl-0">*</span></label>
-          <FieldPopup :bind="{ readonly: !actionText }" class="w-full py-2 !mt-0" :value="values.m_kary_id"
+          <label class="font-semibold">Karyawan<span class="text-red-500 space-x-0 pl-0" v-if="!values.is_all_kary">*</span> <small v-if="values.is_all_kary" class="text-blue-600 font-normal text-xs">(Semua Karyawan)</small></label>
+          <FieldPopup :bind="{ readonly: !actionText || values.is_all_kary }" class="w-full py-2 !mt-0" :value="values.m_kary_id"
             @input="(v)=>values.m_kary_id=v" :errorText="formErrors.m_kary_id?'failed':''" :hints="formErrors.m_kary_id"
             valueField="id" displayField="nama_depan" @update:valueFull="(objVal)=>{
           values.m_divisi_lama_id = objVal['m_divisi.id']
@@ -201,14 +201,17 @@
           />
         </div>
         <div>
-          <label class="font-semibold">Persentase Angsuran<span class="text-red-500 space-x-0 pl-0">*</span><label class="text-red-500 space-x-0 pl-0"></label></label>
+          <label class="font-semibold">Persentase Angsuran (%)<span class="text-red-500 space-x-0 pl-0">*</span></label>
           <FieldNumber :bind="{ readonly: !actionText }" class="w-full py-2 !mt-0"
-            placeholder="1%"
+            placeholder="Contoh: 50 untuk 50% per bulan"
             :value="values.percentage" :errorText="formErrors.percentage?'failed':''"
             @input="v=>values.percentage=v" :hints="formErrors.percentage" 
             :check="false"
             label=""
           />
+          <small v-if="values.nilai && values.percentage" class="text-blue-600 font-medium text-xs mt-1 block">
+            Estimasi: Rp {{ Math.round(values.nilai * values.percentage / 100).toLocaleString('id-ID') }} / bulan (Tenor ~{{ Math.ceil(100 / (values.percentage || 100)) }}x)
+          </small>
         </div>
         <div>
           <label class="font-semibold">Keterangan</label>

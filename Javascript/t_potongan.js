@@ -274,7 +274,7 @@ const landing = reactive({
     },
     params: {
       simplest: true,
-      searchfield:'this.id, nomor, m_kary.nama_depan, bulan, tahun, keterangan, status',
+      searchfield:'this.id, this.nomor, m_kary.nama_depan, m_general.value, this.keterangan, this.status',
     },
     onsuccess(response) {
       response.page = response.current_page
@@ -289,9 +289,8 @@ const landing = reactive({
     sortable: true,
     resizable: true,
     filter: true,
-    cellClass: ['justify-left', 'bg-gray-50', 'border-r', '!border-gray-200']
+    cellClass: ['justify-center', 'bg-gray-50', 'border-r', '!border-gray-200']
   },
-
   {
     field: 'nomor',
     headerName: 'Nomor',
@@ -303,34 +302,45 @@ const landing = reactive({
     cellClass: [ 'border-r', '!border-gray-200', 'justify-start']
   },
   {
-    field: 'm_kary.nama_depan',
     headerName: 'Karyawan',
     filter: true,
     sortable: true,
     flex:1,
     filter: 'ColFilter',
     resizable: true,
-    cellClass: [ 'border-r', '!border-gray-200', 'justify-left']
+    valueGetter: (p) => p.data.is_all_kary ? 'Semua Karyawan' : (p.data['m_kary.nama_depan'] || p.data['m_kary.nama_lengkap'] || '-'),
+    cellClass: (p) => [ 'border-r', '!border-gray-200', p.data.is_all_kary ? '!text-blue-600 font-semibold justify-center' : 'justify-left']
   },
-  // {
-  //   field: 'periode',
-  //   headerName: 'Periode',
-  //   filter: true,
-  //   sortable: true,
-  //   flex:1,
-  //   filter: 'ColFilter',
-  //   resizable: true,
-  //   cellClass: [ 'border-r', '!border-gray-200', 'justify-left']
-  // },
   {
-    field: 'keterangan',
-    headerName: 'Keterangan',
+    headerName: 'Jenis Potongan',
     filter: true,
     sortable: true,
     flex:1,
     filter: 'ColFilter',
     resizable: true,
+    valueGetter: (p) => p.data['m_general.value'] || p.data['jenis_potongan.value'] || '-',
     cellClass: [ 'border-r', '!border-gray-200', 'justify-left']
+  },
+  {
+    headerName: 'Nilai Total',
+    field: 'nilai',
+    filter: true,
+    sortable: true,
+    flex:1,
+    filter: 'ColFilter',
+    resizable: true,
+    valueGetter: (p) => p.data.nilai ? 'Rp ' + Number(p.data.nilai).toLocaleString('id-ID') : 'Rp 0',
+    cellClass: [ 'border-r', '!border-gray-200', 'justify-end', 'font-medium']
+  },
+  {
+    headerName: 'Periode',
+    filter: true,
+    sortable: true,
+    flex:1,
+    filter: 'ColFilter',
+    resizable: true,
+    valueGetter: (p) => (p.data.date_from && p.data.date_to) ? `${p.data.date_from} s/d ${p.data.date_to}` : '-',
+    cellClass: [ 'border-r', '!border-gray-200', 'justify-center', 'text-xs']
   },
   {
     field: 'status',
@@ -339,13 +349,27 @@ const landing = reactive({
     sortable: true,
     filter: 'ColFilter',
     resizable: true,
-    flex:1,
+    width: 110,
     cellClass: [ 'border-r', '!border-gray-200', 'justify-center'],
     cellRenderer: ({ value }) => {
     return value 
       === "POSTED"
-      ? `<span class="text-green-500 rounded-md text-xs font-medium px-4 py-1 inline-block capitalize">${value}</span>`
-      : `<span class="text-red-500 rounded-md text-xs font-medium px-4 py-1 inline-block capitalize">${value}</span>`
+      ? `<span class="text-green-600 font-semibold text-xs px-2 py-1 rounded bg-green-50 border border-green-200">${value}</span>`
+      : `<span class="text-amber-600 font-semibold text-xs px-2 py-1 rounded bg-amber-50 border border-amber-200">${value}</span>`
+  }},
+  {
+    headerName: 'Pelunasan',
+    filter: true,
+    sortable: true,
+    width: 120,
+    filter: 'ColFilter',
+    resizable: true,
+    valueGetter: (p) => p.data.is_lunas ? 'LUNAS' : 'BELUM LUNAS',
+    cellClass: [ 'border-r', '!border-gray-200', 'justify-center'],
+    cellRenderer: ({ value }) => {
+    return value === "LUNAS"
+      ? `<span class="text-emerald-700 font-bold text-xs px-2 py-1 rounded bg-emerald-100">${value}</span>`
+      : `<span class="text-orange-700 font-semibold text-xs px-2 py-1 rounded bg-orange-100">${value}</span>`
   }},
   ]
 })

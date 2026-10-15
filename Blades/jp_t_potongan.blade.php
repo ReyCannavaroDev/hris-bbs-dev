@@ -46,7 +46,7 @@
         @input="v=>values.nomor=v" :check="false" placeholder="Masukan Nomor" label="Nomor" />
     </div>
     <div>
-          <FieldPopup :bind="{ readonly: !actionText }" class="w-full mt-3" :value="values.m_kary_id"
+          <FieldPopup :bind="{ readonly: !actionText || values.is_all_kary }" class="w-full mt-3" :value="values.m_kary_id"
             @input="(v)=>values.m_kary_id=v" :errorText="formErrors.m_kary_id?'failed':''" :hints="formErrors.m_kary_id"
             valueField="id" displayField="nama_depan" @update:valueFull="(objVal)=>{
           values.m_divisi_lama_id = objVal['m_divisi.id']
@@ -60,7 +60,7 @@
             simplest:true,
             searchfield:'nik, nama_depan, m_dir.nama, m_divisi.nama, id'
           }
-        }"  placeholder="Pilih Karyawan" label="Karyawan" :check="false" :columns="[
+        }"  :placeholder="values.is_all_kary ? 'Berlaku untuk semua karyawan' : 'Pilih Karyawan'" :label="values.is_all_kary ? 'Karyawan (Semua Karyawan)' : 'Karyawan*'" :check="false" :columns="[
           {
             headerName: 'No',
             valueGetter: (p) => p.node.rowIndex + 1,
@@ -209,12 +209,15 @@
     </div>
     <div>
           <FieldNumber :bind="{ readonly: !actionText }" class="w-full mt-3"
-            placeholder="1%"
+            placeholder="Contoh: 50 untuk 50% per bulan"
             :value="values.percentage" :errorText="formErrors.percentage?'failed':''"
             @input="v=>values.percentage=v" :hints="formErrors.percentage" 
             :check="false"
-            label="Persentase Angsuran"
+            label="Persentase Angsuran (%)"
           />
+          <small v-if="values.nilai && values.percentage" class="text-blue-600 font-medium text-xs mt-1 block">
+            Estimasi: Rp {{ Math.round(values.nilai * values.percentage / 100).toLocaleString('id-ID') }} / bulan (Tenor ~{{ Math.ceil(100 / (values.percentage || 100)) }}x)
+          </small>
     </div>
 
     <div> 
