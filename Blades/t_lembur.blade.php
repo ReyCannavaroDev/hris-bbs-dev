@@ -164,32 +164,29 @@
             @input="v => { values.jam_selesai_realisasi = v; hitungDurasi(); }" :hints="formErrors.jam_selesai_realisasi" :check="false" />
         </div>
 
-        <!-- SUMMARY DURASI LEMBUR (MoM BBS Poin 3.K) -->
-        <div class="col-span-1 md:col-span-2 bg-blue-50 border border-blue-200 rounded p-3 my-1">
-          <div class="text-xs font-semibold text-blue-900 mb-1">
-            <icon fa="info-circle" class="mr-1" /> Ketentuan Pengakuan Durasi Lembur (MoM BBS 7 Okt 2026 Poin 3.K):
-          </div>
-          <div class="grid grid-cols-2 md:grid-cols-4 gap-2 text-xs">
-            <div class="bg-white p-2 rounded border border-blue-100">
-              <span class="text-gray-500 block">Durasi Rencana SPK:</span>
-              <span class="font-bold text-gray-800">{{ values.interval_min ? values.interval_min + ' menit (' + (values.interval_min/60).toFixed(1) + ' jam)' : '-' }}</span>
-            </div>
-            <div class="bg-white p-2 rounded border border-blue-100">
-              <span class="text-gray-500 block">Durasi Realisasi:</span>
-              <span class="font-bold text-gray-800">{{ values.realisasi_min ? values.realisasi_min + ' menit (' + (values.realisasi_min/60).toFixed(1) + ' jam)' : '(Belum diisi)' }}</span>
-            </div>
-            <div class="bg-green-50 p-2 rounded border border-green-200">
-              <span class="text-green-700 block font-semibold">Durasi Diakui (Min):</span>
-              <span class="font-bold text-green-900">{{ values.diakui_min ? values.diakui_min + ' menit (' + (values.diakui_min/60).toFixed(1) + ' jam)' : '-' }}</span>
-            </div>
-            <div class="bg-white p-2 rounded border border-blue-100">
-              <span class="text-gray-500 block">Estimasi Nominal (Rp):</span>
-              <span class="font-bold text-blue-800">{{ values.total_lembur ? 'Rp ' + Number(values.total_lembur).toLocaleString('id-ID') : '-' }}</span>
-            </div>
-          </div>
-          <div class="text-[11px] text-gray-500 mt-1 italic">
-            *Durasi diakui mengambil durasi terkecil antara rencana SPK dan realisasi lembur.
-          </div>
+        <div>
+          <label class="font-semibold">Durasi SPK</label>
+          <FieldX :bind="{ readonly: true }" class="w-full py-2 !mt-0"
+            :value="values.interval_min ? values.interval_min + ' menit (' + (values.interval_min/60).toFixed(1) + ' jam)' : '-'"
+            :check="false" label="" placeholder="-" />
+        </div>
+        <div>
+          <label class="font-semibold">Durasi Realisasi</label>
+          <FieldX :bind="{ readonly: true }" class="w-full py-2 !mt-0"
+            :value="values.realisasi_min ? values.realisasi_min + ' menit (' + (values.realisasi_min/60).toFixed(1) + ' jam)' : '-'"
+            :check="false" label="" placeholder="-" />
+        </div>
+        <div>
+          <label class="font-semibold">Durasi Diakui</label>
+          <FieldX :bind="{ readonly: true }" class="w-full py-2 !mt-0"
+            :value="values.diakui_min ? values.diakui_min + ' menit (' + (values.diakui_min/60).toFixed(1) + ' jam)' : '-'"
+            :check="false" label="" placeholder="-" />
+        </div>
+        <div>
+          <label class="font-semibold">Estimasi Total Lembur</label>
+          <FieldX :bind="{ readonly: true }" class="w-full py-2 !mt-0"
+            :value="values.total_lembur ? 'Rp ' + Number(values.total_lembur).toLocaleString('id-ID') : '-'"
+            :check="false" label="" placeholder="-" />
         </div>
         <div>
           <label class="font-semibold">Tipe Lembur<span class="text-red-500 space-x-0 pl-0">*</span></label>

@@ -119,11 +119,13 @@ onBeforeMount(async () => {
   for (const key in initialValues) {
     values[key] = initialValues[key]
   }
+  hitungDurasi()
 })
 onMounted(() => {
   if (!is_superadmin.value) {
     values.m_kary_id = store.user.data?.m_kary_id
   }
+  hitungDurasi()
 })
 
 function hitungMenitJs(from, to) {
@@ -139,7 +141,7 @@ function hitungMenitJs(from, to) {
 function hitungDurasi() {
   if (values.jam_mulai && values.jam_selesai) {
     const spkMin = hitungMenitJs(values.jam_mulai, values.jam_selesai);
-    values.interval_min = spkMin;
+    values.interval_min = values.interval_min || spkMin;
 
     if (values.jam_mulai_realisasi && values.jam_selesai_realisasi) {
       const realMin = hitungMenitJs(values.jam_mulai_realisasi, values.jam_selesai_realisasi);
@@ -148,10 +150,10 @@ function hitungDurasi() {
       values.diakui_min = Math.min(spkMin, realMin);
     } else {
       values.realisasi_min = null;
-      values.diakui_min = spkMin;
+      values.diakui_min = values.interval_min || spkMin;
     }
 
-    if (values.tarif_lembur) {
+    if (values.tarif_lembur && !values.total_lembur) {
       values.total_lembur = Math.round((values.diakui_min / 60) * Number(values.tarif_lembur));
     }
   }
