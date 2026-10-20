@@ -66,12 +66,14 @@ const setStandartGaji = async () => {
 const values = reactive({
   is_active: 1,
   direktorat: store.user.data?.direktorat,
+  tgl_masuk: null,
+  tgl_berhenti: null,
   cuti_p24: 0,
   cuti_reguler: 0,
-  cuti_masa_kerja:0,
-  cuti_p24_terpakai:0,
-  sisa_cuti_reguler:0,
-  sisa_cuti_masa_kerja:0,
+  cuti_masa_kerja: 0,
+  cuti_p24_terpakai: 0,
+  sisa_cuti_reguler: 0,
+  sisa_cuti_masa_kerja: 0,
 
 })
 
@@ -999,7 +1001,7 @@ const landing = reactive({
     },
     params: {
       simplest: true,
-      searchfield:'this.id, this.nik, this.kode, atasan.nama_lengkap, this.nama_lengkap, m_dir.nama, m_dept.nama, this.alamat_domisili, this.no_tlp',
+      searchfield:'this.id, this.nik, this.kode, atasan.nama_lengkap, this.nama_lengkap, m_dir.nama, m_dept.nama, this.alamat_domisili, this.no_tlp, this.tgl_masuk, this.tgl_berhenti',
     },
     onsuccess(response) {
       response.page = response.current_page

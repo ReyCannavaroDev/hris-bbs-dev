@@ -591,7 +591,20 @@
             :value="values.limit_potong" :errorText="formErrors.limit_potong?'failed':''"
             @input="v=>values.limit_potong=v" :hints="formErrors.limit_potong" placeholder="Limit Potong"
             :check="false" />
-
+        </div>
+        <div>
+          <label class="col-span-12">Tanggal Masuk Kerja<label class="text-red-500 space-x-0 pl-0">*</label></label>
+          <FieldX :bind="{ readonly: !actionText }" type="date" class="w-full mt-3"
+            :value="values.tgl_masuk" label="" placeholder="Pilih Tanggal Masuk"
+            :errorText="formErrors.tgl_masuk?'failed':''" @input="v=>values.tgl_masuk=v"
+            :hints="formErrors.tgl_masuk" :check="false" />
+        </div>
+        <div>
+          <label class="col-span-12">Tanggal Berhenti Kerja</label>
+          <FieldX :bind="{ readonly: !actionText }" type="date" class="w-full mt-3"
+            :value="values.tgl_berhenti" label="" placeholder="Pilih Tanggal Berhenti"
+            :errorText="formErrors.tgl_berhenti?'failed':''" @input="v=>values.tgl_berhenti=v"
+            :hints="formErrors.tgl_berhenti" :check="false" />
         </div>
       </div>
       <!-- Sosial Media -->

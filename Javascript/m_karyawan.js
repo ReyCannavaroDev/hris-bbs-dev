@@ -66,6 +66,8 @@ const values = reactive({
   is_active: 1,
   direktorat: store.user.data?.direktorat,
   username: null,
+  tgl_masuk: null,
+  tgl_berhenti: null,
   cuti_p24: 0,
   cuti_reguler: 0,
   cuti_masa_kerja: 0,
@@ -1121,7 +1123,7 @@ const landing = reactive({
     },
     params: {
       simplest: true,
-      searchfield: 'this.id, this.nik, this.kode, atasan.nama_lengkap, this.nama_lengkap, m_dir.nama, m_dept.nama, this.alamat_domisili, this.no_tlp',
+      searchfield: 'this.id, this.nik, this.kode, atasan.nama_lengkap, this.nama_lengkap, m_dir.nama, m_dept.nama, this.alamat_domisili, this.no_tlp, this.tgl_masuk, this.tgl_berhenti',
     },
     onsuccess(response) {
       response.page = response.current_page
@@ -1187,6 +1189,16 @@ const landing = reactive({
     resizable: true,
     flex: 1,
     cellClass: ['border-r', '!border-gray-200', 'justify-start']
+  },
+  {
+    headerName: 'Tgl Masuk',
+    field: 'tgl_masuk',
+    filter: true,
+    sortable: true,
+    filter: 'ColFilter',
+    resizable: true,
+    flex: 1,
+    cellClass: ['border-r', '!border-gray-200', 'justify-center']
   },
   {
     headerName: 'Can Outscope',

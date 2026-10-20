@@ -792,24 +792,24 @@
           </div>
         </div>
 
-        <!-- <div class="col-span-8 md:col-span-6">
-            <div class="grid grid-cols-12 items-center gap-1 ">
-              <div class="grid grid-cols-12 col-span-6">
-                <label class="col-span-12">Tanggal Masuk Kerja<label class="text-red-500 space-x-0 pl-0">*</label></label>
-                <FieldX :bind="{ readonly: !actionText && !isProfile, disabled:!actionText && !isProfile }" type="date" class="col-span-12 !mt-0 w-full"
-                  :value="values.tgl_masuk" label="" :errorText="formErrors.tgl_masuk?'failed':''"
-                  @input="v=>values.tgl_masuk=v" :hints="formErrors.tgl_masuk" :check="false"
-                />
-              </div>
-              <div class="grid grid-cols-12 col-span-6">
-                <label class="col-span-12">Tanggal Berhenti Kerja<label class="text-red-500 space-x-0 pl-0"></label></label>
-                <FieldX :bind="{ readonly: !actionText && !isProfile, disabled: !actionText && !isProfile }" type="date" class="col-span-12 !mt-0 w-full"
-                  :value="values.tgl_berhenti" label="" :errorText="formErrors.tgl_berhenti?'failed':''"
-                  @input="v=>values.tgl_berhenti=v" :hints="formErrors.tgl_berhenti" :check="false"
-                />
-              </div>
+        <div class="col-span-8 md:col-span-6">
+          <div class="grid grid-cols-12 items-center gap-1">
+            <div class="grid grid-cols-12 col-span-6">
+              <label class="col-span-12">Tanggal Masuk Kerja<label class="text-red-500 space-x-0 pl-0">*</label></label>
+              <FieldX :bind="{ readonly: !actionText && !isProfile, disabled: !actionText && !isProfile }" type="date" class="col-span-12 !mt-0 w-full"
+                :value="values.tgl_masuk" label="" :errorText="formErrors.tgl_masuk?'failed':''"
+                @input="v=>values.tgl_masuk=v" :hints="formErrors.tgl_masuk" :check="false"
+              />
             </div>
-          </div>    -->
+            <div class="grid grid-cols-12 col-span-6">
+              <label class="col-span-12">Tanggal Berhenti Kerja<label class="text-red-500 space-x-0 pl-0"></label></label>
+              <FieldX :bind="{ readonly: !actionText && !isProfile, disabled: !actionText && !isProfile }" type="date" class="col-span-12 !mt-0 w-full"
+                :value="values.tgl_berhenti" label="" :errorText="formErrors.tgl_berhenti?'failed':''"
+                @input="v=>values.tgl_berhenti=v" :hints="formErrors.tgl_berhenti" :check="false"
+              />
+            </div>
+          </div>
+        </div>
 
 
 
