@@ -567,10 +567,22 @@ class t_perhitungan_gaji extends \App\Models\BasicModels\t_perhitungan_gaji
     public function scopeGenerateForFinal($model)
     {
         $req = app()->request;
-        $date_from = \DateTime::createFromFormat('Y-m-d', $req->periode_awal.'-01') ?? null;
-        $date_to = \DateTime::createFromFormat('Y-m-d', $req->periode_akhir.'-30') ?? null;
+        $tglAwal = $req->periode_awal;
+        $tglAkhir = $req->periode_akhir;
 
-        $model = $model->whereBetween('periode_in_date', [$date_from,$date_to]);
+        if ($tglAwal) {
+            if (strlen($tglAwal) === 7) {
+                $tglAwal = $tglAwal . '-01';
+            }
+            $model = $model->where('t_perhitungan_gaji.periode_in_date', '>=', $tglAwal);
+        }
+        if ($tglAkhir) {
+            if (strlen($tglAkhir) === 7) {
+                $tglAkhir = date('Y-m-t', strtotime($tglAkhir . '-01'));
+            }
+            $model = $model->where('t_perhitungan_gaji.periode_in_date', '<=', $tglAkhir);
+        }
+
         if($req->m_divisi_id) $model = $model->where('t_perhitungan_gaji.m_kary_divisi_id', $req->m_divisi_id);
         if($req->m_dept_id) $model = $model->where('t_perhitungan_gaji.m_kary_dept_id', $req->m_dept_id);
 

@@ -9,6 +9,24 @@ class t_final_gaji extends \App\Models\BasicModels\t_final_gaji
     {
         parent::__construct();
         $this->helper = getCore('Helper');
+        $this->fillable = array_merge($this->fillable, ['m_divisi_id', 'm_dept_id']);
+        $this->createable = array_merge($this->createable, ['m_divisi_id', 'm_dept_id']);
+        $this->updateable = array_merge($this->updateable, ['m_divisi_id', 'm_dept_id']);
+        $this->searchable = array_merge($this->searchable, ['m_divisi_id', 'm_dept_id']);
+        $this->joins = array_merge($this->joins, [
+            "m_divisi.id=t_final_gaji.m_divisi_id",
+            "m_dept.id=t_final_gaji.m_dept_id"
+        ]);
+    }
+
+    public function m_divisi() :\Illuminate\Database\Eloquent\Relations\BelongsTo
+    {
+        return $this->belongsTo('App\Models\BasicModels\m_divisi', 'm_divisi_id', 'id');
+    }
+
+    public function m_dept() :\Illuminate\Database\Eloquent\Relations\BelongsTo
+    {
+        return $this->belongsTo('App\Models\BasicModels\m_dept', 'm_dept_id', 'id');
     }
     
     public $fileColumns    = [ /*file_column*/ ];
