@@ -4,9 +4,15 @@
   $periode_to = $req->periode_to ?? date('Y-m-d');
   $raw = \DB::select("
     select 
-    tl.tanggal, tl.jam_mulai, tl.jam_selesai, tl.nomor,tl.keterangan,tl.status,tl.no_doc, k.kode nik, k.nama_lengkap, kd.nama dir, kdi.nama div,kde.nama dept, mg.value tipe_lembur, mg1.value alasan  
+      tl.tanggal, tl.jam_mulai, tl.jam_selesai, tl.interval_min,
+      tl.jam_mulai_realisasi, tl.jam_selesai_realisasi, tl.realisasi_min, tl.diakui_min,
+      tl.tarif_lembur, tl.total_lembur,
+      tl.nomor, tl.keterangan, tl.status, tl.no_doc, 
+      k.kode nik, k.nama_lengkap, kd.nama dir, kdi.nama div, kde.nama dept, 
+      mg_grade.value grading, mg.value tipe_lembur, mg1.value alasan  
     from t_lembur tl
       join m_kary k on k.id = tl.m_kary_id 
+      left join m_general mg_grade on mg_grade.id = k.grading_id
       left join m_general mg on mg.id = tl.tipe_lembur_id
       left join m_general mg1 on mg1.id = tl.alasan_id
       left join m_dir kd on kd.id = k.m_dir_id 
@@ -18,60 +24,81 @@
       and case when kde.id is not null then kde.id = coalesce(?,kde.id) else true end
       and case when k.m_posisi_id is not null then k.m_posisi_id = coalesce(?,k.m_posisi_id) else true end
       and case when tl.tipe_lembur_id is not null then tl.tipe_lembur_id = coalesce(?,tl.tipe_lembur_id) else true end
-      and case when k.id is not null then k.id =  coalesce(?,k.id) else true end
+      and case when k.id is not null then k.id = coalesce(?,k.id) else true end
       and tl.status = 'APPROVED'
-  order by tl.id
+    order by tl.tanggal asc, tl.id asc
 ", [ $periode_from, $periode_to, $req->m_dir_id, $req->m_divisi_id, $req->m_dept_id, $req->m_posisi_id, $req->tipe_lembur_id, $req->m_kary_id ]);
+
+  $total_diakui_menit = 0;
+  $total_nominal_lembur = 0;
 @endphp
-<span style="width:100%;text-align:center;font-weight:bold;"> Surat Perintah Lembur </span><br/>
+<span style="width:100%;text-align:center;font-weight:bold;font-size:12pt;display:block;"> Laporan Perhitungan & Pembayaran Lembur Mingguan </span>
+<span style="width:100%;text-align:center;font-size:8pt;color:#666;display:block;">(Sesuai MoM BBS Poin 3.J & 3.K: Perhitungan min(Durasi SPK, Durasi Realisasi))</span><br/>
 @php
-  $periode_from = date('d-m-Y', strtotime($periode_from));
-  $periode_to = date('d-m-Y', strtotime($periode_to));
+  $periode_from_label = date('d-m-Y', strtotime($periode_from));
+  $periode_to_label = date('d-m-Y', strtotime($periode_to));
 @endphp
-<span style="width:100%;text-align:center; font-size:10pt"> {{ $periode_from }} - {{ $periode_to }}</span><br/>
-<br/>
-<table width="100%" style="font-size:8px;" cellpadding="2">
-  <thead style="font-weight:semibold;">
-    <tr style="">
-      <td style="border:0.5px solid black; font-weight: bold; line-height: 20px;text-align:center; background-color: #c6c6c6;">No</td>
-      <td style="border:0.5px solid black; font-weight: bold; line-height: 20px;text-align:center; background-color: #c6c6c6;">Tanggal</td>
-      <td style="border:0.5px solid black; font-weight: bold; line-height: 20px;text-align:center; background-color: #c6c6c6;">No Lembur</td>
-      <td style="border:0.5px solid black; font-weight: bold; line-height: 20px;text-align:center; background-color: #c6c6c6;">NIK</td>
-      <td style="border:0.5px solid black; font-weight: bold; line-height: 20px;text-align:center; background-color: #c6c6c6;">Nama Karyawan</td>
-      <td style="border:0.5px solid black; font-weight: bold; line-height: 20px;text-align:center; background-color: #c6c6c6;">Direktorat</td>
-      <td style="border:0.5px solid black; font-weight: bold; line-height: 20px;text-align:center; background-color: #c6c6c6;">Divisi</td>
-      <td style="border:0.5px solid black; font-weight: bold; line-height: 20px;text-align:center; background-color: #c6c6c6;">Departemen</td>
-      <td style="border:0.5px solid black; font-weight: bold; line-height: 20px;text-align:center; background-color: #c6c6c6;">Jam Mulai</td>
-      <td style="border:0.5px solid black; font-weight: bold; line-height: 20px;text-align:center; background-color: #c6c6c6;">Jam Selesai</td>
-      <td style="border:0.5px solid black; font-weight: bold; line-height: 20px;text-align:center; background-color: #c6c6c6;">Tipe Lembur</td>
-      <td style="border:0.5px solid black; font-weight: bold; line-height: 20px;text-align:center; background-color: #c6c6c6;">Alasan</td>
-      <td style="border:0.5px solid black; font-weight: bold; line-height: 20px;text-align:center; background-color: #c6c6c6;">No Dokumen</td>
-      <td style="border:0.5px solid black; font-weight: bold; line-height: 20px;text-align:center; background-color: #c6c6c6;">Keterangan</td>
-      <td style="border:0.5px solid black; font-weight: bold; line-height: 20px;text-align:center; background-color: #c6c6c6;">Status</td>
+<span style="width:100%;text-align:center; font-size:10pt;display:block;"> Periode: {{ $periode_from_label }} s/d {{ $periode_to_label }}</span><br/>
+
+<table width="100%" style="font-size:8px;border-collapse:collapse;" cellpadding="3" cellspacing="0">
+  <thead style="font-weight:bold;">
+    <tr style="background-color: #d9e1f2; text-align:center;">
+      <td style="border:0.5px solid black;">No</td>
+      <td style="border:0.5px solid black;">Tanggal</td>
+      <td style="border:0.5px solid black;">No SPK</td>
+      <td style="border:0.5px solid black;">NIK</td>
+      <td style="border:0.5px solid black;">Nama Karyawan</td>
+      <td style="border:0.5px solid black;">Divisi / Dept</td>
+      <td style="border:0.5px solid black;">Grading</td>
+      <td style="border:0.5px solid black;">Jam SPK</td>
+      <td style="border:0.5px solid black;">Durasi SPK</td>
+      <td style="border:0.5px solid black;">Jam Realisasi</td>
+      <td style="border:0.5px solid black;">Durasi Real</td>
+      <td style="border:0.5px solid black;background-color:#c6e0b4;">Durasi Diakui</td>
+      <td style="border:0.5px solid black;">Tarif/Jam (Rp)</td>
+      <td style="border:0.5px solid black;background-color:#c6e0b4;">Total Lembur (Rp)</td>
+      <td style="border:0.5px solid black;">Status</td>
     </tr>
   </thead>
   <tbody>
     @foreach($raw as $i => $d)
     @php
-        $backgroundColor = $i % 2 === 1 ? '#f8f8f8' : ''; // Logika untuk menentukan warna latar belakang
+        $backgroundColor = $i % 2 === 1 ? '#f9f9f9' : '#ffffff';
+        $spk_menit = $d->interval_min ?? 0;
+        $real_menit = $d->realisasi_min ?? 0;
+        $diakui_menit = $d->diakui_min ?? $spk_menit;
+        $tarif = $d->tarif_lembur ?? 0;
+        $total_uang = $d->total_lembur ?? round(($diakui_menit / 60) * $tarif, 2);
+
+        $total_diakui_menit += $diakui_menit;
+        $total_nominal_lembur += $total_uang;
     @endphp
     <tr style="background-color: {{$backgroundColor}}">
       <td style="border:0.5px solid black;text-align:center;">{{ $i+1 }}</td>
-      <td style="border:0.5px solid black;text-align:left;">{{ $d->tanggal }}</td>
+      <td style="border:0.5px solid black;text-align:center;">{{ $d->tanggal }}</td>
       <td style="border:0.5px solid black;text-align:left;">{{ $d->nomor }}</td>
-      <td style="border:0.5px solid black;text-align:left;">{{ $d->nik }}</td>
+      <td style="border:0.5px solid black;text-align:center;">{{ $d->nik }}</td>
       <td style="border:0.5px solid black;text-align:left;">{{ $d->nama_lengkap }}</td>
-      <td style="border:0.5px solid black;text-align:left;">{{ $d->dir }}</td>
-      <td style="border:0.5px solid black;text-align:left;">{{ $d->div }}</td>
-      <td style="border:0.5px solid black;text-align:left;">{{ $d->dept }}</td>
-      <td style="border:0.5px solid black;text-align:left;">{{ $d->jam_mulai }}</td>
-      <td style="border:0.5px solid black;text-align:left;">{{ $d->jam_selesai }}</td>
-      <td style="border:0.5px solid black;text-align:left;">{{ $d->tipe_lembur }}</td>
-      <td style="border:0.5px solid black;text-align:left;">{{ $d->alasan }}</td>
-      <td style="border:0.5px solid black;text-align:left;">{{ $d->no_doc }}</td>
-      <td style="border:0.5px solid black;text-align:left;">{{ $d->keterangan }}</td>
-      <td style="border:0.5px solid black;text-align:left;">{{ $d->status }}</td>
+      <td style="border:0.5px solid black;text-align:left;">{{ $d->div }} / {{ $d->dept }}</td>
+      <td style="border:0.5px solid black;text-align:center;">{{ $d->grading ?? '-' }}</td>
+      <td style="border:0.5px solid black;text-align:center;">{{ substr($d->jam_mulai,0,5) }} - {{ substr($d->jam_selesai,0,5) }}</td>
+      <td style="border:0.5px solid black;text-align:center;">{{ $spk_menit ? round($spk_menit/60, 2).' jam' : '-' }}</td>
+      <td style="border:0.5px solid black;text-align:center;">{{ ($d->jam_mulai_realisasi && $d->jam_selesai_realisasi) ? substr($d->jam_mulai_realisasi,0,5).' - '.substr($d->jam_selesai_realisasi,0,5) : '-' }}</td>
+      <td style="border:0.5px solid black;text-align:center;">{{ $real_menit ? round($real_menit/60, 2).' jam' : '-' }}</td>
+      <td style="border:0.5px solid black;text-align:center;font-weight:bold;background-color:#e2efda;">{{ $diakui_menit ? round($diakui_menit/60, 2).' jam' : '-' }}</td>
+      <td style="border:0.5px solid black;text-align:right;">{{ $tarif ? number_format($tarif, 0, ',', '.') : '-' }}</td>
+      <td style="border:0.5px solid black;text-align:right;font-weight:bold;background-color:#e2efda;">{{ number_format($total_uang, 0, ',', '.') }}</td>
+      <td style="border:0.5px solid black;text-align:center;color:green;font-weight:semibold;">{{ $d->status }}</td>
     </tr>
     @endforeach
   </tbody>
-</table>  
+  <tfoot>
+    <tr style="background-color: #d9e1f2; font-weight: bold;">
+      <td colspan="11" style="border:0.5px solid black;text-align:right;padding:4px;">GRAND TOTAL PEMBAYARAN:</td>
+      <td style="border:0.5px solid black;text-align:center;background-color:#c6e0b4;">{{ round($total_diakui_menit/60, 2) }} jam</td>
+      <td style="border:0.5px solid black;"></td>
+      <td style="border:0.5px solid black;text-align:right;background-color:#c6e0b4;">Rp {{ number_format($total_nominal_lembur, 0, ',', '.') }}</td>
+      <td style="border:0.5px solid black;"></td>
+    </tr>
+  </tfoot>
+</table>

@@ -126,6 +126,37 @@ onMounted(() => {
   }
 })
 
+function hitungMenitJs(from, to) {
+  if (!from || !to) return 0;
+  const [h1, m1] = from.split(':').map(Number);
+  const [h2, m2] = to.split(':').map(Number);
+  let total1 = h1 * 60 + m1;
+  let total2 = h2 * 60 + m2;
+  if (total2 < total1) total2 += 24 * 60; // lembur lintas tengah malam
+  return Math.max(0, total2 - total1);
+}
+
+function hitungDurasi() {
+  if (values.jam_mulai && values.jam_selesai) {
+    const spkMin = hitungMenitJs(values.jam_mulai, values.jam_selesai);
+    values.interval_min = spkMin;
+
+    if (values.jam_mulai_realisasi && values.jam_selesai_realisasi) {
+      const realMin = hitungMenitJs(values.jam_mulai_realisasi, values.jam_selesai_realisasi);
+      values.realisasi_min = realMin;
+      // MoM BBS 7 Okt 2026 Poin 3.K: min(durasi_spk, durasi_realisasi)
+      values.diakui_min = Math.min(spkMin, realMin);
+    } else {
+      values.realisasi_min = null;
+      values.diakui_min = spkMin;
+    }
+
+    if (values.tarif_lembur) {
+      values.total_lembur = Math.round((values.diakui_min / 60) * Number(values.tarif_lembur));
+    }
+  }
+}
+
 function openModal(id) {
   dataLog.items = []
   modalOpen.value = true
@@ -539,6 +570,62 @@ const landing = reactive({
     filter: 'ColFilter',
     resizable: true,
     cellClass: ['border-r', '!border-gray-200', 'justify-left']
+  },
+  {
+    field: 'interval_min',
+    headerName: 'Durasi SPK',
+    filter: true,
+    sortable: true,
+    flex: 1,
+    filter: 'ColFilter',
+    resizable: true,
+    cellClass: ['border-r', '!border-gray-200', 'justify-center'],
+    valueGetter: (params) => {
+      const min = params.data?.interval_min;
+      return min ? `${min} mnt (${(min/60).toFixed(1)} jam)` : '-';
+    }
+  },
+  {
+    field: 'realisasi',
+    headerName: 'Jam Realisasi',
+    filter: false,
+    sortable: false,
+    flex: 1,
+    resizable: true,
+    cellClass: ['border-r', '!border-gray-200', 'justify-center'],
+    valueGetter: (params) => {
+      const inReal = params.data?.jam_mulai_realisasi;
+      const outReal = params.data?.jam_selesai_realisasi;
+      return (inReal && outReal) ? `${inReal} - ${outReal}` : '-';
+    }
+  },
+  {
+    field: 'diakui_min',
+    headerName: 'Durasi Diakui',
+    filter: true,
+    sortable: true,
+    flex: 1,
+    filter: 'ColFilter',
+    resizable: true,
+    cellClass: ['border-r', '!border-gray-200', 'justify-center', 'font-semibold', '!text-blue-800'],
+    valueGetter: (params) => {
+      const min = params.data?.diakui_min;
+      return min ? `${min} mnt (${(min/60).toFixed(1)} jam)` : '-';
+    }
+  },
+  {
+    field: 'total_lembur',
+    headerName: 'Total Lembur',
+    filter: true,
+    sortable: true,
+    flex: 1,
+    filter: 'ColFilter',
+    resizable: true,
+    cellClass: ['border-r', '!border-gray-200', 'justify-end', 'font-semibold'],
+    valueGetter: (params) => {
+      const tot = params.data?.total_lembur;
+      return tot ? `Rp ${Number(tot).toLocaleString('id-ID')}` : '-';
+    }
   },
   {
     headerName: 'Status',

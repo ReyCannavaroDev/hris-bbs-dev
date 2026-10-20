@@ -139,16 +139,57 @@
         </div>
 
         <div class="col-span-1 md:col-span-1">
-          <label class="font-semibold">Jam Mulai<label class="text-red-500 space-x-0 pl-0">*</label></label>
+          <label class="font-semibold">Jam Mulai (SPK)<label class="text-red-500 space-x-0 pl-0">*</label></label>
           <FieldX :bind="{ readonly: !actionText   }" class="py-2 !mt-0 w-full" type="time" fa-icon="clock"
             :value="values.jam_mulai" :errorText="formErrors.jam_mulai ? 'failed' : ''"
-            @input="v => values.jam_mulai =v" :hints="formErrors.jam_mulai" :check="false" />
+            @input="v => { values.jam_mulai = v; hitungDurasi(); }" :hints="formErrors.jam_mulai" :check="false" />
         </div>
         <div class="col-span-1 md:col-span-1">
-          <label class="font-semibold">Jam Selesai<label class="text-red-500 space-x-0 pl-0">*</label></label>
+          <label class="font-semibold">Jam Selesai (SPK)<label class="text-red-500 space-x-0 pl-0">*</label></label>
           <FieldX :bind="{ readonly: !actionText }" class="py-2 !mt-0 w-full" type="time" fa-icon="clock"
             :value="values.jam_selesai" :errorText="formErrors.jam_selesai ? 'failed' : ''"
-            @input="v => values.jam_selesai =v" :hints="formErrors.jam_selesai" :check="false" />
+            @input="v => { values.jam_selesai = v; hitungDurasi(); }" :hints="formErrors.jam_selesai" :check="false" />
+        </div>
+
+        <div class="col-span-1 md:col-span-1">
+          <label class="font-semibold">Jam Mulai (Realisasi)</label>
+          <FieldX :bind="{ readonly: !actionText }" class="py-2 !mt-0 w-full" type="time" fa-icon="clock"
+            :value="values.jam_mulai_realisasi" :errorText="formErrors.jam_mulai_realisasi ? 'failed' : ''"
+            @input="v => { values.jam_mulai_realisasi = v; hitungDurasi(); }" :hints="formErrors.jam_mulai_realisasi" :check="false" />
+        </div>
+        <div class="col-span-1 md:col-span-1">
+          <label class="font-semibold">Jam Selesai (Realisasi)</label>
+          <FieldX :bind="{ readonly: !actionText }" class="py-2 !mt-0 w-full" type="time" fa-icon="clock"
+            :value="values.jam_selesai_realisasi" :errorText="formErrors.jam_selesai_realisasi ? 'failed' : ''"
+            @input="v => { values.jam_selesai_realisasi = v; hitungDurasi(); }" :hints="formErrors.jam_selesai_realisasi" :check="false" />
+        </div>
+
+        <!-- SUMMARY DURASI LEMBUR (MoM BBS Poin 3.K) -->
+        <div class="col-span-1 md:col-span-2 bg-blue-50 border border-blue-200 rounded p-3 my-1">
+          <div class="text-xs font-semibold text-blue-900 mb-1">
+            <icon fa="info-circle" class="mr-1" /> Ketentuan Pengakuan Durasi Lembur (MoM BBS 7 Okt 2026 Poin 3.K):
+          </div>
+          <div class="grid grid-cols-2 md:grid-cols-4 gap-2 text-xs">
+            <div class="bg-white p-2 rounded border border-blue-100">
+              <span class="text-gray-500 block">Durasi Rencana SPK:</span>
+              <span class="font-bold text-gray-800">{{ values.interval_min ? values.interval_min + ' menit (' + (values.interval_min/60).toFixed(1) + ' jam)' : '-' }}</span>
+            </div>
+            <div class="bg-white p-2 rounded border border-blue-100">
+              <span class="text-gray-500 block">Durasi Realisasi:</span>
+              <span class="font-bold text-gray-800">{{ values.realisasi_min ? values.realisasi_min + ' menit (' + (values.realisasi_min/60).toFixed(1) + ' jam)' : '(Belum diisi)' }}</span>
+            </div>
+            <div class="bg-green-50 p-2 rounded border border-green-200">
+              <span class="text-green-700 block font-semibold">Durasi Diakui (Min):</span>
+              <span class="font-bold text-green-900">{{ values.diakui_min ? values.diakui_min + ' menit (' + (values.diakui_min/60).toFixed(1) + ' jam)' : '-' }}</span>
+            </div>
+            <div class="bg-white p-2 rounded border border-blue-100">
+              <span class="text-gray-500 block">Estimasi Nominal (Rp):</span>
+              <span class="font-bold text-blue-800">{{ values.total_lembur ? 'Rp ' + Number(values.total_lembur).toLocaleString('id-ID') : '-' }}</span>
+            </div>
+          </div>
+          <div class="text-[11px] text-gray-500 mt-1 italic">
+            *Durasi diakui mengambil durasi terkecil antara rencana SPK dan realisasi lembur.
+          </div>
         </div>
         <div>
           <label class="font-semibold">Tipe Lembur<span class="text-red-500 space-x-0 pl-0">*</span></label>

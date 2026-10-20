@@ -12,9 +12,14 @@ class tlembur extends Migration
         Schema::table($this->tableName, function (Blueprint $table) {
             //$table->string('_existColumnName_')->change();
             //$table->string('_columnName_');
-            //$table->dropColumn([ ]);
-            // $table->integer('interval_min')->nullable();
-            $table->bigInteger('pic_id')->comment('{"src":"default_users.id"}')->nullable()->change();
+            $table->integer('interval_min')->nullable();
+            $table->time('jam_mulai_realisasi')->nullable();
+            $table->time('jam_selesai_realisasi')->nullable();
+            $table->integer('realisasi_min')->nullable();
+            $table->integer('diakui_min')->nullable();
+            $table->decimal('tarif_lembur', 12, 2)->nullable();
+            $table->decimal('total_lembur', 14, 2)->nullable();
+            $table->bigInteger('pic_id')->comment('{"src":"default_users.id"}')->nullable();
         });
     }
 }

@@ -11,6 +11,16 @@ class t_lembur extends \App\Models\BasicModels\t_lembur
     {
         parent::__construct();
         $this->helper = getCore("Helper");
+        $this->mergeFillable([
+            'pic_id',
+            'interval_min',
+            'jam_mulai_realisasi',
+            'jam_selesai_realisasi',
+            'realisasi_min',
+            'diakui_min',
+            'tarif_lembur',
+            'total_lembur',
+        ]);
     }
 
     public $fileColumns = ["doc"];
@@ -45,8 +55,14 @@ class t_lembur extends \App\Models\BasicModels\t_lembur
     }
 
     private function hitungMenit($from, $to) {
+        if (!$from || !$to) return 0;
         $dateFrom = Carbon::parse($from);
         $dateTo = Carbon::parse($to);
+
+        // Jika jam selesai lebih kecil dari jam mulai, berarti lembur lintas tengah malam
+        if ($dateTo->lt($dateFrom)) {
+            $dateTo->addDay();
+        }
 
         // Calculate the difference in minutes for datetime range
         $minutesDifference = $dateFrom->diffInMinutes($dateTo);
@@ -54,53 +70,115 @@ class t_lembur extends \App\Models\BasicModels\t_lembur
         return $minutesDifference;
     }
 
+    /**
+     * Hitung durasi SPK, durasi realisasi, dan durasi diakui sesuai MoM BBS 7 Okt 2026 Poin 3.K:
+     * "Perhitungan lembur mengikuti jam realisasi lembur apabila durasi SPK lebih besar dari durasi realisasi.
+     * Sebaliknya, apabila durasi realisasi lembur lebih besar dari durasi yang tercantum dalam SPK, maka perhitungan mengikuti durasi SPK."
+     * Formula: min(durasi_spk, durasi_realisasi).
+     */
+    public function hitungDurasiDanTarif($arrayData, $existingData = null)
+    {
+        $jamMulaiSpk = $arrayData['jam_mulai'] ?? ($existingData->jam_mulai ?? null);
+        $jamSelesaiSpk = $arrayData['jam_selesai'] ?? ($existingData->jam_selesai ?? null);
+        $jamMulaiReal = $arrayData['jam_mulai_realisasi'] ?? ($existingData->jam_mulai_realisasi ?? null);
+        $jamSelesaiReal = $arrayData['jam_selesai_realisasi'] ?? ($existingData->jam_selesai_realisasi ?? null);
+        $mKaryId = $arrayData['m_kary_id'] ?? ($existingData->m_kary_id ?? null);
+
+        // 1. Durasi Rencana SPK (menit)
+        $durasiSpk = ($jamMulaiSpk && $jamSelesaiSpk) ? $this->hitungMenit($jamMulaiSpk, $jamSelesaiSpk) : 0;
+
+        // 2. Durasi Realisasi Aktual (menit)
+        $durasiReal = ($jamMulaiReal && $jamSelesaiReal) ? $this->hitungMenit($jamMulaiReal, $jamSelesaiReal) : null;
+
+        // 3. Durasi Diakui (MoM 3.K: min(durasi_spk, durasi_realisasi))
+        if ($durasiReal !== null && $durasiReal > 0) {
+            $diakuiMin = min($durasiSpk, $durasiReal);
+        } else {
+            // Bila realisasi belum diisi (masih tahap rencana SPK), default diakui = durasi SPK
+            $diakuiMin = $durasiSpk;
+        }
+
+        // 4. Cari Tarif Lembur dari m_lembur berdasarkan grading karyawan (MoM 3.J)
+        $tarifLembur = 0;
+        if ($mKaryId) {
+            $kary = \DB::table('m_kary')->where('id', $mKaryId)->first();
+            if ($kary) {
+                $rate = \DB::table('m_lembur')
+                    ->where('is_active', 1)
+                    ->where(function($q) use ($kary) {
+                        $q->where('grading_id', $kary->grading_id)
+                          ->orWhereNull('grading_id');
+                    })
+                    ->orderByRaw("case when grading_id = " . intval($kary->grading_id ?? 0) . " then 0 else 1 end")
+                    ->orderBy('id', 'desc')
+                    ->first();
+                if ($rate) {
+                    $tarifLembur = floatval($rate->besaran);
+                }
+            }
+        }
+
+        $totalLembur = round(($diakuiMin / 60) * $tarifLembur, 2);
+
+        return [
+            'interval_min'  => $durasiSpk,
+            'realisasi_min' => $durasiReal,
+            'diakui_min'    => $diakuiMin,
+            'tarif_lembur'  => $tarifLembur,
+            'total_lembur'  => $totalLembur
+        ];
+    }
+
     public function createBefore($model, $arrayData, $metaData, $id = null)
     {
+        $kalkulasi = $this->hitungDurasiDanTarif($arrayData);
+
         $newArrayData = array_merge($arrayData, [
-            "nomor" => $this->helper->generateNomor("KODE LEMBUR"),
-            "interval_min" => ($arrayData['jam_mulai'] !== null && $arrayData['jam_selesai'] !== null ) ? $this->hitungMenit($arrayData['jam_mulai'], $arrayData['jam_selesai']) : null,
+            "nomor"                 => $this->helper->generateNomor("KODE LEMBUR"),
+            "interval_min"          => $kalkulasi['interval_min'],
+            "realisasi_min"         => $kalkulasi['realisasi_min'],
+            "diakui_min"            => $kalkulasi['diakui_min'],
+            "tarif_lembur"          => $kalkulasi['tarif_lembur'],
+            "total_lembur"          => $kalkulasi['total_lembur'],
+            "pic_id"                => @app()->request->pic_id ?? auth()->user()->id,
         ]);
+
         if (app()->request->header("Source") == "mobile") {
-            $newArrayData = array_merge($newArrayData, [
-                "nomor" => $this->helper->generateNomor("KODE LEMBUR"),
-                "interval_min" => ($arrayData['jam_mulai'] !== null && $arrayData['jam_selesai'] !== null ) ? $this->hitungMenit($arrayData['jam_mulai'], $arrayData['jam_selesai']) : null,
-                "status" => "IN APPROVAL",
-            ]);
+            $newArrayData["status"] = "IN APPROVAL";
         }
-        $newArrayData = array_merge($newArrayData, [
-            "pic_id" => @app()->request->pic_id ?? auth()->user()->id,
-        ]);
 
         return [
             "model" => $model,
-            "data" => $newArrayData,
-            // "errors" => ['error1']
+            "data"  => $newArrayData,
         ];
     }
 
     public function updateBefore( $model, $arrayData, $metaData, $id=null )
     {
+        $existing = \DB::table('t_lembur')->where('id', $id)->first();
+        $status = $arrayData['status'] ?? ($existing->status ?? 'DRAFT');
+
         if (app()->request->header("Source") == "mobile") {
-            $data = \DB::table('t_lembur')->where('id', $id)->first();
-            if($data->status === 'REVISED'){
+            if ($existing && $existing->status === 'REVISED') {
                 $status = 'IN APPROVAL';
             }
         }
-        if (isset($arrayData['jam_mulai']) && isset($arrayData['jam_selesai']) ) {
-            $interval = $this->hitungMenit($arrayData['jam_mulai'], $arrayData['jam_selesai']);
-        }
+
+        $kalkulasi = $this->hitungDurasiDanTarif($arrayData, $existing);
 
         $newArrayData  = array_merge( $arrayData,[
-            'status' => $status ?? $arrayData['status'],
-            'interval_min' => @$interval ?? $data->interval_min,
-            "pic_id" => @app()->request->pic_id ?? auth()->user()->id,
+            'status'                => $status,
+            'interval_min'          => $kalkulasi['interval_min'],
+            'realisasi_min'         => $kalkulasi['realisasi_min'],
+            'diakui_min'            => $kalkulasi['diakui_min'],
+            'tarif_lembur'          => $kalkulasi['tarif_lembur'],
+            'total_lembur'          => $kalkulasi['total_lembur'],
+            'pic_id'                => @app()->request->pic_id ?? ($existing->pic_id ?? auth()->user()->id),
         ]);
-
 
         return [
             "model"  => $model,
             "data"   => $newArrayData,
-            // "errors" => ['error1']
         ];
     }
 
