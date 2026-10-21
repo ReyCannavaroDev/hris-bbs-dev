@@ -146,7 +146,10 @@ class PerhitunganGaji
     public function hitungDendaKeterlambatan($m_kary_id, $startDate, $endDate)
     {
         // Hubungkan karyawan ke default_users untuk membaca presensi_absensi
-        $userId = DB::table('m_pengguna')->where('m_kary_id', $m_kary_id)->value('default_user_id');
+        $userId = DB::table('default_users')->where('m_kary_id', $m_kary_id)->value('id');
+        if (!$userId) {
+            $userId = DB::table('m_pengguna')->where('m_kary_id', $m_kary_id)->value('default_user_id');
+        }
         if (!$userId) {
             $userId = DB::table('default_users')->where('id', $m_kary_id)->value('id');
         }
@@ -165,16 +168,36 @@ class PerhitunganGaji
         $totalDenda = 0;
         $rincianTelat = [];
 
-        if ($userId) {
-            $presensiList = DB::table('presensi_absensi')
-                ->where('default_user_id', $userId)
-                ->whereBetween('tanggal', [$startDate, $endDate])
-                ->whereNotNull('checkin_time')
-                ->get();
+        $presensiQuery = DB::table('presensi_absensi')
+            ->whereBetween('tanggal', [$startDate, $endDate])
+            ->whereNotNull('checkin_time');
 
-            foreach ($presensiList as $presensi) {
-                $checkin = Carbon::parse($presensi->tanggal . ' ' . $presensi->checkin_time);
-                $jadwalMulai = Carbon::parse($presensi->tanggal . ' ' . $waktuMulaiKerja);
+        if ($userId) {
+            $presensiQuery->where('default_user_id', $userId);
+        } else {
+            $presensiQuery->whereIn('default_user_id', function ($q) use ($m_kary_id) {
+                $q->select('id')->from('default_users')->where('m_kary_id', $m_kary_id);
+            });
+        }
+
+        $presensiList = $presensiQuery->get();
+
+        foreach ($presensiList as $presensi) {
+            // Cek jadwal kerja dinamis per hari jika ada
+            $jamMulaiHariIni = $waktuMulaiKerja;
+            $hariNum = Carbon::parse($presensi->tanggal)->dayOfWeek;
+            $jadwalHarian = DB::table('t_jadwal_kerja_det as d')
+                ->join('t_jadwal_kerja_det_hari as h', 'h.id', '=', 'd.t_jadwal_kerja_det_hari_id')
+                ->where('d.m_kary_id', $m_kary_id)
+                ->where('h.day_num', $hariNum)
+                ->first();
+
+            if ($jadwalHarian && !empty($jadwalHarian->waktu_mulai)) {
+                $jamMulaiHariIni = $jadwalHarian->waktu_mulai;
+            }
+
+            $checkin = Carbon::parse($presensi->tanggal . ' ' . $presensi->checkin_time);
+            $jadwalMulai = Carbon::parse($presensi->tanggal . ' ' . $jamMulaiHariIni);
 
                 if ($checkin->gt($jadwalMulai)) {
                     $menit = (int) $jadwalMulai->diffInMinutes($checkin);
@@ -197,7 +220,6 @@ class PerhitunganGaji
                     }
                 }
             }
-        }
 
         return [
             'total_hari_telat'  => count($rincianTelat),
