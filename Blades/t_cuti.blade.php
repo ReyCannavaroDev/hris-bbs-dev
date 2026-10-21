@@ -187,13 +187,13 @@
         label="" placeholder="Pilih Tanggal" :errorText="formErrors.date_to?'failed':''"
         @input="v=>values.date_to=v" :hints="formErrors.date_to" :check="false" />
     </div>
-        <div  v-if="values.tipe_cuti_id === 15434">
+        <div  v-if="values.tipe_cuti_id === 15434 || values.tipe_string?.toLowerCase() === 'p24'">
           <label class="font-semibold">Waktu Awal<label class="text-red-500 space-x-0 pl-0"></label></label>
           <FieldX :bind="{ readonly: !actionText,disabled: !actionText }" type="time" class="w-full py-2 !mt-0" :value="values.time_from"
             label="" placeholder="Masukan Waktu" :errorText="formErrors.time_from?'failed':''"
             @input="v=>values.time_from=v" :hints="formErrors.time_from" :check="false" />
         </div>
-        <div v-if="values.tipe_cuti_id === 15434">
+        <div v-if="values.tipe_cuti_id === 15434 || values.tipe_string?.toLowerCase() === 'p24'">
           <label class="font-semibold">Waktu Akhir<label class="text-red-500 space-x-0 pl-0"></label></label>
           <FieldX :bind="{ readonly: !actionText,disabled: !actionText }" type="time" class="w-full py-2 !mt-0" :value="values.time_to"
             label="" placeholder="Masukan Waktu" :errorText="formErrors.time_to?'failed':''"
