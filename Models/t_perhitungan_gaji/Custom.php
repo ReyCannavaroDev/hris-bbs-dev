@@ -177,7 +177,7 @@ class t_perhitungan_gaji extends \App\Models\BasicModels\t_perhitungan_gaji
                 $tidak_masuk_kerja = $att->work_not_present ?? 0;
                 $sisa_cuti = (@$att->sisa_cuti_reguler ?? 0) + (@$att->sisa_cuti_masa_kerja ?? 0);
 
-                if (($sisa_cuti - $tidak_masuk_kerja) < 0 && empty($potonganIzin['nominal_potongan_proporsional'])) {
+                if (($sisa_cuti - $tidak_masuk_kerja) < 0) {
                     $value = $gaji_per_hari * $tidak_masuk_kerja;
                     $defaultColumns[] = [
                         'label'      => "Potongan Tidak Masuk Kerja ($tidak_masuk_kerja)",

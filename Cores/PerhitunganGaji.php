@@ -154,9 +154,15 @@ class PerhitunganGaji
             $userId = DB::table('default_users')->where('id', $m_kary_id)->value('id');
         }
 
+        // Cek tipe jam kerja karyawan (Office vs Non-Office/Shift)
+        $tipeJamKerja = DB::table('m_kary as k')
+            ->join('m_general as g', 'g.id', '=', 'k.tipe_jam_kerja_id')
+            ->where('k.id', $m_kary_id)
+            ->value('g.code');
+
         // Cari jam mulai kerja standar
         $kary = DB::table('m_kary')->where('id', $m_kary_id)->first();
-        $waktuMulaiKerja = '08:00:00';
+        $waktuMulaiKerja = '08:30:00';
         if ($kary && !empty($kary->m_jam_kerja_id)) {
             $jamKerja = DB::table('m_jam_kerja')->where('id', $kary->m_jam_kerja_id)->first();
             if ($jamKerja && !empty($jamKerja->waktu_mulai)) {
@@ -182,19 +188,54 @@ class PerhitunganGaji
 
         $presensiList = $presensiQuery->get();
 
-        foreach ($presensiList as $presensi) {
-            // Cek jadwal kerja dinamis per hari jika ada
-            $jamMulaiHariIni = $waktuMulaiKerja;
-            $hariNum = Carbon::parse($presensi->tanggal)->dayOfWeek;
-            $jadwalHarian = DB::table('t_jadwal_kerja_det as d')
-                ->join('t_jadwal_kerja_det_hari as h', 'h.id', '=', 'd.t_jadwal_kerja_det_hari_id')
-                ->where('d.m_kary_id', $m_kary_id)
-                ->where('h.day_num', $hariNum)
-                ->first();
+        $daysMap = [
+            0 => 'minggu',
+            1 => 'senin',
+            2 => 'selasa',
+            3 => 'rabu',
+            4 => 'kamis',
+            5 => 'jumat',
+            6 => 'sabtu',
+        ];
 
-            if ($jadwalHarian && !empty($jadwalHarian->waktu_mulai)) {
-                $jamMulaiHariIni = $jadwalHarian->waktu_mulai;
+        foreach ($presensiList as $presensi) {
+            $cDate = Carbon::parse($presensi->tanggal);
+            $dayOfWeek = $cDate->dayOfWeek;
+            $namaHari = $daysMap[$dayOfWeek] ?? '';
+
+            // Cari jadwal kerja dinamis per hari (selaras dengan Laporan Detail Presensi)
+            $jadwalHarian = null;
+            if (strtolower($tipeJamKerja ?? '') === 'office') {
+                $jadwalHarian = DB::table('t_jadwal_kerja as t')
+                    ->join('t_jadwal_kerja_det_hari as h', 'h.t_jadwal_kerja_id', '=', 't.id')
+                    ->where('t.status', 'POSTED')
+                    ->whereRaw('lower(h.day) = ?', [$namaHari])
+                    ->first();
+            } else {
+                $jadwalHarian = DB::table('t_jadwal_kerja as t')
+                    ->join('t_jadwal_kerja_det_hari as h', 'h.t_jadwal_kerja_id', '=', 't.id')
+                    ->join('t_jadwal_kerja_det as d', 'd.t_jadwal_kerja_det_hari_id', '=', 'h.id')
+                    ->where('t.status', 'POSTED')
+                    ->where('d.m_kary_id', $m_kary_id)
+                    ->whereRaw('lower(h.day) = ?', [$namaHari])
+                    ->first();
             }
+
+            // Fallback ke header jadwal jika belum ketemu di detail
+            if (!$jadwalHarian) {
+                $jadwalHarian = DB::table('t_jadwal_kerja as t')
+                    ->join('t_jadwal_kerja_det_hari as h', 'h.t_jadwal_kerja_id', '=', 't.id')
+                    ->where('t.status', 'POSTED')
+                    ->whereRaw('lower(h.day) = ?', [$namaHari])
+                    ->first();
+            }
+
+            // Jika hari libur, tidak dihitung keterlambatan
+            if ($jadwalHarian && isset($jadwalHarian->tipe_hari) && strtolower($jadwalHarian->tipe_hari) === 'hari libur') {
+                continue;
+            }
+
+            $jamMulaiHariIni = (!empty($jadwalHarian->waktu_mulai)) ? $jadwalHarian->waktu_mulai : $waktuMulaiKerja;
 
             // Jika ada izin resmi jam-jaman (P24) yang disetujui, jam masuk disesuaikan dengan batas akhir izin
             $izinP24 = DB::table('t_cuti')
@@ -210,31 +251,30 @@ class PerhitunganGaji
                     $jamMulaiHariIni = $izinP24->time_to;
                 }
             }
-
             $checkin = Carbon::parse($presensi->tanggal . ' ' . $presensi->checkin_time);
             $jadwalMulai = Carbon::parse($presensi->tanggal . ' ' . $jamMulaiHariIni);
 
-                if ($checkin->gt($jadwalMulai)) {
-                    $menit = (int) $jadwalMulai->diffInMinutes($checkin);
-                    if ($menit > 0) {
-                        // Formula MoM 3.B: Kelipatan 30 menit x Rp 25.000
-                        $kelipatan = (int) floor($menit / 30);
-                        $dendaHariIni = $kelipatan * $this->tarifDendaTelatPer30Menit;
+            if ($checkin->gt($jadwalMulai)) {
+                $menit = (int) $jadwalMulai->diffInMinutes($checkin);
+                if ($menit > 0) {
+                    // Formula MoM 3.B: Kelipatan 30 menit x Rp 25.000
+                    $kelipatan = (int) floor($menit / 30);
+                    $dendaHariIni = $kelipatan * $this->tarifDendaTelatPer30Menit;
 
-                        $totalMenitTelat += $menit;
-                        $totalDenda += $dendaHariIni;
+                    $totalMenitTelat += $menit;
+                    $totalDenda += $dendaHariIni;
 
-                        $rincianTelat[] = [
-                            'tanggal'      => $presensi->tanggal,
-                            'checkin_time' => $presensi->checkin_time,
-                            'jadwal_masuk' => $waktuMulaiKerja,
-                            'menit_telat'  => $menit,
-                            'kelipatan_30' => $kelipatan,
-                            'denda'        => $dendaHariIni,
-                        ];
-                    }
+                    $rincianTelat[] = [
+                        'tanggal'      => $presensi->tanggal,
+                        'checkin_time' => $presensi->checkin_time,
+                        'jadwal_masuk' => $jamMulaiHariIni,
+                        'menit_telat'  => $menit,
+                        'kelipatan_30' => $kelipatan,
+                        'denda'        => $dendaHariIni,
+                    ];
                 }
             }
+        }
 
         return [
             'total_hari_telat'  => count($rincianTelat),
@@ -264,10 +304,13 @@ class PerhitunganGaji
 
         // Ambil permohonan izin/cuti yang disetujui dalam rentang tanggal
         $daftarCuti = DB::table('t_cuti')
-            ->where('m_kary_id', $m_kary_id)
-            ->whereDate('date_from', '>=', $startDate)
-            ->whereDate('date_to', '<=', $endDate)
-            ->whereIn('status', ['APPROVED', 'POSTED'])
+            ->leftJoin('m_general as al', 'al.id', '=', 't_cuti.alasan_id')
+            ->leftJoin('m_general as tc', 'tc.id', '=', 't_cuti.tipe_cuti_id')
+            ->select('t_cuti.*', 'al.value as alasan_value', 'tc.value as tipe_cuti_value')
+            ->where('t_cuti.m_kary_id', $m_kary_id)
+            ->whereDate('t_cuti.date_from', '>=', $startDate)
+            ->whereDate('t_cuti.date_to', '<=', $endDate)
+            ->whereIn('t_cuti.status', ['APPROVED', 'POSTED'])
             ->get();
 
         $totalMenitIzinParsial = 0;
@@ -275,7 +318,7 @@ class PerhitunganGaji
         $rincianIzin = [];
 
         foreach ($daftarCuti as $cuti) {
-            $keteranganLower = strtolower($cuti->keterangan ?? '');
+            $keteranganLower = strtolower(trim(($cuti->keterangan ?? '') . ' ' . ($cuti->alasan_value ?? '') . ' ' . ($cuti->tipe_cuti_value ?? '')));
 
             // MoM 3.D: Sakit dengan surat dokter dikecualikan
             if (str_contains($keteranganLower, 'sakit')) {
