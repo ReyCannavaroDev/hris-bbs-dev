@@ -196,6 +196,21 @@ class PerhitunganGaji
                 $jamMulaiHariIni = $jadwalHarian->waktu_mulai;
             }
 
+            // Jika ada izin resmi jam-jaman (P24) yang disetujui, jam masuk disesuaikan dengan batas akhir izin
+            $izinP24 = DB::table('t_cuti')
+                ->where('m_kary_id', $m_kary_id)
+                ->whereIn('status', ['APPROVED', 'POSTED'])
+                ->whereDate('date_from', '<=', $presensi->tanggal)
+                ->whereDate('date_to', '>=', $presensi->tanggal)
+                ->whereNotNull('time_to')
+                ->first();
+
+            if ($izinP24 && !empty($izinP24->time_to)) {
+                if (strtotime($izinP24->time_to) > strtotime($jamMulaiHariIni)) {
+                    $jamMulaiHariIni = $izinP24->time_to;
+                }
+            }
+
             $checkin = Carbon::parse($presensi->tanggal . ' ' . $presensi->checkin_time);
             $jadwalMulai = Carbon::parse($presensi->tanggal . ' ' . $jamMulaiHariIni);
 
