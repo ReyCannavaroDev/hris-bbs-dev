@@ -144,9 +144,20 @@ class presensi_absensi extends \App\Models\BasicModels\presensi_absensi
                 })
                 ->count();
 
-            $cuti = t_cuti::where("status", "APPROVED")
-                ->whereDate("date_from", ">=", $date)
-                ->whereDate("date_to", "<=", $date)
+            $cuti = t_cuti::whereIn("status", ["APPROVED", "POSTED"])
+                ->whereDate("date_from", "<=", $date)
+                ->whereDate("date_to", ">=", $date)
+                ->when($req->divisi_id || $req->dept_id, function ($q) use ($req) {
+                    $q->whereHas("m_kary", function ($qKary) use ($req) {
+                        $qKary->where("is_active", true);
+                        if ($req->divisi_id) {
+                            $qKary->where("m_divisi_id", $req->divisi_id);
+                        }
+                        if ($req->dept_id) {
+                            $qKary->where("m_dept_id", $req->dept_id);
+                        }
+                    });
+                })
                 ->count();
 
             $alpha = $totalKary - $hadir - $cuti;
@@ -248,12 +259,54 @@ class presensi_absensi extends \App\Models\BasicModels\presensi_absensi
             )) AS att_report
             FROM get_employee_attendance_report(?,?,?)",[$req->date,$req->divisi_id,$req->dept_id]);
 
-        
-        if(count($data)){   
-            return $this->helper->customResponse('OK',200,json_decode($data[0]->att_report));
-        }else{
-            return $this->helper->customResponse('OK',200,[]);
+        if (!count($data) || !$data[0]->att_report) {
+            return $this->helper->customResponse('OK', 200, []);
         }
+
+        $att_report = json_decode($data[0]->att_report);
+
+        $cutiAll = \DB::table("t_cuti")
+            ->leftJoin("m_general as al", "al.id", "=", "t_cuti.alasan_id")
+            ->leftJoin("m_general as tc", "tc.id", "=", "t_cuti.tipe_cuti_id")
+            ->select(
+                "t_cuti.m_kary_id",
+                "t_cuti.date_from",
+                "t_cuti.date_to",
+                "t_cuti.status",
+                "t_cuti.keterangan",
+                "al.value as alasan_value",
+                "tc.value as tipe_cuti_value"
+            )
+            ->whereIn("t_cuti.status", ["APPROVED", "POSTED"])
+            ->whereDate("t_cuti.date_from", "<=", $req->date)
+            ->whereDate("t_cuti.date_to", ">=", $req->date)
+            ->get();
+
+        foreach ($att_report as $report) {
+            $currentStatus = @$report->absensi->status;
+            if (!$currentStatus || $currentStatus === "NOT ATTEND" || $currentStatus === "CUTI") {
+                $matchingCuti = $cutiAll->first(function ($c) use ($report) {
+                    return $c->m_kary_id == $report->m_kary_id;
+                });
+
+                if ($matchingCuti) {
+                    if (!isset($report->absensi)) {
+                        $report->absensi = new \stdClass();
+                    }
+                    $ketLower = strtolower(trim(($matchingCuti->keterangan ?? '') . ' ' . ($matchingCuti->alasan_value ?? '') . ' ' . ($matchingCuti->tipe_cuti_value ?? '')));
+                    $isSakit = str_contains($ketLower, 'sakit');
+                    $report->absensi->status = $isSakit ? "CUTI (SAKIT)" : "CUTI";
+                    if (!isset($report->absensi->created_at)) {
+                        $report->absensi->created_at = "-";
+                    }
+                    if (!isset($report->absensi->updated_at)) {
+                        $report->absensi->updated_at = "-";
+                    }
+                }
+            }
+        }
+
+        return $this->helper->customResponse('OK', 200, $att_report);
     }
 
 public function custom_checkin($req)

@@ -139,6 +139,31 @@ if ($req->filled('kary_id')) {
         $catatanIn = $absensi['catatan_in'] ?? '-';
         $catatanOut = $absensi['catatan_out'] ?? '-';
 
+        $tanggalBaris = null;
+        if (!empty($dt->date_to_idn)) {
+            $tanggalBaris = Carbon\Carbon::parse($dt->date_to_idn)->format('Y-m-d');
+        } elseif (!empty($dt->all_days_of_month)) {
+            $tanggalBaris = $dt->all_days_of_month;
+        }
+
+        if ($tanggalBaris && (empty($status) || $status === '-' || $status === 'NOT ATTEND' || $status === 'CUTI')) {
+            $cekCuti = \DB::table('t_cuti')
+                ->leftJoin('m_general as al', 'al.id', '=', 't_cuti.alasan_id')
+                ->leftJoin('m_general as tc', 'tc.id', '=', 't_cuti.tipe_cuti_id')
+                ->select('t_cuti.*', 'al.value as alasan_value', 'tc.value as tipe_cuti_value')
+                ->where('t_cuti.m_kary_id', $kary_id)
+                ->whereIn('t_cuti.status', ['APPROVED', 'POSTED'])
+                ->whereDate('t_cuti.date_from', '<=', $tanggalBaris)
+                ->whereDate('t_cuti.date_to', '>=', $tanggalBaris)
+                ->first();
+
+            if ($cekCuti) {
+                $ketLower = strtolower(trim(($cekCuti->keterangan ?? '') . ' ' . ($cekCuti->alasan_value ?? '') . ' ' . ($cekCuti->tipe_cuti_value ?? '')));
+                $isSakit = str_contains($ketLower, 'sakit');
+                $status = $isSakit ? 'CUTI (SAKIT)' : 'CUTI';
+            }
+        }
+
         $checkinScope = !is_null($absensi['checkin_on_scope'])
             ? ($absensi['checkin_on_scope'] ? 'IN SCOPE' : 'OUT SCOPE')
             : '-';
@@ -172,7 +197,7 @@ if ($req->filled('kary_id')) {
         <tr>
           <td style="border:0.5px solid black; padding: 2px; font-size: 7pt; border-collapse: collapse; width: 15%;">{{ $dt->day_name_idn }}, {{$dt->date_to_idn}}</td>
           <td style="border:0.5px solid black; padding: 2px; font-size: 7pt; border-collapse: collapse; width: 6%;">{{ $dt->type }}</td>
-          <td style="border:0.5px solid black; padding: 2px; font-size: 7pt; border-collapse: collapse; width: 8%; text-align: center;">{{ @json_decode($dt->absensi)->status }}</td>
+          <td style="border:0.5px solid black; padding: 2px; font-size: 7pt; border-collapse: collapse; width: 8%; text-align: center;">{{ $status }}</td>
           <td style="border:0.5px solid black; padding: 2px; font-size: 7pt; border-collapse: collapse; width: 10%; text-align: center;">
             {!! $checkin_result !!}
           </td>

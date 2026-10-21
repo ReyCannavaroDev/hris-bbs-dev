@@ -72,13 +72,16 @@
       </thead>
       <tbody class="bg-blue-100" v-if="openDateSelected && dataByDateDetail.length">
         <tr v-for="item,idx in dataByDateDetail" :key="idx"
-          :class="item?.absensi?.status == 'NOT ATTEND' ? 'bg-red-200' : ''" class="hover:bg-amber-200">
+          :class="item?.absensi?.status == 'NOT ATTEND' ? 'bg-red-200' : (item?.absensi?.status?.includes('CUTI') ? 'bg-amber-50' : '')" class="hover:bg-amber-200">
           <!-- {{$log(item)}} -->
           <td class="text-left border-1 border-gray-500 px-3">{{idx+1}}</td>
           <td class="text-left border-1 border-gray-500 px-3">{{item.kode}}</td>
           <td class="text-left border-1 border-gray-500 px-3">{{item.nama_lengkap}}</td>
           <td class="text-left border-1 border-gray-500 px-3">{{item.dept}}</td>
-          <td class="text-left border-1 border-gray-500 px-3">{{item.absensi?.status}}</td>
+          <td class="text-left border-1 border-gray-500 px-3 font-medium"
+            :class="item.absensi?.status === 'CUTI (SAKIT)' ? 'text-blue-700 font-semibold' : (item.absensi?.status === 'CUTI' ? 'text-amber-700' : '')">
+            {{item.absensi?.status}}
+          </td>
           <td class="text-left border-1 border-gray-500 px-3 cursor-pointer"
             @click="openDateDetail(true,item.absensi,'checkin',item)">
             <div class="flex items-center">
@@ -96,17 +99,18 @@
             </div>
           </td>
           <td class="text-center border-1 border-gray-500 px-3">
-            <RouterLink v-if="item.absensi?.status.toLowerCase() === 'not attend'"
+            <RouterLink v-if="!item.absensi?.presensi_absensi_id && item.absensi?.status?.toLowerCase() === 'not attend'"
               :to="$route.path+'/create?ts='+openDateSelected+`&user_id=${item.default_user_id}`" class="text-gray-600">
               <icon fa="plus" />
             </RouterLink>
-            <RouterLink v-else
+            <RouterLink v-else-if="item.absensi?.presensi_absensi_id"
               :to="$route.path+`/${item.absensi?.presensi_absensi_id}?action=Edit&ts=`+item.absensi?.tanggal"
               class="text-gray-600">
               <icon fa="edit" />
             </RouterLink>
-            <!-- <Icon fa="file" class="hover:text-yellow-500 cursor-pointer"/>
-          <Icon fa="file" class="hover:text-yellow-500 cursor-pointer"/> -->
+            <span v-else class="text-gray-400 font-semibold italic text-xs">
+              -
+            </span>
           </td>
         </tr>
       </tbody>
