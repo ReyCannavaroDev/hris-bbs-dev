@@ -13,22 +13,46 @@ class t_perhitungan_gaji extends \App\Models\BasicModels\t_perhitungan_gaji
     
     public $fileColumns    = [ /*file_column*/ ];
 
-    public $createAdditionalData = ["creator_id"=>"auth:id"];
+    public $createAdditionalData = ["creator_id"=>"auth:id", "last_editor_id"=>"auth:id"];
     public $updateAdditionalData = ["last_editor_id"=>"auth:id"];
 
 
     protected $factorAdded = [];
 
-    private function factorSalary($standart_gaji, $kary = null, $periode = null)
+    private function factorSalary($standart_gaji, $kary = null, $periode = null, $periodeAkhir = null)
     {
-        $firstDayOfMonth = "$periode-01";
-        $date = new \DateTime($firstDayOfMonth);
+        $startDate = null;
+        $endDate = null;
 
-        // Set the date to the last day of the month
-        $date->modify('last day of this month');
+        if ($periode) {
+            if (strlen($periode) === 10) {
+                $startDate = $periode;
+                $endDate = ($periodeAkhir && strlen($periodeAkhir) === 10) ? $periodeAkhir : $periode;
+            } elseif (strlen($periode) === 7) {
+                $startDate = "$periode-01";
+                if ($periodeAkhir && strlen($periodeAkhir) === 7) {
+                    $endDate = date('Y-m-t', strtotime("$periodeAkhir-01"));
+                } else {
+                    $date = new \DateTime($startDate);
+                    $date->modify('last day of this month');
+                    $endDate = $date->format('Y-m-d');
+                }
+            } else {
+                $time = strtotime($periode);
+                if ($time) {
+                    $startDate = date('Y-m-d', $time);
+                    $endDate = $periodeAkhir ? date('Y-m-d', strtotime($periodeAkhir)) : $startDate;
+                }
+            }
+        }
 
-        // Get the last day as a string in 'Y-m-d' format
-        $lastDayOfMonth = $date->format('Y-m-d');
+        if (!$startDate) {
+            $startDate = date('Y-m-01');
+            $endDate = date('Y-m-t');
+        }
+
+        $firstDayOfMonth = $startDate;
+        $lastDayOfMonth = $endDate;
 
         $defaultColumns = [
             [
@@ -117,7 +141,18 @@ class t_perhitungan_gaji extends \App\Models\BasicModels\t_perhitungan_gaji
         }
 
         // faktor lain :Potongan
-        $t_potongan = t_potongan::where('m_kary_id', @$kary->id ?? 0)->orWhere('is_all_kary', true)->whereRaw("date_from >= ? and date_to <= ?",[$firstDayOfMonth,$lastDayOfMonth])->get();
+        $t_potongan = t_potongan::where(function($q) use ($kary) {
+                $q->where('m_kary_id', @$kary->id ?? 0)
+                  ->orWhere('is_all_kary', true);
+            })
+            ->where(function($q) {
+                $q->where('is_lunas', 0)->orWhereNull('is_lunas');
+            })
+            ->where(function($q) use ($firstDayOfMonth, $lastDayOfMonth) {
+                $q->whereRaw("date_from >= ? and date_to <= ?", [$firstDayOfMonth, $lastDayOfMonth])
+                  ->orWhereRaw("date_from <= ? and date_to >= ?", [$lastDayOfMonth, $firstDayOfMonth]);
+            })
+            ->get();
         if(count($t_potongan)) {
             foreach($t_potongan as $d){
                 $nilai_netto = ((float)$d->nilai * (float)$d->percentage)/100;
@@ -379,7 +414,7 @@ class t_perhitungan_gaji extends \App\Models\BasicModels\t_perhitungan_gaji
 
 
 
-    public function salaryOfKary($id, $periode = null)
+    public function salaryOfKary($id, $periode = null, $periodeAkhir = null)
     {
         try{
             $m_kary_id = $id;
@@ -414,7 +449,7 @@ class t_perhitungan_gaji extends \App\Models\BasicModels\t_perhitungan_gaji
             ];
 
             // default summary salary
-            $getBasicSalary = $this->factorSalary($m_standart_gaji, $kary, $periode);
+            $getBasicSalary = $this->factorSalary($m_standart_gaji, $kary, $periode, $periodeAkhir);
             $netto          = $this->summarySubSalary($getBasicSalary);
             $getBasicSalary    = array_merge($getBasicSalary, [
                 [
@@ -481,47 +516,54 @@ class t_perhitungan_gaji extends \App\Models\BasicModels\t_perhitungan_gaji
 
             $kary = $kary->get();
             
-            $date_from = \DateTime::createFromFormat('Y-m-d', $req->periode_awal.'-20');
-            $date_to = \DateTime::createFromFormat('Y-m-d', $req->periode_akhir.'-20');
+            $rawAwal = $req->periode_awal;
+            $rawAkhir = $req->periode_akhir;
 
-            // Menghitung jumlah bulan antara tanggal_awal dan tanggal_akhir
-            $interval = $date_from->diff($date_to);
-            $jumlah_bulan = (($interval->y) * 12) + ($interval->m);
+            if (!$rawAwal || !$rawAkhir) {
+                return $this->helper->customResponse('Periode awal dan periode akhir wajib diisi', 422);
+            }
 
+            // Normalisasi format input (mendukung Y-m-d maupun Y-m)
+            if (strlen($rawAwal) === 7) {
+                $strDateFrom = $rawAwal . '-01';
+            } else {
+                $strDateFrom = date('Y-m-d', strtotime($rawAwal));
+            }
+
+            if (strlen($rawAkhir) === 7) {
+                $strDateTo = date('Y-m-t', strtotime($rawAkhir . '-01'));
+            } else {
+                $strDateTo = date('Y-m-d', strtotime($rawAkhir));
+            }
+
+            $labelAwal = date('d/m/Y', strtotime($strDateFrom));
+            $labelAkhir = date('d/m/Y', strtotime($strDateTo));
+            $periodeLabel = ($labelAwal === $labelAkhir) ? $labelAwal : ($labelAwal . ' - ' . $labelAkhir);
 
             $data = [];
-            for ($i = 0; $i <= $jumlah_bulan; $i++) {
-
-                $date = $date_from->format('Y-m-d');
-                foreach($kary as $key)
-                {
-                    $gaji = $this->salaryOfKary($key->id, $date_from->format('Y-m'));
-                    $data[] = [
-                        'm_kary_id'         => $key->id,
-                        'm_kary.nik'        => $key->nik,
-                        'm_kary_dir_id'     => $key->m_dir_id,
-                        'm_kary_dir.nama'   => $key->dir,
-                        'm_kary_divisi_id'  => $key->m_divisi_id,
-                        'm_kary_divisi.nama'=> $key->divisi,
-                        'm_kary_dept_id'    => $key->m_dept_id,
-                        'm_kary_dept.nama'  => $key->dept,
-                        'nik'               => $key->nik,
-                        'nama_lengkap'      => $key->nama_lengkap,
-                        'periode'           => $date_from->format('d-m-Y'),
-                        'periode_in_date'   => $date,
-                        'periode_id'        => $key->periode_gaji_id,
-                        'periode_text'      => $key->periode_text,
-                        'total_tax'         => $gaji['total_tax'] ?? 0,
-                        'total_gaji'        => $gaji['total_gaji'],
-                        'netto'             => $gaji['netto'],
-                        'detail_gaji'       => $gaji['detail'],
-                    ];
-                }
-
-                // Menambahkan satu bulan untuk iterasi berikutnya
-                $date_from->add(new \DateInterval('P1M'));
+            foreach ($kary as $key) {
+                $gaji = $this->salaryOfKary($key->id, $strDateFrom, $strDateTo);
+                $data[] = [
+                    'm_kary_id'         => $key->id,
+                    'm_kary.nik'        => $key->nik,
+                    'm_kary_dir_id'     => $key->m_dir_id,
+                    'm_kary_dir.nama'   => $key->dir,
+                    'm_kary_divisi_id'  => $key->m_divisi_id,
+                    'm_kary_divisi.nama'=> $key->divisi,
+                    'm_kary_dept_id'    => $key->m_dept_id,
+                    'm_kary_dept.nama'  => $key->dept,
+                    'nik'               => $key->nik,
+                    'nama_lengkap'      => $key->nama_lengkap,
+                    'periode'           => $periodeLabel,
+                    'periode_in_date'   => $strDateFrom,
+                    'periode_id'        => $key->periode_gaji_id,
+                    'periode_text'      => $key->periode_text,
+                    'total_tax'         => $gaji['total_tax'] ?? 0,
+                    'total_gaji'        => $gaji['total_gaji'],
+                    'netto'             => $gaji['netto'],
+                    'detail_gaji'       => $gaji['detail'],
+                ];
             }
-            
 
             return $this->helper->customResponse('OK', 200, $data);
         } catch (\Exception $e) {

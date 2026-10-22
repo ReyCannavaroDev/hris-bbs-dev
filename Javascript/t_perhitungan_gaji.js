@@ -49,12 +49,16 @@ function formatRupiah(amount) {
 let initialValues = {}
 const changedValues = []
 let _id = 0
-let thisMonth = new Date().toISOString().split('T')[0]
-let tempYear = thisMonth.split('-')[0]
-let tempMonth = thisMonth.split('-')[1]
+let now = new Date()
+let tempYear = now.getFullYear()
+let tempMonth = String(now.getMonth() + 1).padStart(2, '0')
+let firstDay = `${tempYear}-${tempMonth}-01`
+let lastDayDate = new Date(tempYear, now.getMonth() + 1, 0)
+let lastDay = `${tempYear}-${tempMonth}-${String(lastDayDate.getDate()).padStart(2, '0')}`
+
 const values = reactive({
-  periode_awal: tempYear+'-'+tempMonth,
-  periode_akhir: tempYear+'-'+tempMonth
+  periode_awal: firstDay,
+  periode_akhir: lastDay
 })
 
 function openDetail(i) {
@@ -152,61 +156,81 @@ function onReset() {
 }
 
 
+function formatDate(dateStr) {
+  if (!dateStr) return null
+  if (typeof dateStr === 'string' && dateStr.includes('/')) {
+    const parts = dateStr.split('/')
+    if (parts.length === 3) {
+      return `${parts[2]}-${parts[1].padStart(2, '0')}-${parts[0].padStart(2, '0')}`
+    }
+  }
+  return dateStr
+}
+
 async function generatePerhitungan() {
+    if (!values.periode_awal || !values.periode_akhir) {
+      return swal.fire({
+        icon: 'warning',
+        text: 'Periode Awal dan Periode Akhir wajib diisi terlebih dahulu!'
+      })
+    }
+
     detailArr.value = []
-  //values.tags = JSON.stringify(values.tags)
-      try {
-        const dataURL = `${store.server.url_backend}/operation/t_perhitungan_gaji/generate`
+    try {
+      const dataURL = `${store.server.url_backend}/operation/t_perhitungan_gaji/generate`
+      const payload = {
+        ...values,
+        periode_awal: formatDate(values.periode_awal),
+        periode_akhir: formatDate(values.periode_akhir)
+      }
 
-        const res = await fetch(dataURL, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'Application/json',
-            Authorization: `${store.user.token_type} ${store.user.token}`
-          },
-          body: JSON.stringify(values)
-
-        })
-        if (!res.ok) {
-          if ([400, 422].includes(res.status)) {
-            const responseJson = await res.json()
-            formErrors.value = responseJson.errors || {}
-            throw (responseJson.errors.length ? responseJson.errors[0] : responseJson.message || "Failed when trying to post data")
-          } else if(res.status == 500) {
-            throw ("Sesuatu yang salah terjadi, silahkan coba kembali nanti atau hubungi administrator")
-          } else {
-            throw ("Failed when trying to post data")
-          }
+      const res = await fetch(dataURL, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'Application/json',
+          Authorization: `${store.user.token_type} ${store.user.token}`
+        },
+        body: JSON.stringify(payload)
+      })
+      if (!res.ok) {
+        if ([400, 422].includes(res.status)) {
+          const responseJson = await res.json()
+          formErrors.value = responseJson.errors || {}
+          throw (responseJson.errors?.length ? responseJson.errors[0] : responseJson.message || "Failed when trying to post data")
+        } else if(res.status == 500) {
+          throw ("Sesuatu yang salah terjadi, silahkan coba kembali nanti atau hubungi administrator")
+        } else {
+          throw ("Failed when trying to post data")
         }
-        
-        const result = await res.json()
-        const resultData = result.data
-        if(!resultData?.length) {
-          swal.fire({
-            icon: 'warning',
-            text: "Tidak ditemukan data Perhitungan Gaji, pastikan karyawan sudah memiliki standar gaji"
-          })
-        }
-        resultData.forEach((item) => {
-          item.id           = ++_id
-          item.karyawan     = item['nama_lengkap']
-          item.deskripsi    = item['desc']
-          detailArr.value.push(item)
-        })
-        
-      } catch (err) {
-        isBadForm.value = true
-        swal.fire({
-          icon: 'error',
-          text: "Sesuatu yang salah terjadi, silahkan coba kembali nanti atau hubungi administrator"
-        })
       }
       
+      const result = await res.json()
+      const resultData = result.data
+      if(!resultData?.length) {
+        swal.fire({
+          icon: 'warning',
+          text: "Tidak ditemukan data Perhitungan Gaji, pastikan karyawan sudah memiliki standar gaji"
+        })
+      }
+      resultData.forEach((item) => {
+        item.id           = ++_id
+        item.karyawan     = item['nama_lengkap']
+        item.deskripsi    = item['desc'] || ''
+        detailArr.value.push(item)
+      })
+      
+    } catch (err) {
+      isBadForm.value = true
+      swal.fire({
+        icon: 'error',
+        text: typeof err === 'string' ? err : "Sesuatu yang salah terjadi, silahkan coba kembali nanti atau hubungi administrator"
+      })
+    }
 }
 
 async function onSave() {
   // merging detail data
-    values['detail'] = detailArr._value
+    values['detail'] = detailArr.value ?? detailArr._value
       try {
         const dataURL = `${store.server.url_backend}/operation/t_perhitungan_gaji/save`
         isRequesting.value = true

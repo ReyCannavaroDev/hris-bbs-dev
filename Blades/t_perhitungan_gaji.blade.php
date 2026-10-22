@@ -27,7 +27,7 @@
               :value="values.periode_awal" :errorText="formErrors.periode_awal?'failed':''"
               :hints="formErrors.periode_awal" 
               :check="false"
-              type="month"
+              type="date"
               label=""
               placeholder="YYYY-MM-DD"
               @input="(v)=>{
@@ -44,7 +44,7 @@
               :value="values.periode_akhir" :errorText="formErrors.periode_akhir?'failed':''"
               :hints="formErrors.periode_akhir" 
               :check="false"
-              type="month"
+              type="date"
               label=""
               placeholder="YYYY-MM-DD"
               @input="(v)=>{
