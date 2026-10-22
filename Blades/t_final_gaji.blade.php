@@ -149,16 +149,16 @@
                 {{ item.periode }}
               </td>
               <td class="text-left border border-[#CACACA] px-2">
-                {{ item['m_kary.nik'] }}
+                {{ item['m_kary.nik'] || item.m_kary?.nik || '-' }}
               </td>
               <td class="text-left border border-[#CACACA] px-2">
-                {{ item.karyawan }}
+                {{ item.karyawan || item['m_kary.nama_lengkap'] || item.m_kary?.nama_lengkap || '-' }}
               </td>
               <td class="text-left border border-[#CACACA] px-2">
-                {{ item['m_kary_divisi.nama'] || item['m_divisi.nama'] || '-' }}
+                {{ item['m_kary_divisi.nama'] || item.m_kary_divisi?.nama || item['m_divisi.nama'] || item.m_divisi?.nama || '-' }}
               </td>
               <td class="text-left border border-[#CACACA] px-2">
-                {{ item['m_kary_dept.nama'] || item['m_dept.nama'] || '-' }}
+                {{ item['m_kary_dept.nama'] || item.m_kary_dept?.nama || item['m_dept.nama'] || item.m_dept?.nama || '-' }}
               </td>
               <td class="text-right border border-[#CACACA] px-2">
                 {{ formatRupiah(item.netto) }}

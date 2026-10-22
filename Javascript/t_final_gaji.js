@@ -58,9 +58,11 @@ function openDetail(i) {
   idxOpen.value = i
   detailArrAdjOpen.items = []
   objectOpen.items = detailArr.value[i]
-  titleOpen.value = (detailArr.value[i]['m_kary.nama_lengkap'] || detailArr.value[i].karyawan || '-') + ' - ' + (detailArr.value[i]['m_kary.nik'] || '')
+  titleOpen.value = (detailArr.value[i]['m_kary.nama_lengkap'] || detailArr.value[i].m_kary?.nama_lengkap || detailArr.value[i].karyawan || '-') + ' - ' + (detailArr.value[i]['m_kary.nik'] || detailArr.value[i].m_kary?.nik || '')
   
-  let dataFormat = detailArr.value[i]?.detail_gaji?.slice() ?? detailArr.value[i]?.t_final_gaji_det_rincian?.sort((a, b) => a.seq - b.seq) ?? []
+  let dataFormat = (detailArr.value[i]?.detail_gaji && detailArr.value[i].detail_gaji.length) 
+    ? detailArr.value[i].detail_gaji.slice() 
+    : (detailArr.value[i]?.t_final_gaji_det_rincian?.slice().sort((a, b) => a.seq - b.seq) ?? [])
 
   detailArrOpen.items = dataFormat
 
@@ -474,7 +476,14 @@ onBeforeMount(async () => {
 
       detailArr.value = initialValues.t_final_gaji_det?.sort((a, b) => a.id - b.id) || []
       detailArr.value.forEach((item) => {
-        item.karyawan = item['m_kary.nama_lengkap'] || item.karyawan
+        item['m_kary.nik'] = item['m_kary.nik'] || item.m_kary?.nik || ''
+        item['m_kary.nama_lengkap'] = item['m_kary.nama_lengkap'] || item.m_kary?.nama_lengkap || ''
+        item.karyawan = item.karyawan || item['m_kary.nama_lengkap'] || item.m_kary?.nama_lengkap || '-'
+        item['m_kary_divisi.nama'] = item['m_kary_divisi.nama'] || item.m_kary_divisi?.nama || item.m_divisi?.nama || '-'
+        item['m_kary_dept.nama'] = item['m_kary_dept.nama'] || item.m_kary_dept?.nama || item.m_dept?.nama || '-'
+        if ((!item.detail_gaji || !item.detail_gaji.length) && item.t_final_gaji_det_rincian?.length) {
+          item.detail_gaji = item.t_final_gaji_det_rincian.slice().sort((a, b) => a.seq - b.seq)
+        }
       })
 
       for (const key in initialValues) {
@@ -574,6 +583,7 @@ const landing = reactive({
     },
     params: {
       simplest: true,
+      join: false,
       searchfield: 'this.nomor, this.desc, this.periode_awal, this.periode_akhir, this.total_pengeluaran_gaji, this.status',
     },
     onsuccess(response) {

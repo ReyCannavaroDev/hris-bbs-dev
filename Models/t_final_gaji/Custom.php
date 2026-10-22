@@ -13,10 +13,9 @@ class t_final_gaji extends \App\Models\BasicModels\t_final_gaji
         $this->createable = array_merge($this->createable, ['m_divisi_id', 'm_dept_id']);
         $this->updateable = array_merge($this->updateable, ['m_divisi_id', 'm_dept_id']);
         $this->searchable = array_merge($this->searchable, ['m_divisi_id', 'm_dept_id']);
-        $this->joins = array_merge($this->joins, [
-            "m_divisi.id=t_final_gaji.m_divisi_id",
-            "m_dept.id=t_final_gaji.m_dept_id"
-        ]);
+        // Kosongkan $joins agar generator tidak melakukan INNER JOIN otomatis
+        // yang menyebabkan data dengan m_divisi_id, m_dept_id, atau last_editor_id NULL tereliminasi dari landing
+        $this->joins = [];
     }
 
     public function m_divisi() :\Illuminate\Database\Eloquent\Relations\BelongsTo
@@ -31,14 +30,16 @@ class t_final_gaji extends \App\Models\BasicModels\t_final_gaji
     
     public $fileColumns    = [ /*file_column*/ ];
 
-    public $createAdditionalData = ["creator_id"=>"auth:id"];
+    public $createAdditionalData = ["creator_id"=>"auth:id", "last_editor_id"=>"auth:id"];
     public $updateAdditionalData = ["last_editor_id"=>"auth:id"];
 
     public function createBefore( $model, $arrayData, $metaData, $id=null )
     {
         $req = app()->request;
         $newArrayData  = array_merge( $arrayData,[
-            'nomor' => $this->helper->generateNomor('KODE FINAL GAJI')
+            'nomor' => $this->helper->generateNomor('KODE FINAL GAJI'),
+            'm_comp_id' => $arrayData['m_comp_id'] ?? (auth()->check() ? auth()->user()->m_comp_id : 1) ?? 1,
+            'status' => $arrayData['status'] ?? 'DRAFT'
         ]);
        
         return [

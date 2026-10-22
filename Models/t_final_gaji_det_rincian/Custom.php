@@ -11,14 +11,14 @@ class t_final_gaji_det_rincian extends \App\Models\BasicModels\t_final_gaji_det_
     
     public $fileColumns    = [ /*file_column*/ ];
 
-    public $createAdditionalData = ["creator_id"=>"auth:id"];
+    public $createAdditionalData = ["creator_id"=>"auth:id", "last_editor_id"=>"auth:id"];
     public $updateAdditionalData = ["last_editor_id"=>"auth:id"];
 
     public function createBefore( $model, $arrayData, $metaData, $id=null )
     {
         $newArrayData  = array_merge( $arrayData,[
-            'name' =>$arrayData['name'] ?? $arrayData['label'],
-            'detail' => @$arrayData['detail'] ? json_encode($arrayData['detail']) : ''
+            'name' => $arrayData['name'] ?? $arrayData['label'] ?? '',
+            'detail' => !empty($arrayData['detail']) ? json_encode($arrayData['detail']) : null
         ]);
        
         return [

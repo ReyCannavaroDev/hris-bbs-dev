@@ -11,8 +11,8 @@ class t_final_gaji_det extends \App\Models\BasicModels\t_final_gaji_det
     
     public $fileColumns    = [ /*file_column*/ ];
 
-    //public $createAdditionalData = ["creator_id"=>"auth:id"];
-    //public $updateAdditionalData = ["last_editor_id"=>"auth:id"];
+    public $createAdditionalData = ["creator_id"=>"auth:id", "last_editor_id"=>"auth:id"];
+    public $updateAdditionalData = ["last_editor_id"=>"auth:id"];
 
     
 }
