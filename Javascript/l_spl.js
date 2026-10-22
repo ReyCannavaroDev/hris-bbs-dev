@@ -66,8 +66,8 @@
     if(values.m_dir_id){
       tempGet.push(`m_dir_id=${values.m_dir_id}`)
     }
-    if(values.m_div_id){
-      tempGet.push(`m_div_id=${values.m_div_id}`)
+    if(values.m_divisi_id || values.m_div_id){
+      tempGet.push(`m_divisi_id=${values.m_divisi_id ?? values.m_div_id}`)
     }
     if(values.m_dept_id){
       tempGet.push(`m_dept_id=${values.m_dept_id}`)

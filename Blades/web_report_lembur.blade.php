@@ -2,6 +2,8 @@
   $req = app()->request;
   $periode_from = $req->periode_from ?? date('Y-m').'-01';
   $periode_to = $req->periode_to ?? date('Y-m-d');
+  $divisi_id = $req->m_divisi_id ?? $req->m_div_id;
+
   $raw = \DB::select("
     select 
       tl.tanggal, tl.jam_mulai, tl.jam_selesai, tl.interval_min,
@@ -27,43 +29,84 @@
       and case when k.id is not null then k.id = coalesce(?,k.id) else true end
       and tl.status = 'APPROVED'
     order by tl.tanggal asc, tl.id asc
-", [ $periode_from, $periode_to, $req->m_dir_id, $req->m_divisi_id, $req->m_dept_id, $req->m_posisi_id, $req->tipe_lembur_id, $req->m_kary_id ]);
+", [ $periode_from, $periode_to, $req->m_dir_id, $divisi_id, $req->m_dept_id, $req->m_posisi_id, $req->tipe_lembur_id, $req->m_kary_id ]);
+
+  $active_filters = [];
+  if (!empty($req->m_dir_id)) {
+    $dirName = \DB::table('m_dir')->where('id', $req->m_dir_id)->value('nama');
+    if ($dirName) $active_filters['Direktorat'] = $dirName;
+  }
+  if (!empty($divisi_id)) {
+    $divName = \DB::table('m_divisi')->where('id', $divisi_id)->value('nama');
+    if ($divName) $active_filters['Divisi'] = $divName;
+  }
+  if (!empty($req->m_dept_id)) {
+    $deptName = \DB::table('m_dept')->where('id', $req->m_dept_id)->value('nama');
+    if ($deptName) $active_filters['Departemen'] = $deptName;
+  }
+  if (!empty($req->m_posisi_id)) {
+    $posName = \DB::table('m_posisi')->where('id', $req->m_posisi_id)->value('desc_kerja');
+    if ($posName) $active_filters['Posisi'] = $posName;
+  }
+  if (!empty($req->tipe_lembur_id)) {
+    $tipeLembur = \DB::table('m_general')->where('id', $req->tipe_lembur_id)->value('value');
+    if ($tipeLembur) $active_filters['Tipe Lembur'] = $tipeLembur;
+  }
+  if (!empty($req->m_kary_id)) {
+    $kary = \DB::table('m_kary')->where('id', $req->m_kary_id)->first();
+    if ($kary) $active_filters['Karyawan'] = ($kary->nik ? $kary->nik . ' - ' : '') . $kary->nama_lengkap;
+  }
 
   $total_diakui_menit = 0;
   $total_nominal_lembur = 0;
-@endphp
-<span style="width:100%;text-align:center;font-weight:bold;font-size:12pt;display:block;"> Laporan Perhitungan & Pembayaran Lembur Mingguan </span>
-<span style="width:100%;text-align:center;font-size:8pt;color:#666;display:block;">(Sesuai MoM BBS Poin 3.J & 3.K: Perhitungan min(Durasi SPK, Durasi Realisasi))</span><br/>
-@php
   $periode_from_label = date('d-m-Y', strtotime($periode_from));
   $periode_to_label = date('d-m-Y', strtotime($periode_to));
 @endphp
-<span style="width:100%;text-align:center; font-size:10pt;display:block;"> Periode: {{ $periode_from_label }} s/d {{ $periode_to_label }}</span><br/>
 
-<table width="100%" style="font-size:8px;border-collapse:collapse;" cellpadding="3" cellspacing="0">
-  <thead style="font-weight:bold;">
-    <tr style="background-color: #d9e1f2; text-align:center;">
-      <td style="border:0.5px solid black;">No</td>
-      <td style="border:0.5px solid black;">Tanggal</td>
-      <td style="border:0.5px solid black;">No SPK</td>
-      <td style="border:0.5px solid black;">NIK</td>
-      <td style="border:0.5px solid black;">Nama Karyawan</td>
-      <td style="border:0.5px solid black;">Divisi / Dept</td>
-      <td style="border:0.5px solid black;">Grading</td>
-      <td style="border:0.5px solid black;">Jam SPK</td>
-      <td style="border:0.5px solid black;">Durasi SPK</td>
-      <td style="border:0.5px solid black;">Jam Realisasi</td>
-      <td style="border:0.5px solid black;">Durasi Real</td>
-      <td style="border:0.5px solid black;background-color:#c6e0b4;">Durasi Diakui</td>
-      <td style="border:0.5px solid black;">Tarif/Jam (Rp)</td>
-      <td style="border:0.5px solid black;background-color:#c6e0b4;">Total Lembur (Rp)</td>
-      <td style="border:0.5px solid black;">Status</td>
+<div style="width:100%; font-family: Arial, Helvetica, sans-serif; margin-bottom: 12px;">
+  <div style="text-align: center; margin-bottom: 6px;">
+    <span style="font-size: 14pt; font-weight: bold; display: block; color: #1e293b; letter-spacing: 0.5px;">LAPORAN PERHITUNGAN & PEMBAYARAN LEMBUR</span>
+    <span style="font-size: 8pt; color: #64748b; display: block;">(Sesuai MoM BBS Poin 3.J & 3.K: Perhitungan min(Durasi SPK, Durasi Realisasi))</span>
+    <span style="font-size: 10pt; color: #475569; display: block; margin-top: 3px;">Periode: {{ $periode_from_label }} s/d {{ $periode_to_label }}</span>
+  </div>
+
+  @if(count($active_filters) > 0)
+  <table width="100%" style="border-collapse: collapse; margin-top: 4px; margin-bottom: 8px;">
+    <tr>
+      <td style="text-align: left; vertical-align: bottom; border: none; font-size: 9pt; line-height: 1.5; color: #334155; padding: 0;">
+        @foreach($active_filters as $fLabel => $fVal)
+          <div><strong style="color: #0f172a;">{{ $fLabel }}</strong> = <span style="color: #334155;">{{ $fVal }}</span></div>
+        @endforeach
+      </td>
+    </tr>
+  </table>
+  @endif
+</div>
+
+<table width="100%" style="font-size: 8px; font-family: Arial, Helvetica, sans-serif; border-collapse: collapse;" cellpadding="3" cellspacing="0">
+  <thead>
+    <tr style="background-color: #e2e8f0; color: #0f172a; text-align: center;">
+      <th style="border: 0.5px solid #94a3b8; padding: 5px 3px;">No</th>
+      <th style="border: 0.5px solid #94a3b8; padding: 5px 3px;">Tanggal</th>
+      <th style="border: 0.5px solid #94a3b8; padding: 5px 3px;">No SPK</th>
+      <th style="border: 0.5px solid #94a3b8; padding: 5px 3px;">NIK</th>
+      <th style="border: 0.5px solid #94a3b8; padding: 5px 3px;">Nama Karyawan</th>
+      <th style="border: 0.5px solid #94a3b8; padding: 5px 3px;">Divisi / Dept</th>
+      <th style="border: 0.5px solid #94a3b8; padding: 5px 3px;">Grading</th>
+      <th style="border: 0.5px solid #94a3b8; padding: 5px 3px;">Jam SPK</th>
+      <th style="border: 0.5px solid #94a3b8; padding: 5px 3px;">Durasi SPK</th>
+      <th style="border: 0.5px solid #94a3b8; padding: 5px 3px;">Jam Realisasi</th>
+      <th style="border: 0.5px solid #94a3b8; padding: 5px 3px;">Durasi Real</th>
+      <th style="border: 0.5px solid #94a3b8; padding: 5px 3px; background-color: #c6e0b4;">Durasi Diakui</th>
+      <th style="border: 0.5px solid #94a3b8; padding: 5px 3px;">Tarif/Jam (Rp)</th>
+      <th style="border: 0.5px solid #94a3b8; padding: 5px 3px; background-color: #c6e0b4;">Total Lembur (Rp)</th>
+      <th style="border: 0.5px solid #94a3b8; padding: 5px 3px;">Status</th>
     </tr>
   </thead>
   <tbody>
-    @foreach($raw as $i => $d)
+    @forelse($raw as $i => $d)
     @php
-        $backgroundColor = $i % 2 === 1 ? '#f9f9f9' : '#ffffff';
+        $backgroundColor = $i % 2 === 1 ? '#f8fafc' : '#ffffff';
         $spk_menit = $d->interval_min ?? 0;
         $real_menit = $d->realisasi_min ?? 0;
         $diakui_menit = $d->diakui_min ?? $spk_menit;
@@ -74,31 +117,39 @@
         $total_nominal_lembur += $total_uang;
     @endphp
     <tr style="background-color: {{$backgroundColor}}">
-      <td style="border:0.5px solid black;text-align:center;">{{ $i+1 }}</td>
-      <td style="border:0.5px solid black;text-align:center;">{{ $d->tanggal }}</td>
-      <td style="border:0.5px solid black;text-align:left;">{{ $d->nomor }}</td>
-      <td style="border:0.5px solid black;text-align:center;">{{ $d->nik }}</td>
-      <td style="border:0.5px solid black;text-align:left;">{{ $d->nama_lengkap }}</td>
-      <td style="border:0.5px solid black;text-align:left;">{{ $d->div }} / {{ $d->dept }}</td>
-      <td style="border:0.5px solid black;text-align:center;">{{ $d->grading ?? '-' }}</td>
-      <td style="border:0.5px solid black;text-align:center;">{{ substr($d->jam_mulai,0,5) }} - {{ substr($d->jam_selesai,0,5) }}</td>
-      <td style="border:0.5px solid black;text-align:center;">{{ $spk_menit ? round($spk_menit/60, 2).' jam' : '-' }}</td>
-      <td style="border:0.5px solid black;text-align:center;">{{ ($d->jam_mulai_realisasi && $d->jam_selesai_realisasi) ? substr($d->jam_mulai_realisasi,0,5).' - '.substr($d->jam_selesai_realisasi,0,5) : '-' }}</td>
-      <td style="border:0.5px solid black;text-align:center;">{{ $real_menit ? round($real_menit/60, 2).' jam' : '-' }}</td>
-      <td style="border:0.5px solid black;text-align:center;font-weight:bold;background-color:#e2efda;">{{ $diakui_menit ? round($diakui_menit/60, 2).' jam' : '-' }}</td>
-      <td style="border:0.5px solid black;text-align:right;">{{ $tarif ? number_format($tarif, 0, ',', '.') : '-' }}</td>
-      <td style="border:0.5px solid black;text-align:right;font-weight:bold;background-color:#e2efda;">{{ number_format($total_uang, 0, ',', '.') }}</td>
-      <td style="border:0.5px solid black;text-align:center;color:green;font-weight:semibold;">{{ $d->status }}</td>
+      <td style="border: 0.5px solid #cbd5e1; text-align: center; padding: 3px;">{{ $i+1 }}</td>
+      <td style="border: 0.5px solid #cbd5e1; text-align: center; padding: 3px;">{{ $d->tanggal }}</td>
+      <td style="border: 0.5px solid #cbd5e1; text-align: left; padding: 3px 4px;">{{ $d->nomor }}</td>
+      <td style="border: 0.5px solid #cbd5e1; text-align: center; padding: 3px;">{{ $d->nik }}</td>
+      <td style="border: 0.5px solid #cbd5e1; text-align: left; padding: 3px 5px;">{{ $d->nama_lengkap }}</td>
+      <td style="border: 0.5px solid #cbd5e1; text-align: left; padding: 3px 5px;">{{ $d->div }} / {{ $d->dept }}</td>
+      <td style="border: 0.5px solid #cbd5e1; text-align: center; padding: 3px;">{{ $d->grading ?? '-' }}</td>
+      <td style="border: 0.5px solid #cbd5e1; text-align: center; padding: 3px;">{{ substr($d->jam_mulai,0,5) }} - {{ substr($d->jam_selesai,0,5) }}</td>
+      <td style="border: 0.5px solid #cbd5e1; text-align: center; padding: 3px;">{{ $spk_menit ? round($spk_menit/60, 2).' jam' : '-' }}</td>
+      <td style="border: 0.5px solid #cbd5e1; text-align: center; padding: 3px;">{{ ($d->jam_mulai_realisasi && $d->jam_selesai_realisasi) ? substr($d->jam_mulai_realisasi,0,5).' - '.substr($d->jam_selesai_realisasi,0,5) : '-' }}</td>
+      <td style="border: 0.5px solid #cbd5e1; text-align: center; padding: 3px;">{{ $real_menit ? round($real_menit/60, 2).' jam' : '-' }}</td>
+      <td style="border: 0.5px solid #cbd5e1; text-align: center; font-weight: bold; background-color: #e2efda; padding: 3px;">{{ $diakui_menit ? round($diakui_menit/60, 2).' jam' : '-' }}</td>
+      <td style="border: 0.5px solid #cbd5e1; text-align: right; padding: 3px 4px;">{{ $tarif ? number_format($tarif, 0, ',', '.') : '-' }}</td>
+      <td style="border: 0.5px solid #cbd5e1; text-align: right; font-weight: bold; background-color: #e2efda; padding: 3px 4px;">{{ number_format($total_uang, 0, ',', '.') }}</td>
+      <td style="border: 0.5px solid #cbd5e1; text-align: center; color: #16a34a; font-weight: 600; padding: 3px;">{{ $d->status }}</td>
     </tr>
-    @endforeach
+    @empty
+    <tr>
+      <td colspan="15" style="border: 0.5px solid #cbd5e1; text-align: center; padding: 12px; color: #64748b; font-style: italic;">
+        Tidak ada data lembur untuk kriteria yang dipilih.
+      </td>
+    </tr>
+    @endforelse
   </tbody>
+  @if(count($raw) > 0)
   <tfoot>
-    <tr style="background-color: #d9e1f2; font-weight: bold;">
-      <td colspan="11" style="border:0.5px solid black;text-align:right;padding:4px;">GRAND TOTAL PEMBAYARAN:</td>
-      <td style="border:0.5px solid black;text-align:center;background-color:#c6e0b4;">{{ round($total_diakui_menit/60, 2) }} jam</td>
-      <td style="border:0.5px solid black;"></td>
-      <td style="border:0.5px solid black;text-align:right;background-color:#c6e0b4;">Rp {{ number_format($total_nominal_lembur, 0, ',', '.') }}</td>
-      <td style="border:0.5px solid black;"></td>
+    <tr style="background-color: #f1f5f9; font-weight: bold; color: #0f172a;">
+      <td colspan="11" style="border: 0.5px solid #94a3b8; text-align: right; padding: 5px 6px;">GRAND TOTAL PEMBAYARAN:</td>
+      <td style="border: 0.5px solid #94a3b8; text-align: center; background-color: #c6e0b4; padding: 5px 3px;">{{ round($total_diakui_menit/60, 2) }} jam</td>
+      <td style="border: 0.5px solid #94a3b8;"></td>
+      <td style="border: 0.5px solid #94a3b8; text-align: right; background-color: #c6e0b4; padding: 5px 6px;">Rp {{ number_format($total_nominal_lembur, 0, ',', '.') }}</td>
+      <td style="border: 0.5px solid #94a3b8;"></td>
     </tr>
   </tfoot>
+  @endif
 </table>
