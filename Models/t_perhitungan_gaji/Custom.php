@@ -511,8 +511,9 @@ class t_perhitungan_gaji extends \App\Models\BasicModels\t_perhitungan_gaji
                       });
                 });
 
-            if($req->m_dept_id) $kary = $kary->where('m_kary.m_dept_id', $req->m_dept_id);
+            if($req->m_dir_id) $kary = $kary->where('m_kary.m_dir_id', $req->m_dir_id);
             if($req->m_divisi_id) $kary = $kary->where('m_kary.m_divisi_id', $req->m_divisi_id);
+            if($req->m_dept_id) $kary = $kary->where('m_kary.m_dept_id', $req->m_dept_id);
 
             $kary = $kary->get();
             
@@ -625,6 +626,7 @@ class t_perhitungan_gaji extends \App\Models\BasicModels\t_perhitungan_gaji
             $model = $model->where('t_perhitungan_gaji.periode_in_date', '<=', $tglAkhir);
         }
 
+        if($req->m_dir_id) $model = $model->where('t_perhitungan_gaji.m_kary_dir_id', $req->m_dir_id);
         if($req->m_divisi_id) $model = $model->where('t_perhitungan_gaji.m_kary_divisi_id', $req->m_divisi_id);
         if($req->m_dept_id) $model = $model->where('t_perhitungan_gaji.m_kary_dept_id', $req->m_dept_id);
 

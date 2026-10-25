@@ -48,6 +48,7 @@ let _id = 0
 const values = reactive({
   periode_awal: '',
   periode_akhir: '',
+  m_dir_id: null,
   m_divisi_id: null,
   m_dept_id: null,
   desc: '',
@@ -211,6 +212,7 @@ async function generatePerhitungan() {
       periode_akhir: formatDate(values.periode_akhir),
       paginate: 9999
     }
+    if (values.m_dir_id) params.m_dir_id = values.m_dir_id
     if (values.m_divisi_id) params.m_divisi_id = values.m_divisi_id
     if (values.m_dept_id) params.m_dept_id = values.m_dept_id
 
@@ -479,6 +481,7 @@ onBeforeMount(async () => {
         item['m_kary.nik'] = item['m_kary.nik'] || item.m_kary?.nik || ''
         item['m_kary.nama_lengkap'] = item['m_kary.nama_lengkap'] || item.m_kary?.nama_lengkap || ''
         item.karyawan = item.karyawan || item['m_kary.nama_lengkap'] || item.m_kary?.nama_lengkap || '-'
+        item['m_kary_dir.nama'] = item['m_kary_dir.nama'] || item.m_kary_dir?.nama || item['m_dir.nama'] || item.m_dir?.nama || '-'
         item['m_kary_divisi.nama'] = item['m_kary_divisi.nama'] || item.m_kary_divisi?.nama || item.m_divisi?.nama || '-'
         item['m_kary_dept.nama'] = item['m_kary_dept.nama'] || item.m_kary_dept?.nama || item.m_dept?.nama || '-'
         if ((!item.detail_gaji || !item.detail_gaji.length) && item.t_final_gaji_det_rincian?.length) {

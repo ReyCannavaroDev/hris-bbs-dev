@@ -43,15 +43,16 @@
         </div>
 
         <div>
-          <label class="font-semibold">Divisi<span class="text-red-500 space-x-0 pl-0"></span></label>
+          <label class="font-semibold">Direktorat / Cabang</label>
           <FieldSelect class="w-full py-2 !mt-0" :bind="{ disabled: !actionText, clearable:true }"
-            :value="values.m_divisi_id" :check="false" @input="(v)=>{
-              values.m_divisi_id=v
-              values.m_dept_id=''
+            :value="values.m_dir_id" :check="false" @input="(v)=>{
+              values.m_dir_id=v
+              values.m_divisi_id=null
+              values.m_dept_id=null
               detailArr = []
-            }" :errorText="formErrors.m_divisi_id?'failed':''" :hints="formErrors.m_divisi_id" displayField="nama"
-            valueField="id" :api="{
-                url: `${store.server.url_backend}/operation/m_divisi`,
+            }" :errorText="formErrors.m_dir_id?'failed':''" :hints="formErrors.m_dir_id" placeholder="Pilih Direktorat / Cabang"
+            displayField="nama" valueField="id" :api="{
+                url: `${store.server.url_backend}/operation/m_dir`,
                 headers: {
                   Authorization: `${store.user.token_type} ${store.user.token}`
                 },
@@ -65,13 +66,35 @@
         </div>
 
         <div>
+          <label class="font-semibold">Divisi<span class="text-red-500 space-x-0 pl-0"></span></label>
+          <FieldSelect class="w-full py-2 !mt-0" :bind="{ disabled: !actionText, clearable:true }"
+            :value="values.m_divisi_id" :check="false" @input="(v)=>{
+              values.m_divisi_id=v
+              values.m_dept_id=null
+              detailArr = []
+            }" :errorText="formErrors.m_divisi_id?'failed':''" :hints="formErrors.m_divisi_id" placeholder="Pilih Divisi"
+            displayField="nama" valueField="id" :api="{
+                url: `${store.server.url_backend}/operation/m_divisi`,
+                headers: {
+                  Authorization: `${store.user.token_type} ${store.user.token}`
+                },
+                params: {
+                  simplest:true,
+                  single:true,
+                  where: values.m_dir_id ? `this.m_dir_id=${values.m_dir_id} and this.is_active='true'` : `this.is_active='true'`,
+                  transform:false,
+                }
+            }" fa-icon="search" :check="true" />
+        </div>
+
+        <div>
           <label class="font-semibold">Departemen<span class="text-red-500 space-x-0 pl-0"></span></label>
           <FieldSelect class="w-full py-2 !mt-0" :bind="{ disabled: !actionText, clearable:true }"
             :value="values.m_dept_id" :check="false" @input="(v)=>{
               values.m_dept_id=v
               detailArr = []
-            }" :errorText="formErrors.m_dept_id?'failed':''" :hints="formErrors.m_dept_id" displayField="nama"
-            valueField="id" :api="{
+            }" :errorText="formErrors.m_dept_id?'failed':''" :hints="formErrors.m_dept_id" placeholder="Pilih Departemen"
+            displayField="nama" valueField="id" :api="{
                 url: `${store.server.url_backend}/operation/m_dept`,
                 headers: {
                   Authorization: `${store.user.token_type} ${store.user.token}`
@@ -79,21 +102,22 @@
                 params: {
                   simplest:true,
                   single:true,
-                  where: values.m_divisi_id ? `this.m_divisi_id=${values.m_divisi_id} and this.is_active='true'` : `this.is_active='true'`,
+                  where: values.m_divisi_id ? `this.m_divisi_id=${values.m_divisi_id} and this.is_active='true'` : (values.m_dir_id ? `this.m_dir_id=${values.m_dir_id} and this.is_active='true'` : `this.is_active='true'`),
                   transform:false,
                 }
             }" fa-icon="search" :check="true" />
         </div>
 
         <div>
-          <label class="font-semibold">Deskripsi Pendek<span class="text-red-500 space-x-0 pl-0">*</span></label>
-          <FieldX :bind="{ readonly: !actionText}" class="!mt-0" :value="values.desc" @input="v=>values.desc=v"
-            :errorText="formErrors.desc?'failed':''" :hints="formErrors.desc" type="textarea" label="" :check="false" />
-        </div>
-        <div>
           <label class="font-semibold">Total Pengeluaran Gaji<span class="text-red-500 space-x-0 pl-0">*</span></label>
           <FieldNumber :bind="{ readonly: true}" class="!mt-0 flex justify-end" :value="values.total_pengeluaran_gaji"
             @input="v=>values.total_pengeluaran_gaji=v" type="number" label="" :check="false" />
+        </div>
+
+        <div class="col-span-2">
+          <label class="font-semibold">Deskripsi Pendek<span class="text-red-500 space-x-0 pl-0">*</span></label>
+          <FieldX :bind="{ readonly: !actionText}" class="!mt-0" :value="values.desc" @input="v=>values.desc=v"
+            :errorText="formErrors.desc?'failed':''" :hints="formErrors.desc" type="textarea" label="" :check="false" />
         </div>
       </div>
 
@@ -122,6 +146,9 @@
               <td
                 class="text-[#8F8F8F] font-semibold text-[14px] text-capitalize px-2 text-center w-[20%] border bg-[#f8f8f8] border-[#CACACA]">
                 Karyawan</td>
+              <td
+                class="text-[#8F8F8F] font-semibold text-[14px] text-capitalize px-2 text-center w-[12%] border bg-[#f8f8f8] border-[#CACACA]">
+                Direktorat</td>
               <td
                 class="text-[#8F8F8F] font-semibold text-[14px] text-capitalize px-2 text-center w-[12%] border bg-[#f8f8f8] border-[#CACACA]">
                 Divisi</td>
@@ -155,6 +182,9 @@
                 {{ item.karyawan || item['m_kary.nama_lengkap'] || item.m_kary?.nama_lengkap || '-' }}
               </td>
               <td class="text-left border border-[#CACACA] px-2">
+                {{ item['m_kary_dir.nama'] || item.m_kary_dir?.nama || item['m_dir.nama'] || item.m_dir?.nama || '-' }}
+              </td>
+              <td class="text-left border border-[#CACACA] px-2">
                 {{ item['m_kary_divisi.nama'] || item.m_kary_divisi?.nama || item['m_divisi.nama'] || item.m_divisi?.nama || '-' }}
               </td>
               <td class="text-left border border-[#CACACA] px-2">
@@ -176,7 +206,7 @@
               </td>
             </tr>
             <tr v-else class="text-center">
-              <td colspan="9" class="py-[20px]">
+              <td colspan="10" class="py-[20px]">
                 No data to show
               </td>
             </tr>

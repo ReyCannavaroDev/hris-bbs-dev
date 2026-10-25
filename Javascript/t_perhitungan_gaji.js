@@ -58,7 +58,11 @@ let lastDay = `${tempYear}-${tempMonth}-${String(lastDayDate.getDate()).padStart
 
 const values = reactive({
   periode_awal: firstDay,
-  periode_akhir: lastDay
+  periode_akhir: lastDay,
+  m_dir_id: null,
+  m_divisi_id: null,
+  m_dept_id: null,
+  divisi: null
 })
 
 function openDetail(i) {
@@ -375,15 +379,37 @@ const landing = reactive({
     cellClass: [ 'border-r', '!border-gray-200', 'justify-start']
   },
   {
+    field: 'm_kary_dir.nama',
+    headerName: 'Direktorat',
+    filter: true,
+    wrapText: true,
+    sortable: true,
+    flex: 1,
+    filter: 'ColFilter',
+    resizable: true,
+    cellClass: ['border-r', '!border-gray-200', 'justify-start']
+  },
+  {
+    field: 'm_kary_divisi.nama',
+    headerName: 'Divisi',
+    filter: true,
+    wrapText: true,
+    sortable: true,
+    flex: 1,
+    filter: 'ColFilter',
+    resizable: true,
+    cellClass: ['border-r', '!border-gray-200', 'justify-start']
+  },
+  {
     field: 'm_kary_dept.nama',
     headerName: 'Departement',
     filter: true,
     wrapText: true,
     sortable: true,
-    flex:1,
+    flex: 1,
     filter: 'ColFilter',
     resizable: true,
-    cellClass: [ 'border-r', '!border-gray-200', 'justify-start']
+    cellClass: ['border-r', '!border-gray-200', 'justify-start']
   },
   {
     field: 'periode',

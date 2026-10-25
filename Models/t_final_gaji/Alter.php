@@ -10,9 +10,9 @@ class tfinalgaji extends Migration
     public function up()
     {
         Schema::table($this->tableName, function (Blueprint $table) {
-            //$table->string('_existColumnName_')->change();
-            //$table->string('_columnName_');
-            //$table->dropColumn([ ]);
+            if (!Schema::hasColumn($this->tableName, 'm_dir_id')) {
+                $table->bigInteger('m_dir_id')->comment('{"src":"m_dir.id"}')->nullable();
+            }
         });
     }
 }

@@ -56,28 +56,27 @@
           />
         </div>
         <div>
-          <label class="font-semibold">Divisi<span class="text-red-500 space-x-0 pl-0">*</span></label>
+          <label class="font-semibold">Direktorat / Cabang</label>
           <FieldSelect
             class="w-full py-2 !mt-0"
             :bind="{ disabled: !actionText, clearable:true }"
-            :value="values.divisi" 
+            :value="values.m_dir_id" 
             :check="false"
             @input="(v)=>{
-              //$log(v)
-              values.divisi=v
-              values.m_divisi_id=v
-              values.m_dept_id=''
+              values.m_dir_id=v
+              values.divisi=null
+              values.m_divisi_id=null
+              values.m_dept_id=null
               detailArr = []
-              //$log(values.divisi)
             }"
-            :errorText="formErrors.divisi?'failed':''"
-            :hints="formErrors.divisi"
+            :errorText="formErrors.m_dir_id?'failed':''"
+            :hints="formErrors.m_dir_id"
+            placeholder="Pilih Direktorat / Cabang"
             displayField="nama"
             valueField="id"
             :api="{
-                url: `${store.server.url_backend}/operation/m_divisi`,
+                url: `${store.server.url_backend}/operation/m_dir`,
                 headers: {
-                  //'Content-Type': 'Application/json',
                   Authorization: `${store.user.token_type} ${store.user.token}`
                 },
                 params: {
@@ -90,33 +89,62 @@
             fa-icon="search" :check="true" />
         </div>
         <div>
-          <label class="font-semibold">Departemen<span class="text-red-500 space-x-0 pl-0">*</span></label>
+          <label class="font-semibold">Divisi</label>
+          <FieldSelect
+            class="w-full py-2 !mt-0"
+            :bind="{ disabled: !actionText, clearable:true }"
+            :value="values.divisi" 
+            :check="false"
+            @input="(v)=>{
+              values.divisi=v
+              values.m_divisi_id=v
+              values.m_dept_id=null
+              detailArr = []
+            }"
+            :errorText="formErrors.divisi?'failed':''"
+            :hints="formErrors.divisi"
+            placeholder="Pilih Divisi"
+            displayField="nama"
+            valueField="id"
+            :api="{
+                url: `${store.server.url_backend}/operation/m_divisi`,
+                headers: {
+                  Authorization: `${store.user.token_type} ${store.user.token}`
+                },
+                params: {
+                  simplest:true,
+                  single:true,
+                  where: values.m_dir_id ? `this.m_dir_id=${values.m_dir_id} and this.is_active='true'` : `this.is_active='true'`,
+                  transform:false,
+                }
+            }"
+            fa-icon="search" :check="true" />
+        </div>
+        <div>
+          <label class="font-semibold">Departemen</label>
           <FieldSelect
             class="w-full py-2 !mt-0"
             :bind="{ disabled: !actionText, clearable:true }"
             :value="values.m_dept_id" 
             :check="false"
             @input="(v)=>{
-              //$log(v)
               values.m_dept_id=v
               detailArr = []
-              //$log(values.departemen)
             }"
             :errorText="formErrors.m_dept_id?'failed':''"
             :hints="formErrors.m_dept_id"
+            placeholder="Pilih Departemen"
             displayField="nama"
             valueField="id"
             :api="{
                 url: `${store.server.url_backend}/operation/m_dept`,
                 headers: {
-                  //'Content-Type': 'Application/json',
                   Authorization: `${store.user.token_type} ${store.user.token}`
                 },
                 params: {
                   simplest:true,
                   single:true,
-                  scopes: 'filterDivisi',
-                  divisi_id: values.m_divisi_id ?? null,
+                  where: values.m_divisi_id ? `this.m_divisi_id=${values.m_divisi_id} and this.is_active='true'` : (values.m_dir_id ? `this.m_dir_id=${values.m_dir_id} and this.is_active='true'` : `this.is_active='true'`),
                   transform:false,
                 }
             }"
@@ -141,6 +169,7 @@
               <td class="text-[#8F8F8F] font-semibold text-[14px] text-capitalize px-2 text-center w-[10%] border bg-[#f8f8f8] border-[#CACACA]">Periode</td>
               <td class="text-[#8F8F8F] font-semibold text-[14px] text-capitalize px-2 text-center w-[12%] border bg-[#f8f8f8] border-[#CACACA]">NIK</td>
               <td class="text-[#8F8F8F] font-semibold text-[14px] text-capitalize px-2 text-center w-[20%] border bg-[#f8f8f8] border-[#CACACA]">Karyawan</td>
+              <td class="text-[#8F8F8F] font-semibold text-[14px] text-capitalize px-2 text-center w-[12%] border bg-[#f8f8f8] border-[#CACACA]">Direktorat</td>
               <td class="text-[#8F8F8F] font-semibold text-[14px] text-capitalize px-2 text-center w-[12%] border bg-[#f8f8f8] border-[#CACACA]">Divisi</td>
               <td class="text-[#8F8F8F] font-semibold text-[14px] text-capitalize px-2 text-center w-[12%] border bg-[#f8f8f8] border-[#CACACA]">Departemen</td>
               <td class="text-[#8F8F8F] font-semibold text-[14px] text-capitalize px-2 text-center w-[15%] border bg-[#f8f8f8] border-[#CACACA]">Gaji Bersih</td>
@@ -161,6 +190,9 @@
               </td>
               <td class="text-left border border-[#CACACA] px-2">
                 {{ item.karyawan }}
+              </td>
+              <td class="text-left border border-[#CACACA] px-2">
+                {{ item['m_kary_dir.nama'] || '-' }}
               </td>
               <td class="text-left border border-[#CACACA] px-2">
                 {{ item['m_kary_divisi.nama'] }}
@@ -190,7 +222,7 @@
               </td>
             </tr>
             <tr v-else class="text-center">
-              <td colspan="7" class="py-[20px]">
+              <td colspan="10" class="py-[20px]">
                 No data to show
               </td>
             </tr>
