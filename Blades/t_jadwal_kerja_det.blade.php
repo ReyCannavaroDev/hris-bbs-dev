@@ -101,9 +101,8 @@
                     searchfield: 'this.id, this.nama_depan, this.nama_belakang, this.nama_lengkap, m_divisi.nama, m_dept.nama',
                     where: 'this.is_active = true',
                     scopes: 'karyawanShift,notInGenerate',
-                    t_jadwal_kerja_id : route.params.id,
-                    notin: dataActive.length>0?`this.id:${dataActive.map(dt=>dt.id).join(',')}`:null
-                    },
+                    t_jadwal_kerja_id : route.params.id
+                  },
                     onsuccess:(response)=>{
                       response.data = [...response.data].map((dt)=>{
                         return dt

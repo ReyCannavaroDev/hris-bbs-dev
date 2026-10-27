@@ -1415,28 +1415,51 @@ class m_kary extends \App\Models\BasicModels\m_kary
 
     public function scopeKaryawanOffice($model)
     {
-        return $model->join('m_general','m_general.id','m_kary.tipe_jam_kerja_id')
-            ->whereRaw("lower(m_general.code) = 'office'");
+        return $model->whereExists(function($sub) {
+            $sub->select(\DB::raw(1))
+                ->from('m_general as gen_office')
+                ->whereColumn('gen_office.id', 'm_kary.tipe_jam_kerja_id')
+                ->where(function($w) {
+                    $w->whereRaw("lower(coalesce(gen_office.code, '')) = 'office'")
+                      ->orWhereRaw("lower(coalesce(gen_office.value, '')) = 'office'");
+                });
+        });
     }
 
     public function scopeKaryawanShift($model)
     {
-        return $model->join('m_general','m_general.id','m_kary.tipe_jam_kerja_id')
-            ->whereRaw("lower(m_general.code) != 'office'")
-            ->orWhere('m_kary.tipe_jam_kerja_id',null);
+        return $model->where(function($q) {
+            $q->whereNull('m_kary.tipe_jam_kerja_id')
+              ->orWhereExists(function($sub) {
+                  $sub->select(\DB::raw(1))
+                      ->from('m_general as gen_shift')
+                      ->whereColumn('gen_shift.id', 'm_kary.tipe_jam_kerja_id')
+                      ->where(function($w) {
+                          $w->whereRaw("lower(coalesce(gen_shift.code, '')) != 'office'")
+                            ->whereRaw("lower(coalesce(gen_shift.value, '')) != 'office'");
+                      });
+              });
+        });
     }
 
     public function scopeNotInGenerate($model)
     {
-        $t_jadwal_kerja_id = app()->request->t_jadwal_kerja_id;
+        $t_jadwal_kerja_id = app()->request->t_jadwal_kerja_id ?? 0;
 
-        return $model
-        ->whereRaw("
-            m_kary.id not in(select d.m_kary_id from t_jadwal_kerja_det d 
-            join t_jadwal_kerja t on t.id = d.t_jadwal_kerja_id where t.status = 'POSTED')
-            or m_kary.id in(select d.m_kary_id from t_jadwal_kerja_det d 
-            join t_jadwal_kerja t on t.id = d.t_jadwal_kerja_id where t.id = ?)
-        ", [$t_jadwal_kerja_id ?? 0]);
+        return $model->where(function($q) use ($t_jadwal_kerja_id) {
+            $q->whereRaw("
+                (m_kary.id NOT IN (
+                    SELECT d.m_kary_id FROM t_jadwal_kerja_det d 
+                    JOIN t_jadwal_kerja t ON t.id = d.t_jadwal_kerja_id 
+                    WHERE t.status = 'POSTED' AND d.m_kary_id IS NOT NULL
+                )
+                OR m_kary.id IN (
+                    SELECT d.m_kary_id FROM t_jadwal_kerja_det d 
+                    JOIN t_jadwal_kerja t ON t.id = d.t_jadwal_kerja_id 
+                    WHERE t.id = ? AND d.m_kary_id IS NOT NULL
+                ))
+            ", [$t_jadwal_kerja_id]);
+        });
     }
 
     public function scopeHUT($model)

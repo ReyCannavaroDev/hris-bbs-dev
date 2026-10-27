@@ -38,35 +38,7 @@
           />
         </div>
         <div>
-          <label class="font-semibold">Holding Company<span class="text-red-500 space-x-0 pl-0">*</span></label>
-          <FieldSelect
-            :bind="{ disabled: true, clearable:false }"
-            class="col-span-12 !mt-0 w-full"
-            :value="values.m_comp_id"
-            @input="v=>values.m_comp_id=v"
-            :errorText="formErrors.m_comp_id?'failed':''"
-            :hints="formErrors.m_comp_id"
-            valueField="id" displayField="nama"
-            placeholder="Holding Company"
-            label=""
-            :api="{
-              url: `${store.server.url_backend}/operation/m_comp`,
-              headers: {
-                'Content-Type': 'Application/json',
-                Authorization: `${store.user.token_type} ${store.user.token}`
-              },
-              params: {
-                simplest:true,
-                transform:false,
-                where:`this.is_active='true'`,
-                selectfield: 'this.id, this.nama, this.is_active'
-              }
-            }"
-            :check="false"
-          />
-        </div>
-        <div>
-          <label class="font-semibold">Company / Cabang<span class="text-red-500 space-x-0 pl-0"></span></label>
+          <label class="font-semibold">Company<span class="text-red-500 space-x-0 pl-0"></span></label>
           <FieldSelect
             :bind="{ disabled: !actionText, clearable:true }"
             class="col-span-12 !mt-0 w-full"
@@ -75,7 +47,7 @@
             :errorText="formErrors.m_dir_id?'failed':''"
             :hints="formErrors.m_dir_id"
             valueField="id" displayField="nama"
-            placeholder="Pilih Company / Cabang"
+            placeholder="Pilih Company"
             label=""
             :api="{
               url: `${store.server.url_backend}/operation/m_dir`,
@@ -182,14 +154,24 @@
               <td class="text-center px-1 border border-gray-200">
                   <FieldSelect
                   :bind="{ disabled: !actionText || values.tipe_jam_kerja?.toLowerCase() == 'office' ? true : false, clearable:false }" class="!mt-0 w-full"
-                  :value="trx_dtl.items[i].tipe_hari" @input="v=>trx_dtl.items[i].tipe_hari=v"
-                  label="" placeholder="Pilih Faktor"
+                  :value="trx_dtl.items[i].tipe_hari" 
+                  @input="(v)=>{
+                    trx_dtl.items[i].tipe_hari = v
+                    if (v === 'LIBUR') {
+                      trx_dtl.items[i].m_jam_kerja_id = null
+                      trx_dtl.items[i].waktu_mulai = '00:00'
+                      trx_dtl.items[i].waktu_akhir = '00:00'
+                    }
+                  }"
+                  label="" placeholder="Pilih Tipe Hari"
                   :options="['KERJA','LIBUR']"
                   valueField="key" displayField="key" :check="false"
                   />
               </td>
               <td class="text-center px-1 border border-gray-200">
+                <span v-if="trx_dtl.items[i].tipe_hari === 'LIBUR'" class="text-gray-400 italic text-sm font-medium">- Libur -</span>
                 <FieldSelect
+                  v-else
                   class="w-full !mt-0"
                   :bind="{ disabled: !actionText, clearable:false }"
                   :value="trx_dtl.items[i].m_jam_kerja_id" 
@@ -219,7 +201,8 @@
                   fa-icon="search" :check="true" />
               </td>
               <td class="text-center px-1 border border-gray-200">   
-                <FieldX :bind="{ readonly: !actionText }" class="w-full py-2 !mt-0"
+                <span v-if="trx_dtl.items[i].tipe_hari === 'LIBUR'" class="text-gray-400 italic text-sm">-</span>
+                <FieldX v-else :bind="{ readonly: !actionText }" class="w-full py-2 !mt-0"
                     :value="trx_dtl.items[i].waktu_mulai ?? ''" 
                     @input="v=>trx_dtl.items[i].waktu_mulai=v" 
                     :check="false"
@@ -229,7 +212,8 @@
                 />
               </td>
               <td class="text-center px-1 border border-gray-200">   
-                <FieldX :bind="{ readonly: !actionText }" class="w-full py-2 !mt-0"
+                <span v-if="trx_dtl.items[i].tipe_hari === 'LIBUR'" class="text-gray-400 italic text-sm">-</span>
+                <FieldX v-else :bind="{ readonly: !actionText }" class="w-full py-2 !mt-0"
                     :value="trx_dtl.items[i].waktu_akhir ?? ''" 
                     @input="v=>trx_dtl.items[i].waktu_akhir=v" 
                     :check="false"

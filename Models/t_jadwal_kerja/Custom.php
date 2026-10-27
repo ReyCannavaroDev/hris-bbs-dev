@@ -13,9 +13,10 @@ class t_jadwal_kerja extends \App\Models\BasicModels\t_jadwal_kerja
         $this->createable = array_merge($this->createable, ['m_comp_id', 'm_dir_id', 'm_divisi_id', 'm_dept_id']);
         $this->updateable = array_merge($this->updateable, ['m_comp_id', 'm_dir_id', 'm_divisi_id', 'm_dept_id']);
         $this->searchable = array_merge($this->searchable, ['m_comp_id', 'm_dir_id', 'm_divisi_id', 'm_dept_id']);
-        // Batasi joins hanya ke tabel yang pasti ada agar data dengan m_dir_id/m_divisi_id/m_dept_id/last_editor_id NULL tidak tereliminasi oleh INNER JOIN otomatis generator
+        // Batasi joins hanya ke tabel yang pasti ada agar data dengan m_divisi_id/m_dept_id/last_editor_id NULL tidak tereliminasi oleh INNER JOIN otomatis generator
         $this->joins = [
             "m_comp.id=t_jadwal_kerja.m_comp_id",
+            "m_dir.id=t_jadwal_kerja.m_dir_id",
             "m_general.id=t_jadwal_kerja.tipe_jam_kerja_id"
         ];
     }
@@ -23,6 +24,11 @@ class t_jadwal_kerja extends \App\Models\BasicModels\t_jadwal_kerja
     public function comp() :\Illuminate\Database\Eloquent\Relations\BelongsTo
     {
         return $this->belongsTo('App\Models\BasicModels\m_comp', 'm_comp_id', 'id');
+    }
+
+    public function dir() :\Illuminate\Database\Eloquent\Relations\BelongsTo
+    {
+        return $this->belongsTo('App\Models\BasicModels\m_dir', 'm_dir_id', 'id');
     }
     
     public $fileColumns    = [ /*file_column*/ ];
@@ -37,6 +43,9 @@ class t_jadwal_kerja extends \App\Models\BasicModels\t_jadwal_kerja
 
         if(strtolower($tipe_jam_kerja) == 'shift'){
             foreach(@app()->request->t_jadwal_kerja_det_hari ?? [] as $idx => $d){
+                if ((@$d['tipe_hari'] ?? '') === 'LIBUR') {
+                    continue;
+                }
                 $no = $idx+1;
                 if(!@$d['waktu_mulai']){
                     return [
@@ -56,6 +65,7 @@ class t_jadwal_kerja extends \App\Models\BasicModels\t_jadwal_kerja
         $newArrayData  = array_merge( $arrayData,[
             'nomor' => $this->helper->generateNomor('KODE JADWAL KERJA'),
             'm_comp_id' => $m_comp_id,
+            'status' => 'DRAFT',
         ]);
         return [
             "model"  => $model,
@@ -72,6 +82,9 @@ class t_jadwal_kerja extends \App\Models\BasicModels\t_jadwal_kerja
         // khusus edit tambahkan pengecualian untuk setting jadwal detail karyawan
         if(strtolower($tipe_jam_kerja) == 'shift' && app()->request->from != 'setting_jadwal'){
             foreach(@app()->request->t_jadwal_kerja_det_hari ?? [] as $idx => $d){
+                if ((@$d['tipe_hari'] ?? '') === 'LIBUR') {
+                    continue;
+                }
                 $no = $idx+1;
                 if(!@$d['waktu_mulai']){
                     return [
@@ -240,10 +253,16 @@ class t_jadwal_kerja extends \App\Models\BasicModels\t_jadwal_kerja
         $data = m_kary::selectRaw("m_kary.id m_kary_id, m_kary.nama_lengkap, d.nama \"m_dept.nama\", dv.nama \"m_divisi.nama\",m_kary.m_dir_id,m_kary.m_divisi_id,m_kary.m_dept_id")
             ->leftJoin('m_dept as d','d.id','m_kary.m_dept_id')
             ->leftJoin('m_divisi as dv','dv.id','m_kary.m_divisi_id')
-            ->join('m_general as g','g.id','m_kary.tipe_jam_kerja_id')
-            ->where('g.value','!=','OFFICE')
+            ->leftJoin('m_general as g','g.id','m_kary.tipe_jam_kerja_id')
+            ->where(function($q) {
+                $q->whereNull('m_kary.tipe_jam_kerja_id')
+                  ->orWhere(function($sub) {
+                      $sub->whereRaw("lower(coalesce(g.code, '')) != 'office'")
+                          ->whereRaw("lower(coalesce(g.value, '')) != 'office'");
+                  });
+            })
             ->whereRaw("m_kary.id not in(select d.m_kary_id from t_jadwal_kerja_det d 
-                join t_jadwal_kerja t on t.id = d.t_jadwal_kerja_id where t.status = 'POSTED')")
+                join t_jadwal_kerja t on t.id = d.t_jadwal_kerja_id where t.status = 'POSTED' and d.m_kary_id is not null)")
             ->where('m_kary.is_active', true)
             ->get();
         return $this->helper->customResponse('OK', 200, $data);

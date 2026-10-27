@@ -59,7 +59,18 @@ onBeforeMount(async () => {
       if (!res.ok) throw new Error("Failed when trying to read data")
       const resultJson = await res.json()
       initialValues = resultJson.data
-      trx_dtl.items = resultJson.data?.t_jadwal_kerja_det_hari
+      trx_dtl.items = resultJson.data?.t_jadwal_kerja_det_hari || []
+      if (route.query.action === 'Copy' || actionText.value === 'Copy') {
+        initialValues.status = 'DRAFT'
+        initialValues.nomor = null
+        delete initialValues.id
+        if (Array.isArray(trx_dtl.items)) {
+          trx_dtl.items = trx_dtl.items.map(item => {
+            const { id, t_jadwal_kerja_id, ...rest } = item
+            return rest
+          })
+        }
+      }
     } catch (err) {
       isBadForm.value = true
       swal.fire({
@@ -78,6 +89,12 @@ onBeforeMount(async () => {
 
   for (const key in initialValues) {
     values[key] = initialValues[key]
+  }
+
+  if (route.query.action === 'Copy' || actionText.value === 'Copy') {
+    values.status = 'DRAFT'
+    values.nomor = null
+    delete values.id
   }
 
   values?.generate_num_det?.forEach((v,i)=>{
@@ -188,10 +205,10 @@ async function getJamKerjaDefault() {
         {
           day : 'Minggu',
           day_num : 7,
-          m_jam_kerja_id: jamKerja?.id,
+          m_jam_kerja_id: null,
           tipe_hari: 'LIBUR',
-          waktu_mulai: jamKerja?.waktu_mulai,      
-          waktu_akhir: jamKerja?.waktu_akhir,      
+          waktu_mulai: '00:00',      
+          waktu_akhir: '00:00',      
         }  
       ]
 
@@ -280,13 +297,24 @@ async function onSave() {
     values.m_comp_id = store.user.data?.m_comp_id || 1
   }
 
+  const isCreating = ['Create','Copy','Tambah'].includes(actionText.value)
+  if (isCreating) {
+    values.status = 'DRAFT'
+    delete values.id
+    values.nomor = null
+  }
+
   trx_dtl.items.forEach((v,i)=>{
     v.seq = i+1
+    if (v.tipe_hari === 'LIBUR') {
+      v.m_jam_kerja_id = null
+      v.waktu_mulai = '00:00:00'
+      v.waktu_akhir = '00:00:00'
+    }
   })
   // merging detail data
   values['t_jadwal_kerja_det_hari'] = trx_dtl.items
       try {
-        const isCreating = ['Create','Copy','Tambah'].includes(actionText.value)
         const dataURL = `${store.server.url_backend}/operation${endpointApi}${isCreating ? '' : ('/' + route.params.id)}`
         isRequesting.value = true
         const res = await fetch(dataURL, {
@@ -540,24 +568,15 @@ const landing = reactive({
     cellClass: [ 'border-r', '!border-gray-200', 'justify-start']
   },
   {
-    headerName: 'Holding Company',
-    field: 'm_comp.nama',
-    filter: true,
-    sortable: true,
-    flex:1,
-    filter: 'ColFilter',
-    resizable: true,
-    cellClass: [ 'border-r', '!border-gray-200', 'justify-start']
-  },
-  {
-    headerName: 'Company / Cabang',
+    headerName: 'Company',
     field: 'm_dir.nama',
     filter: true,
     sortable: true,
-    flex:1,
+    flex: 1,
     filter: 'ColFilter',
     resizable: true,
-    cellClass: [ 'border-r', '!border-gray-200', 'justify-start']
+    cellClass: ['border-r', '!border-gray-200', 'justify-start'],
+    valueGetter: (params) => params.data['m_dir.nama'] || params.data.m_dir?.nama || '-'
   },
   {
     headerName: 'Tipe Jam Kerja',
