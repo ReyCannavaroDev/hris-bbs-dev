@@ -39,7 +39,7 @@
         </div>
         <div class="col-span-8 md:col-span-6">
           <div class="grid grid-cols-12 items-center gap-y-2">
-            <label class="col-span-12">Direktorat<label class="text-red-500 space-x-0 pl-0">*</label></label>
+            <label class="col-span-12">Company / Cabang<label class="text-red-500 space-x-0 pl-0">*</label></label>
             <FieldSelect
               :bind="{ disabled: true, clearable:false }" class="col-span-12 !mt-0 w-full"
               :value="values.m_dir_id" @input="v=>values.m_dir_id=v"
@@ -108,7 +108,7 @@
               {
                 flex: 1,
                 field: 'm_dir.nama',
-                headerName: 'Direktorat',
+                headerName: 'Company / Cabang',
                 sortable: false, resizable: true, filter: 'ColFilter',
                 cellClass: ['border-r', '!border-gray-200', 'justify-center']
               },

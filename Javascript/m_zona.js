@@ -284,7 +284,7 @@ const landing = reactive({
     cellClass: [ 'border-r', '!border-gray-200', 'justify-start']
   },
   {
-    headerName: 'Company',
+    headerName: 'Holding Company',
     field: 'm_comp.nama',
     filter: true,
     sortable: true,
@@ -295,7 +295,7 @@ const landing = reactive({
     cellClass: [ 'border-r', '!border-gray-200', 'justify-start']
   },
   {
-    headerName: 'Direktorat',
+    headerName: 'Company / Cabang',
     field: 'm_dir.nama',
     filter: true,
     sortable: true,

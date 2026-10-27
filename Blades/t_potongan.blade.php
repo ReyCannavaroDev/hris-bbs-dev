@@ -24,15 +24,15 @@
       <div class="grid <md:grid-cols-1 grid-cols-2 gap-2">
         <!-- START COLUMN -->
         <div>
-          <label class="font-semibold">Company<span class="text-red-500 space-x-0 pl-0">*</span></label>
+          <label class="font-semibold">Holding Company<span class="text-red-500 space-x-0 pl-0">*</span></label>
           <FieldSelect
-            :bind="{ disabled: !actionText, clearable: false }"
+            :bind="{ disabled: true, clearable: false }"
             class="w-full py-2 !mt-0"
             :value="values.m_comp_id"
             @input="v=>values.m_comp_id=v"
             :errorText="formErrors.m_comp_id?'failed':''"
             :hints="formErrors.m_comp_id"
-            placeholder="Pilih Company"
+            placeholder="Holding Company"
             label=""
             displayField="nama"
             valueField="id"
@@ -52,7 +52,7 @@
             fa-icon="search" :check="false" />
         </div>
         <div>
-          <label class="font-semibold">Direktorat / Cabang</label>
+          <label class="font-semibold">Company / Cabang</label>
           <FieldSelect
             :bind="{ disabled: !actionText, clearable: true }"
             class="w-full py-2 !mt-0"
@@ -60,7 +60,7 @@
             @input="v=>values.m_dir_id=v"
             :errorText="formErrors.m_dir_id?'failed':''"
             :hints="formErrors.m_dir_id"
-            placeholder="Pilih Direktorat / Cabang"
+            placeholder="Pilih Company / Cabang"
             label=""
             displayField="nama"
             valueField="id"
@@ -148,7 +148,7 @@
           {
             flex: 1,
             field: 'm_comp.nama',
-            headerName: 'Company',
+            headerName: 'Holding Company',
             sortable: false, 
             resizable: true, 
             filter: 'ColFilter',
@@ -157,7 +157,7 @@
           {
             flex: 1,
             field: 'm_dir.nama',
-            headerName: 'Direktorat',
+            headerName: 'Company / Cabang',
             sortable: false, 
             resizable: true, 
             filter: 'ColFilter',

@@ -43,7 +43,7 @@
           :bind="{ disabled: !actionText, clearable:false }" class="w-full !mt-3"
           :value="values.m_dir_id" @input="v=>values.m_dir_id=v"
           :errorText="formErrors.m_dir_id?'failed':''" 
-          label="Direktorat" placeholder="Pilih Direktorat"
+          label="Company / Cabang" placeholder="Pilih Company / Cabang"
           :hints="formErrors.m_dir_id"
           :api="{
               url: `${store.server.url_backend}/operation/m_dir`,

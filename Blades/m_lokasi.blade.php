@@ -24,12 +24,12 @@
       <div class="grid <md:grid-cols-1 grid-cols-2 gap-2">
         <!-- START COLUMN -->
 <div>
-  <label for="Direktorat" class="font-semibold select-all">Direktorat <span class="text-red-500 space-x-0 pl-0"></span></label>
+  <label for="Direktorat" class="font-semibold select-all">Company / Cabang <span class="text-red-500 space-x-0 pl-0"></span></label>
   <FieldSelect
     :bind="{ disabled: true, clearable:false }" class="w-full py-2 !mt-0"
     :value="values.m_dir_id" @input="v=>values.m_dir_id=v"
     :errorText="formErrors.m_dir_id?'failed':''" 
-    label="" placeholder="Pilih Divisi"
+    label="" placeholder="Pilih Company / Cabang"
     :hints="formErrors.m_dir_id"
     :api="{
         url: `${store.server.url_backend}/operation/m_dir`,

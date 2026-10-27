@@ -26,9 +26,9 @@
         <!-- Form Jam Kerja -->
         <div class="grid grid-cols-2 md:grid-cols-2 text-[14px] gap-10 gap-y-[26px] mt-[36px]" v-if="activeTabIndex === 0">
         <div>
-          <label class="font-semibold">Company<label class="text-red-500 space-x-0 pl-0">*</label></label>
+          <label class="font-semibold">Holding Company<label class="text-red-500 space-x-0 pl-0">*</label></label>
           <FieldSelect
-            :bind="{ disabled: !actionText, clearable: false }"
+            :bind="{ disabled: true, clearable: false }"
             class="w-full py-2 !mt-0"
             :value="values.m_comp_id"
             @input="v=>{
@@ -37,7 +37,7 @@
             }"
             :errorText="formErrors.m_comp_id?'failed':''"
             :hints="formErrors.m_comp_id"
-            placeholder="Pilih Company"
+            placeholder="Holding Company"
             label=""
             displayField="nama"
             valueField="id"
@@ -57,7 +57,7 @@
             fa-icon="search" :check="false" />
         </div>
         <div>
-          <label class="font-semibold">Direktorat / Cabang</label>
+          <label class="font-semibold">Company / Cabang</label>
           <FieldSelect
             :bind="{ disabled: !actionText, clearable: true }"
             class="w-full py-2 !mt-0"
@@ -65,7 +65,7 @@
             @input="v=>values.m_dir_id=v"
             :errorText="formErrors.m_dir_id?'failed':''"
             :hints="formErrors.m_dir_id"
-            placeholder="Pilih Direktorat / Cabang"
+            placeholder="Pilih Company / Cabang"
             label=""
             displayField="nama"
             valueField="id"

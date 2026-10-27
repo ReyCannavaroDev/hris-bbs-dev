@@ -38,19 +38,16 @@
           />
         </div>
         <div>
-          <label class="font-semibold">Company<span class="text-red-500 space-x-0 pl-0">*</span></label>
+          <label class="font-semibold">Holding Company<span class="text-red-500 space-x-0 pl-0">*</span></label>
           <FieldSelect
-            :bind="{ disabled: !actionText, clearable:false }"
+            :bind="{ disabled: true, clearable:false }"
             class="col-span-12 !mt-0 w-full"
             :value="values.m_comp_id"
-            @input="v=>{
-              values.m_comp_id=v
-              values.m_dir_id=null
-            }"
+            @input="v=>values.m_comp_id=v"
             :errorText="formErrors.m_comp_id?'failed':''"
             :hints="formErrors.m_comp_id"
             valueField="id" displayField="nama"
-            placeholder="Pilih Company"
+            placeholder="Holding Company"
             label=""
             :api="{
               url: `${store.server.url_backend}/operation/m_comp`,
@@ -69,7 +66,7 @@
           />
         </div>
         <div>
-          <label class="font-semibold">Direktorat / Cabang<span class="text-red-500 space-x-0 pl-0"></span></label>
+          <label class="font-semibold">Company / Cabang<span class="text-red-500 space-x-0 pl-0"></span></label>
           <FieldSelect
             :bind="{ disabled: !actionText, clearable:true }"
             class="col-span-12 !mt-0 w-full"
@@ -78,7 +75,7 @@
             :errorText="formErrors.m_dir_id?'failed':''"
             :hints="formErrors.m_dir_id"
             valueField="id" displayField="nama"
-            placeholder="Pilih Direktorat / Cabang"
+            placeholder="Pilih Company / Cabang"
             label=""
             :api="{
               url: `${store.server.url_backend}/operation/m_dir`,

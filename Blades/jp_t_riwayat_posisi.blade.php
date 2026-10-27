@@ -47,7 +47,7 @@
     </div>
     <div>
             <FieldSelect
-              placeholder="Masukan Direktorat" label="Direktorat"
+              placeholder="Masukan Company / Cabang" label="Company / Cabang"
               :bind="{ disabled: true, clearable:false }" class="w-full mt-3"
               :value="values.m_dir_id" @input="v=>values.m_dir_id=v"
               :errorText="formErrors.m_dir_id?'failed':''" 
@@ -112,7 +112,7 @@
               {
                 flex: 1,
                 field: 'm_dir.nama',
-                headerName: 'Direktorat',
+                headerName: 'Company / Cabang',
                 sortable: false, resizable: true, filter: 'ColFilter',
                 cellClass: ['border-r', '!border-gray-200', 'justify-center']
               },

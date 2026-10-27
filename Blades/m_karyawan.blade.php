@@ -99,10 +99,10 @@
         <!-- NOT PROFILE -->
         <div v-if="!isProfile" class="col-span-8 md:col-span-6">
           <div class="grid grid-cols-12 items-center">
-            <label class="col-span-12">Company<label class="text-red-500 space-x-0 pl-0">*</label></label>
-            <FieldSelect :bind="{ disabled: !actionText && !isProfile, clearable:false }"
+            <label class="col-span-12">Holding Company<label class="text-red-500 space-x-0 pl-0">*</label></label>
+            <FieldSelect :bind="{ disabled: true, clearable:false }"
               class="col-span-12 !mt-0 w-full" :value="values.m_comp_id" @input="v=>values.m_comp_id=v"
-              :errorText="formErrors.m_comp_id?'failed':''" label="" placeholder="Pilih Company" :hints="formErrors.m_comp_id" :api="{
+              :errorText="formErrors.m_comp_id?'failed':''" label="" placeholder="Holding Company" :hints="formErrors.m_comp_id" :api="{
                   url: `${store.server.url_backend}/operation/m_comp`,
                   headers: { 'Content-Type': 'Application/json', Authorization: `${store.user.token_type} ${store.user.token}`},
                   params: {
@@ -114,14 +114,14 @@
         </div>
         <div v-if="!isProfile" class="col-span-8 md:col-span-6">
           <div class="grid grid-cols-12 items-center">
-            <label class="col-span-12">Direktorat / Cabang<label class="text-red-500 space-x-0 pl-0">*</label></label>
+            <label class="col-span-12">Company / Cabang<label class="text-red-500 space-x-0 pl-0">*</label></label>
             <FieldSelect :bind="{ disabled: !actionText && !isProfile, clearable:true }"
               class="col-span-12 !mt-0 w-full" :value="values.m_dir_id" @input="(v)=>{
                 values.m_dir_id = v
                 values.m_divisi_id = null
                 values.m_dept_id = null
               }"
-              :errorText="formErrors.m_dir_id?'failed':''" label="" placeholder="Pilih Direktorat / Cabang" :hints="formErrors.m_dir_id" :api="{
+              :errorText="formErrors.m_dir_id?'failed':''" label="" placeholder="Pilih Company / Cabang" :hints="formErrors.m_dir_id" :api="{
                   url: `${store.server.url_backend}/operation/m_dir`,
                   headers: { 'Content-Type': 'Application/json', Authorization: `${store.user.token_type} ${store.user.token}`},
                   params: {
@@ -399,7 +399,7 @@
                 flex: 1,
                 wrapText:true,
                 field: 'm_dir.nama',
-                headerName: 'Direktorat',
+                headerName: 'Company / Cabang',
                 sortable: false, resizable: true, filter: 'ColFilter',
                 cellClass: ['border-r', '!border-gray-200', 'justify-start']
               },

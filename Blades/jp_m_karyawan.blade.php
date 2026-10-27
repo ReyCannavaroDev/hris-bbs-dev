@@ -105,9 +105,9 @@
 				<div class="p-4 grid <md:grid-cols-1 grid-cols-3 gap-2" v-if="activeTabIndex === 0">
 					<!-- NOT PROFILE -->
 					<div v-if="!isProfile">
-						<FieldSelect :bind="{ disabled: !actionText, clearable:false }" class="w-full mt-3"
+						<FieldSelect :bind="{ disabled: true, clearable:false }" class="w-full mt-3"
 							:value="values.m_comp_id" @input="v=>values.m_comp_id=v" :errorText="formErrors.m_comp_id?'failed':''"
-							label="Company" placeholder="Pilih Company" :hints="formErrors.m_comp_id" :api="{
+							label="Holding Company" placeholder="Holding Company" :hints="formErrors.m_comp_id" :api="{
 								url: `${store.server.url_backend}/operation/m_comp`,
 								headers: { 'Content-Type': 'Application/json', Authorization: `${store.user.token_type} ${store.user.token}`},
 								params: {
@@ -123,7 +123,7 @@
 								values.m_divisi_id = null
 								values.m_dept_id = null
 							}" :errorText="formErrors.m_dir_id?'failed':''"
-							label="Direktorat / Cabang" placeholder="Pilih Direktorat / Cabang" :hints="formErrors.m_dir_id" :api="{
+							label="Company / Cabang" placeholder="Pilih Company / Cabang" :hints="formErrors.m_dir_id" :api="{
 								url: `${store.server.url_backend}/operation/m_dir`,
 								headers: { 'Content-Type': 'Application/json', Authorization: `${store.user.token_type} ${store.user.token}`},
 								params: {
@@ -342,7 +342,7 @@
 						flex: 1,
 						wrapText:true,
 						field: 'm_dir.nama',
-						headerName: 'Direktorat',
+						headerName: 'Company / Cabang',
 						sortable: false, resizable: true, filter: 'ColFilter',
 						cellClass: ['border-r', '!border-gray-200', 'justify-start']
 						},

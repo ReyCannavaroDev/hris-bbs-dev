@@ -291,7 +291,7 @@ async function onSave() {
       
     },
     {
-      headerName: 'Company',
+      headerName: 'Holding Company',
       field: 'm_comp.nama',
       wrapText: true,
       filter: true,
@@ -302,7 +302,7 @@ async function onSave() {
       cellClass: ['border-r', '!border-gray-200', 'justify-start']
     },
     {
-      headerName: 'Direktorat',
+      headerName: 'Company / Cabang',
       field: 'm_dir.nama',
       wrapText: true,
       filter: true,

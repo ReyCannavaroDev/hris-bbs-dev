@@ -47,12 +47,12 @@
             @input="v => values.m_dir_id = v" 
             :hints="formErrors.m_dir_id" 
             :check="false"
-            label="Direktorat"
+            label="Company / Cabang"
             @update:valueFull="(objVal)=>{
               $log(values.m_dir_id)
               values.m_divisi_id = null
             }"
-            placeholder="Pilih Direktorat"
+            placeholder="Pilih Company / Cabang"
             valueField="id" 
             displayField="nama"
             :api="{

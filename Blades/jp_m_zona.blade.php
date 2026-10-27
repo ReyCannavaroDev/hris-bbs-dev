@@ -40,14 +40,14 @@
       <!-- START COLUMN -->
       <div>
         <FieldSelect
-          :bind="{ disabled: !actionText, clearable: false }"
+          :bind="{ disabled: true, clearable: false }"
           class="w-full !mt-3"
           :value="values.m_comp_id"
           @input="v=>values.m_comp_id=v"
           :errorText="formErrors.m_comp_id?'failed':''"
           :hints="formErrors.m_comp_id"
-          placeholder="Pilih Company"
-          label="Company"
+          placeholder="Holding Company"
+          label="Holding Company"
           displayField="nama"
           valueField="id"
           :api="{
@@ -73,8 +73,8 @@
           @input="v=>values.m_dir_id=v"
           :errorText="formErrors.m_dir_id?'failed':''"
           :hints="formErrors.m_dir_id"
-          placeholder="Pilih Direktorat / Cabang"
-          label="Direktorat / Cabang"
+          placeholder="Pilih Company / Cabang"
+          label="Company / Cabang"
           displayField="nama"
           valueField="id"
           :api="{

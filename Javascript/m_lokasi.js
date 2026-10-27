@@ -256,7 +256,7 @@ const landing = reactive({
     cellClass: ['justify-center', 'bg-gray-50', 'border-r', '!border-gray-200']
   },
   {
-    headerName: 'Direktorat',
+    headerName: 'Company / Cabang',
     field: 'm_dir.nama',
     filter: true,
     sortable: true,
