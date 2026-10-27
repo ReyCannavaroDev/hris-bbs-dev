@@ -30,7 +30,7 @@
       <!-- FORM START -->
       <div class="grid grid-cols-1 gap-2 mb-5">
         <div>
-            <label>Company / Cabang <label class="text-red-500 space-x-0 pl-0">*</label>
+            <label>Company <label class="text-red-500 space-x-0 pl-0">*</label>
             <FieldSelect 
                 :bind="{ readonly: !actionText }" 
                 class="!mt-0"
@@ -43,7 +43,7 @@
                 @update:valueFull="(objVal)=>{
                   values.m_divisi_id = null
                 }"
-                placeholder="Pilih Company / Cabang"
+                placeholder="Pilih Company"
                 valueField="id" 
                 displayField="nama"
                 :api="{

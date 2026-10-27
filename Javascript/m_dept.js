@@ -230,7 +230,7 @@ const landing = reactive({
     },
     params: {
       simplest: true,
-      searchfield:'this.id, this.nama, this.desc, m_divisi.nama',
+      searchfield:'this.id, m_dir.nama, m_divisi.nama, this.nama, this.desc, this.is_active',
     },
     onsuccess(response) {
       response.page = response.current_page
@@ -248,7 +248,7 @@ const landing = reactive({
     cellClass: ['justify-center', 'bg-gray-50', 'border-r', '!border-gray-200']
   },
   {
-    headerName: 'Company / Cabang',
+    headerName: 'Company',
     field: 'm_dir.nama',
     filter: true,
     sortable: true,
@@ -296,8 +296,9 @@ const landing = reactive({
     resizable: true,
     flex:1,
     cellClass: [ 'border-r', '!border-gray-200', 'justify-center'],
+    valueGetter: (params) => (params.data?.is_active ? 'Active' : 'Inactive'),
     cellRenderer: ({ value }) => {
-    return value === true
+    return value === 'Active' || value === true
       ? `<span class="text-green-500 rounded-md text-xs font-medium px-4 py-1 inline-block capitalize">Active</span>`
       : `<span class="text-gray-500 rounded-md text-xs font-medium px-4 py-1 inline-block capitalize">Inactive</span>`
   }},
