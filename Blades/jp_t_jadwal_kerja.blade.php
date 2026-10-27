@@ -42,6 +42,65 @@
           />
         </div>
         <div>
+          <label class="font-semibold">Company<span class="text-red-500 space-x-0 pl-0">*</span></label>
+          <FieldSelect
+            :bind="{ disabled: !actionText, clearable:false }"
+            class="col-span-12 !mt-0 w-full"
+            :value="values.m_comp_id"
+            @input="v=>{
+              values.m_comp_id=v
+              values.m_dir_id=null
+            }"
+            :errorText="formErrors.m_comp_id?'failed':''"
+            :hints="formErrors.m_comp_id"
+            valueField="id" displayField="nama"
+            placeholder="Pilih Company"
+            label=""
+            :api="{
+              url: `${store.server.url_backend}/operation/m_comp`,
+              headers: {
+                'Content-Type': 'Application/json',
+                Authorization: `${store.user.token_type} ${store.user.token}`
+              },
+              params: {
+                simplest:true,
+                transform:false,
+                where:`this.is_active='true'`,
+                selectfield: 'this.id, this.nama, this.is_active'
+              }
+            }"
+            :check="false"
+          />
+        </div>
+        <div>
+          <label class="font-semibold">Direktorat / Cabang<span class="text-red-500 space-x-0 pl-0"></span></label>
+          <FieldSelect
+            :bind="{ disabled: !actionText, clearable:true }"
+            class="col-span-12 !mt-0 w-full"
+            :value="values.m_dir_id"
+            @input="v=>values.m_dir_id=v"
+            :errorText="formErrors.m_dir_id?'failed':''"
+            :hints="formErrors.m_dir_id"
+            valueField="id" displayField="nama"
+            placeholder="Pilih Direktorat / Cabang"
+            label=""
+            :api="{
+              url: `${store.server.url_backend}/operation/m_dir`,
+              headers: {
+                'Content-Type': 'Application/json',
+                Authorization: `${store.user.token_type} ${store.user.token}`
+              },
+              params: {
+                simplest:true,
+                transform:false,
+                where: values.m_comp_id ? `this.is_active='true' AND (this.m_comp_id=${values.m_comp_id} OR this.m_comp_id IS NULL)` : `this.is_active='true'`,
+                selectfield: 'this.id, this.nama, this.m_comp_id, this.is_active'
+              }
+            }"
+            :check="false"
+          />
+        </div>
+        <div>
           <label class="font-semibold">Tipe Jam Kerja<span class="text-red-500 space-x-0 pl-0"></span></label>
             <FieldSelect
               :bind="{ disabled: !actionText, clearable:false }" 

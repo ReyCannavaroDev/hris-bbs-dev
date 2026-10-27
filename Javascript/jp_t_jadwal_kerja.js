@@ -35,6 +35,8 @@ let initialValues = {}
 const changedValues = []
 
 const values = reactive({
+   m_comp_id: store.user.data?.m_comp_id || 1,
+   m_dir_id: null,
    status: 'DRAFT',
 })
 
@@ -70,13 +72,15 @@ onBeforeMount(async () => {
       })
     }
     isRequesting.value = false
+  } else {
+    values.m_comp_id = store.user.data?.m_comp_id || 1
   }
 
   for (const key in initialValues) {
     values[key] = initialValues[key]
   }
 
-  values?.generate_num_det.forEach((v,i)=>{
+  values?.generate_num_det?.forEach((v,i)=>{
     v._id = i++
   })
 })
@@ -271,6 +275,10 @@ async function onSave() {
       text: `Detail tidak boleh kosong`
     })
   if(!next) return
+
+  if (!values.m_comp_id) {
+    values.m_comp_id = store.user.data?.m_comp_id || 1
+  }
 
   trx_dtl.items.forEach((v,i)=>{
     v.seq = i+1
@@ -503,7 +511,8 @@ const landing = reactive({
     },
     params: {
       simplest: true,
-      searchfield:'this.id, this.nama, this.is_active',
+      join: true,
+      searchfield:'this.id, this.nomor, m_comp.nama, m_dir.nama, tipe_jam_kerja.value, this.keterangan, this.status',
     },
     onsuccess(response) {
       response.page = response.current_page
@@ -522,6 +531,27 @@ const landing = reactive({
   },
   {
     field: 'nomor',
+    headerName: 'Nomor',
+    filter: true,
+    sortable: true,
+    flex:1,
+    filter: 'ColFilter',
+    resizable: true,
+    cellClass: [ 'border-r', '!border-gray-200', 'justify-start']
+  },
+  {
+    headerName: 'Company',
+    field: 'm_comp.nama',
+    filter: true,
+    sortable: true,
+    flex:1,
+    filter: 'ColFilter',
+    resizable: true,
+    cellClass: [ 'border-r', '!border-gray-200', 'justify-start']
+  },
+  {
+    headerName: 'Direktorat',
+    field: 'm_dir.nama',
     filter: true,
     sortable: true,
     flex:1,

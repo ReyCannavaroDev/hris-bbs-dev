@@ -9,6 +9,20 @@ class t_jadwal_kerja extends \App\Models\BasicModels\t_jadwal_kerja
     {
         parent::__construct();
         $this->helper = getCore('Helper');
+        $this->fillable = array_merge($this->fillable, ['m_comp_id', 'm_dir_id', 'm_divisi_id', 'm_dept_id']);
+        $this->createable = array_merge($this->createable, ['m_comp_id', 'm_dir_id', 'm_divisi_id', 'm_dept_id']);
+        $this->updateable = array_merge($this->updateable, ['m_comp_id', 'm_dir_id', 'm_divisi_id', 'm_dept_id']);
+        $this->searchable = array_merge($this->searchable, ['m_comp_id', 'm_dir_id', 'm_divisi_id', 'm_dept_id']);
+        // Batasi joins hanya ke tabel yang pasti ada agar data dengan m_dir_id/m_divisi_id/m_dept_id/last_editor_id NULL tidak tereliminasi oleh INNER JOIN otomatis generator
+        $this->joins = [
+            "m_comp.id=t_jadwal_kerja.m_comp_id",
+            "m_general.id=t_jadwal_kerja.tipe_jam_kerja_id"
+        ];
+    }
+
+    public function comp() :\Illuminate\Database\Eloquent\Relations\BelongsTo
+    {
+        return $this->belongsTo('App\Models\BasicModels\m_comp', 'm_comp_id', 'id');
     }
     
     public $fileColumns    = [ /*file_column*/ ];
@@ -37,9 +51,11 @@ class t_jadwal_kerja extends \App\Models\BasicModels\t_jadwal_kerja
             }
         }
 
+        $m_comp_id = $arrayData['m_comp_id'] ?? (auth()->check() ? auth()->user()->m_comp_id : 1) ?? 1;
 
         $newArrayData  = array_merge( $arrayData,[
-            'nomor' => $this->helper->generateNomor('KODE JADWAL KERJA')
+            'nomor' => $this->helper->generateNomor('KODE JADWAL KERJA'),
+            'm_comp_id' => $m_comp_id,
         ]);
         return [
             "model"  => $model,
@@ -74,6 +90,9 @@ class t_jadwal_kerja extends \App\Models\BasicModels\t_jadwal_kerja
         }
 
         $newArrayData  = array_merge( $arrayData,[] );
+        if (!empty($arrayData['m_comp_id'])) {
+            $newArrayData['m_comp_id'] = $arrayData['m_comp_id'];
+        }
         return [
             "model"  => $model,
             "data"   => $newArrayData,
