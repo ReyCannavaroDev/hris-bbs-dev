@@ -307,11 +307,13 @@ const landing = reactive({
   {
     headerName: 'Status',
     field: 'is_active',
-    filter: true,
-    sortable: true,
     filter: 'ColFilter',
+    filterParams: {
+      options: ['Active', 'Inactive']
+    },
+    sortable: true,
     resizable: true,
-    flex:1,
+    flex: 1,
     cellClass: [ 'border-r', '!border-gray-200', 'justify-center'],
     valueGetter: (params) => (params.data?.is_active ? 'Active' : 'Inactive'),
     cellRenderer: ({ value }) => {

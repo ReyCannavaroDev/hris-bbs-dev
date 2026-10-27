@@ -402,10 +402,12 @@ async function onSave() {
     {
       headerName: 'Status',
       field: 'is_active',
-      filter: true,
+      filter: 'ColFilter',
+      filterParams: {
+        options: ['Active', 'Inactive']
+      },
       sortable: true,
       flex: 1,
-      filter: 'ColFilter',
       resizable: true,
       cellClass: ['border-r', '!border-gray-200', 'justify-center'],
       valueGetter: (params) => {

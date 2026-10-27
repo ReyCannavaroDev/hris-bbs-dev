@@ -14,7 +14,51 @@ class Middleware
         $modelInstance = @app("App\\Models\\CustomModels\\$modelName");
         $user = auth()->user();
         $requestData = $request->all();
-   
+
+        // Normalisasi filter is_active agar support 'Active' dan 'Inactive'
+        if (isset($requestData['filter_is_active'])) {
+            $val = strtolower(trim((string)$requestData['filter_is_active']));
+            if ($val === 'active') {
+                $requestData['filter_is_active'] = 'true';
+            } elseif ($val === 'inactive') {
+                $requestData['filter_is_active'] = 'false';
+            }
+            if ($request->query) {
+                $request->query->set('filter_is_active', $requestData['filter_is_active']);
+            }
+            $_GET['filter_is_active'] = $requestData['filter_is_active'];
+        }
+        if (isset($requestData['filter_status']) && $modelInstance && in_array('is_active', $modelInstance->columns ?? []) && !in_array('status', $modelInstance->columns ?? [])) {
+            $val = strtolower(trim((string)$requestData['filter_status']));
+            if ($val === 'active') {
+                $requestData['filter_is_active'] = 'true';
+            } elseif ($val === 'inactive') {
+                $requestData['filter_is_active'] = 'false';
+            }
+            if ($request->query) {
+                $request->query->set('filter_is_active', $requestData['filter_is_active']);
+                $request->query->remove('filter_status');
+            }
+            $_GET['filter_is_active'] = $requestData['filter_is_active'];
+            unset($_GET['filter_status']);
+            unset($requestData['filter_status']);
+        }
+        if (isset($requestData['search'])) {
+            $searchVal = strtolower(trim((string)$requestData['search']));
+            if ($searchVal === 'active' || $searchVal === 'inactive') {
+                if ($modelInstance && in_array('is_active', $modelInstance->columns ?? [])) {
+                    $requestData['filter_is_active'] = ($searchVal === 'active') ? 'true' : 'false';
+                    if ($request->query) {
+                        $request->query->set('filter_is_active', $requestData['filter_is_active']);
+                        $request->query->remove('search');
+                    }
+                    $_GET['filter_is_active'] = $requestData['filter_is_active'];
+                    unset($_GET['search']);
+                    unset($requestData['search']);
+                }
+            }
+        }
+
         if(app()->request->header('Source') === 'mobile') {
             $modelInstance->addGlobalScope('global', function (Builder $builder) use($modelName, $modelInstance, $user) {
                 if(in_array('creator_id', $modelInstance->columns) && !in_array(@$modelInstance->getTable(),['generate_approval','generate_approval_det','m_kary','default_users','m_general','m_dir','m_zona','m_lokasi','m_divisi','m_dept','m_posisi','m_spd','presensi_app_version','t_pengumuman'])){
