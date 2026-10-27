@@ -43,41 +43,14 @@
     <!-- START COLUMN -->
     <div>
       <FieldSelect
-        :bind="{ disabled: true, clearable: false }"
-        class="w-full mt-3"
-        :value="values.m_comp_id"
-        @input="v=>values.m_comp_id=v"
-        :errorText="formErrors.m_comp_id?'failed':''"
-        :hints="formErrors.m_comp_id"
-        placeholder="Holding Company"
-        label="Holding Company"
-        displayField="nama"
-        valueField="id"
-        :api="{
-            url: `${store.server.url_backend}/operation/m_comp`,
-            headers: {
-              'Content-Type': 'Application/json',
-              Authorization: `${store.user.token_type} ${store.user.token}`
-            },
-            params: {
-              simplest:true,
-              where:`this.is_active='true'`,
-              transform:false,
-              selectfield: 'this.id, this.nama, this.is_active'
-            }
-        }"
-        fa-icon="search" :check="false" />
-    </div>
-    <div>
-      <FieldSelect
         :bind="{ disabled: !actionText, clearable: true }"
         class="w-full mt-3"
         :value="values.m_dir_id"
         @input="v=>values.m_dir_id=v"
         :errorText="formErrors.m_dir_id?'failed':''"
         :hints="formErrors.m_dir_id"
-        placeholder="Pilih Company / Cabang"
-        label="Company / Cabang"
+        placeholder="Pilih Company"
+        label="Company"
         displayField="nama"
         valueField="id"
         :api="{
@@ -156,17 +129,8 @@
           },              
           {
             flex: 1,
-            field: 'm_comp.nama',
-            headerName: 'Holding Company',
-            sortable: false, 
-            resizable: true, 
-            filter: 'ColFilter',
-            cellClass: ['border-r', '!border-gray-200', 'justify-center']
-          },              
-          {
-            flex: 1,
             field: 'm_dir.nama',
-            headerName: 'Company / Cabang',
+            headerName: 'Company',
             sortable: false, 
             resizable: true, 
             filter: 'ColFilter',

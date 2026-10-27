@@ -313,19 +313,8 @@ const landing = reactive({
     cellClass: [ 'border-r', '!border-gray-200', 'justify-start']
   },
   {
-    field: 'm_comp.nama',
-    headerName: 'Holding Company',
-    filter: true,
-    sortable: true,
-    flex: 1,
-    filter: 'ColFilter',
-    resizable: true,
-    valueGetter: (p) => p.data['m_comp.nama'] || '-',
-    cellClass: [ 'border-r', '!border-gray-200', 'justify-start']
-  },
-  {
     field: 'm_dir.nama',
-    headerName: 'Company / Cabang',
+    headerName: 'Company',
     filter: true,
     sortable: true,
     flex: 1,
