@@ -1,12 +1,20 @@
 @if(!$req->has('id'))
 <div class="bg-white p-6 rounded-xl h-[570px]">
+  <div class="flex justify-between items-center mb-4">
+    <div class="flex items-center gap-x-4">
+      <p class="text-sm font-medium">Filter Status :</p>
+      <div class="flex gap-x-2">
+        <button @click="filterShowData(true,1)" :class="activeBtn === 1?'bg-green-600 text-white hover:bg-green-400':'border border-green-600 text-green-600 bg-white hover:bg-green-600 hover:text-white'" class="duration-300 transform hover:-translate-y-0.5 rounded-md py-1 px-2 text-sm">Active</button>
+        <div class="flex my-auto h-4 w-0.5 bg-[#6E91D1]"></div>
+        <button @click="filterShowData(false,2)" :class="activeBtn === 2?'bg-red-600 text-white hover:bg-red-400':'border border-red-600 text-red-600 bg-white hover:bg-red-600 hover:text-white'" class="duration-300 transform hover:-translate-y-0.5 rounded-md py-1 px-2 text-sm">Inactive</button>
+      </div>
+    </div>
+    <RouterLink v-if="currentMenu?.can_create||true||store.user.data.username==='developer'" :to="$route.path+'/create?'+(Date.parse(new Date()))" class="bg-green-500 text-white hover:bg-green-600 rounded-[6px] py-2 px-[12.5px]">
+      <icon fa="plus" />
+      Tambah Data
+    </RouterLink>
+  </div>
   <TableApi ref='apiTable' :api="landing.api" :columns="landing.columns" :actions="landing.actions">
-    <template #header>
-      <RouterLink v-if="currentMenu?.can_create||true||store.user.data.username==='developer'" :to="$route.path+'/create?'+(Date.parse(new Date()))" class="bg-green-500 text-white hover:bg-green-600 rounded-[6px] py-2 px-[12.5px]">
-        <icon fa="plus" />
-        Tambah Data
-      </RouterLink>
-    </template>
   </TableApi>
 </div>
 @else
@@ -57,7 +65,7 @@
             fa-icon="search" :check="false" />
         </div>
         <div>
-          <label class="font-semibold">Company / Cabang</label>
+          <label class="font-semibold">Company</label>
           <FieldSelect
             :bind="{ disabled: !actionText, clearable: true }"
             class="w-full py-2 !mt-0"
@@ -65,7 +73,7 @@
             @input="v=>values.m_dir_id=v"
             :errorText="formErrors.m_dir_id?'failed':''"
             :hints="formErrors.m_dir_id"
-            placeholder="Pilih Company / Cabang"
+            placeholder="Pilih Company"
             label=""
             displayField="nama"
             valueField="id"
@@ -171,7 +179,7 @@
           >
           <div class="flex w-40">
             <div class="flex-auto">
-              <i class="text-red-500">InActive</i>
+              <i class="text-red-500">Inactive</i>
             </div>
             <div class="flex-auto">
               <input

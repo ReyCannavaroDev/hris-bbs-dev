@@ -93,6 +93,12 @@ onBeforeMount(async () => {
   for (const key in initialValues) {
     values[key] = initialValues[key]
   }
+  if (values.waktu_mulai && values.waktu_mulai.length > 5) {
+    values.waktu_mulai = values.waktu_mulai.slice(0, 5)
+  }
+  if (values.waktu_akhir && values.waktu_akhir.length > 5) {
+    values.waktu_akhir = values.waktu_akhir.slice(0, 5)
+  }
   if (!values.m_comp_id) {
     values.m_comp_id = store.user.data?.m_comp_id ?? 1
   }
@@ -198,21 +204,15 @@ const validateTimes = () => {
 }
 
 //  @else----------------------- LANDING
-const activeBtn = ref()
+const activeBtn = ref(null)
 
-function filterShowData(params,noBtn){
-  if(activeBtn.value === noBtn){
+function filterShowData(params, noBtn) {
+  if (activeBtn.value === noBtn) {
     activeBtn.value = null
-  }else{
-    activeBtn.value = noBtn
-  }
-  if(params){
-    landing.api.params.where = `this.is_active=true`
-  }else if(activeBtn.value == null){
-    // clear params filter
     landing.api.params.where = null
-  }else{
-    landing.api.params.where = `this.is_active=false`
+  } else {
+    activeBtn.value = noBtn
+    landing.api.params.where = `this.is_active=${params ? 'true' : 'false'}`
   }
 
   apiTable.value.reload()
@@ -297,7 +297,7 @@ const landing = reactive({
     params: {
       simplest: true,
       join: true,
-      searchfield:'this.kode, m_comp.nama, m_dir.nama, this.waktu_mulai, this.waktu_akhir, this.desc, tipe_jam_kerja.value',
+      searchfield: 'this.id, this.kode, m_comp.nama, m_dir.nama, this.waktu_mulai, this.waktu_akhir, this.desc, tipe_jam_kerja.value, this.is_active, this.is_hari_berikutnya',
     },
     onsuccess(response) {
       response.page = response.current_page
@@ -321,6 +321,7 @@ const landing = reactive({
   {
     headerName: 'Holding Company',
     field: 'm_comp.nama',
+    valueGetter: (p) => p.data?.['m_comp.nama'] || p.data?.m_comp?.nama || p.data?.['comp.nama'] || p.data?.comp?.nama || '-',
     wrapText: true,
     filter: true,
     sortable: true,
@@ -330,8 +331,9 @@ const landing = reactive({
     cellClass: ['border-r', '!border-gray-200', 'justify-start']
   },
   {
-    headerName: 'Company / Cabang',
+    headerName: 'Company',
     field: 'm_dir.nama',
+    valueGetter: (p) => p.data?.['m_dir.nama'] || p.data?.m_dir?.nama || '-',
     wrapText: true,
     filter: true,
     sortable: true,
@@ -345,20 +347,21 @@ const landing = reactive({
     field: 'kode',
     filter: true,
     sortable: true,
-    flex:1,
+    flex: 1,
     filter: 'ColFilter',
     resizable: true,
-    cellClass: [ 'border-r', '!border-gray-200', 'justify-start']
+    cellClass: ['border-r', '!border-gray-200', 'justify-start']
   },
   {
-      headerName: 'Tipe',
-      field: 'tipe_jam_kerja.value',
-      filter: true,
-      sortable: true,
-      flex: 1,
-      filter: 'ColFilter',
-      resizable: true,
-      cellClass: ['border-r', '!border-gray-200', 'justify-start'],
+    headerName: 'Tipe',
+    field: 'tipe_jam_kerja.value',
+    valueGetter: (p) => p.data?.['tipe_jam_kerja.value'] || p.data?.tipe_jam_kerja?.value || '-',
+    filter: true,
+    sortable: true,
+    flex: 1,
+    filter: 'ColFilter',
+    resizable: true,
+    cellClass: ['border-r', '!border-gray-200', 'justify-start'],
   },
   {
     headerName: 'Jam Kerja',
@@ -366,11 +369,15 @@ const landing = reactive({
     sortable: true,
     filter: 'ColFilter',
     resizable: true,
-    flex:1,
-    cellClass: [ 'border-r', '!border-gray-200', 'justify-start'],
-    cellRenderer: ( params ) => {
-      return params.data.waktu_mulai + '-' + params.data.waktu_akhir
-    }
+    flex: 1,
+    cellClass: ['border-r', '!border-gray-200', 'justify-start'],
+    valueGetter: (params) => {
+      const mulai = params.data?.waktu_mulai ? (params.data.waktu_mulai.length >= 5 ? params.data.waktu_mulai.slice(0, 5) : params.data.waktu_mulai) : ''
+      const akhir = params.data?.waktu_akhir ? (params.data.waktu_akhir.length >= 5 ? params.data.waktu_akhir.slice(0, 5) : params.data.waktu_akhir) : ''
+      if (mulai && akhir) return `${mulai} - ${akhir}`
+      return mulai || akhir || '-'
+    },
+    cellRenderer: (params) => params.value || '-'
   },
   {
     headerName: 'Hari Lain',
@@ -379,37 +386,45 @@ const landing = reactive({
     sortable: true,
     filter: 'ColFilter',
     resizable: true,
-    flex:1,
-    cellClass: [ 'border-r', '!border-gray-200', 'justify-center'],
+    flex: 1,
+    cellClass: ['border-r', '!border-gray-200', 'justify-center'],
+    valueGetter: (params) => {
+      const val = params.data?.is_hari_berikutnya
+      return (val === true || val === 1 || val === '1' || val === 'true') ? 'Ada' : 'Tidak Ada'
+    },
     cellRenderer: ({ value }) => {
-      return value === true
+      return value === 'Ada'
         ? `<span class="text-green-500 rounded-md text-xs font-medium px-4 py-1 inline-block capitalize">Ada</span>`
         : `<span class="text-red-500 rounded-md text-xs font-medium px-4 py-1 inline-block capitalize">Tidak Ada</span>`
     }
   },
-      {
-      headerName: 'Keterangan',
-      field: 'desc',
-      filter: true,
-      sortable: true,
-      flex: 1,
-      filter: 'ColFilter',
-      resizable: true,
-      cellClass: ['border-r', '!border-gray-200', 'justify-start'],
+  {
+    headerName: 'Keterangan',
+    field: 'desc',
+    filter: true,
+    sortable: true,
+    flex: 1,
+    filter: 'ColFilter',
+    resizable: true,
+    cellClass: ['border-r', '!border-gray-200', 'justify-start'],
   },
-          {
-      headerName: 'Status',
-      field: 'is_active',
-      filter: true,
-      sortable: true,
-      flex: 1,
-      filter: 'ColFilter',
-      resizable: true,
-      cellClass: ['border-r', '!border-gray-200', 'justify-center'],
-      cellRenderer: ({ value }) => {
-      return value === true
+  {
+    headerName: 'Status',
+    field: 'is_active',
+    filter: true,
+    sortable: true,
+    flex: 1,
+    filter: 'ColFilter',
+    resizable: true,
+    cellClass: ['border-r', '!border-gray-200', 'justify-center'],
+    valueGetter: (params) => {
+      const val = params.data?.is_active
+      return (val === true || val === 1 || val === '1' || val === 'true') ? 'Active' : 'Inactive'
+    },
+    cellRenderer: ({ value }) => {
+      return value === 'Active'
         ? `<span class="text-green-500 rounded-md text-xs font-medium px-4 py-1 inline-block capitalize">Active</span>`
-        : `<span class="text-red-500 rounded-md text-xs font-medium px-4 py-1 inline-block capitalize">Inactive</span>`
+        : `<span class="text-gray-500 rounded-md text-xs font-medium px-4 py-1 inline-block capitalize">Inactive</span>`
     }
   },
 

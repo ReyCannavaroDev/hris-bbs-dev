@@ -76,8 +76,8 @@
           @input="v=>values.m_dir_id=v"
           :errorText="formErrors.m_dir_id?'failed':''"
           :hints="formErrors.m_dir_id"
-          placeholder="Pilih Company / Cabang"
-          label="Company / Cabang"
+          placeholder="Pilih Company"
+          label="Company"
           displayField="nama"
           valueField="id"
           :api="{
@@ -180,7 +180,7 @@
           :errorText="formErrors.is_active?'failed':''" 
           :hints="formErrors.is_active"
           valueField="id" displayField="key"
-          :options="[{'id' : 1 , 'key' : 'Active'},{'id': 0, 'key' : 'InActive'}]"
+          :options="[{'id' : 1 , 'key' : 'Active'},{'id': 0, 'key' : 'Inactive'}]"
           placeholder="Pilih Status" label="Status" :check="false"
         />
       </div>
