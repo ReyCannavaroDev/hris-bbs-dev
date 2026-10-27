@@ -39,6 +39,58 @@
     <div class="p-4 grid <md:grid-cols-1 grid-cols-3 gap-2 ">
       <!-- START COLUMN -->
       <div>
+        <FieldSelect
+          :bind="{ disabled: !actionText, clearable: false }"
+          class="w-full !mt-3"
+          :value="values.m_comp_id"
+          @input="v=>values.m_comp_id=v"
+          :errorText="formErrors.m_comp_id?'failed':''"
+          :hints="formErrors.m_comp_id"
+          placeholder="Pilih Company"
+          label="Company"
+          displayField="nama"
+          valueField="id"
+          :api="{
+              url: `${store.server.url_backend}/operation/m_comp`,
+              headers: {
+                Authorization: `${store.user.token_type} ${store.user.token}`
+              },
+              params: {
+                simplest:true,
+                single:true,
+                where:`this.is_active='true'`,
+                transform:false,
+              }
+          }"
+          fa-icon="search" :check="false" />
+      </div>
+      <div>
+        <FieldSelect
+          :bind="{ disabled: !actionText, clearable: true }"
+          class="w-full !mt-3"
+          :value="values.m_dir_id"
+          @input="v=>values.m_dir_id=v"
+          :errorText="formErrors.m_dir_id?'failed':''"
+          :hints="formErrors.m_dir_id"
+          placeholder="Pilih Direktorat / Cabang"
+          label="Direktorat / Cabang"
+          displayField="nama"
+          valueField="id"
+          :api="{
+              url: `${store.server.url_backend}/operation/m_dir`,
+              headers: {
+                Authorization: `${store.user.token_type} ${store.user.token}`
+              },
+              params: {
+                simplest:true,
+                single:true,
+                where: values.m_comp_id ? `this.m_comp_id=${values.m_comp_id} AND this.is_active='true'` : `this.is_active='true'`,
+                transform:false,
+              }
+          }"
+          fa-icon="search" :check="false" />
+      </div>
+      <div>
         <FieldX :bind="{ readonly: true }" class="w-full !mt-3"
             :value="values.kode" :errorText="formErrors.kode?'failed':''"
             @input="v=>values.kode=v" :hints="formErrors.kode" 

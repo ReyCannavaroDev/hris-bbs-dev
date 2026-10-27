@@ -46,11 +46,17 @@ const changedValues = []
 const values = reactive({
   is_active : 1,
   is_hari_berikutnya: true,
+  m_comp_id: null,
+  m_dir_id: null,
 })
 
 onBeforeMount(async () => {
   // tampilkan default direktorat dengan store user comp.nama
   values.direktorat = store.user.data?.direktorat
+  if (!isRead) {
+    values.m_comp_id = store.user.data?.m_comp_id ?? 1
+    values.m_dir_id = store.user.data?.m_dir_id ?? null
+  }
   if (isRead) {
     //  READ DATA
     try {
@@ -86,6 +92,9 @@ onBeforeMount(async () => {
 
   for (const key in initialValues) {
     values[key] = initialValues[key]
+  }
+  if (!values.m_comp_id) {
+    values.m_comp_id = store.user.data?.m_comp_id ?? 1
   }
   if(values['m_dir.nama']){
     values.direktorat = values['m_dir.nama']
@@ -287,7 +296,8 @@ const landing = reactive({
     },
     params: {
       simplest: true,
-      searchfield:'this.kode, this.waktu_mulai, this.waktu_akhir, this.desc, tipe_jam_kerja.value',
+      join: true,
+      searchfield:'this.kode, m_comp.nama, m_dir.nama, this.waktu_mulai, this.waktu_akhir, this.desc, tipe_jam_kerja.value',
     },
     onsuccess(response) {
       response.page = response.current_page
@@ -307,6 +317,28 @@ const landing = reactive({
     filter: true,
     cellClass: ['justify-center', 'bg-gray-50', 'border-r', '!border-gray-200']
     
+  },
+  {
+    headerName: 'Company',
+    field: 'm_comp.nama',
+    wrapText: true,
+    filter: true,
+    sortable: true,
+    flex: 1,
+    filter: 'ColFilter',
+    resizable: true,
+    cellClass: ['border-r', '!border-gray-200', 'justify-start']
+  },
+  {
+    headerName: 'Direktorat',
+    field: 'm_dir.nama',
+    wrapText: true,
+    filter: true,
+    sortable: true,
+    flex: 1,
+    filter: 'ColFilter',
+    resizable: true,
+    cellClass: ['border-r', '!border-gray-200', 'justify-start']
   },
   {
     headerName: 'Kode Presensi',
