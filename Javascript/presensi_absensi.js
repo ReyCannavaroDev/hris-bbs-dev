@@ -55,11 +55,25 @@ let tempYear = thisMonth.split('-')[0]
 let tempMonth = thisMonth.split('-')[1]
 const headerValues = reactive({
   month: tempYear+'-'+tempMonth,
+  m_dir_id: null,
   divisi_id: null,
   dept_id: null
 })
 
-
+const formatDmy = (dateStr) => {
+  if (!dateStr) return '-'
+  const str = String(dateStr).trim()
+  const parts = str.split(/[-/]/)
+  if (parts.length === 3) {
+    if (parts[0].length === 4) {
+      return `${parts[2].padStart(2, '0')}-${parts[1].padStart(2, '0')}-${parts[0]}`
+    }
+    if (parts[2].length === 4) {
+      return `${parts[0].padStart(2, '0')}-${parts[1].padStart(2, '0')}-${parts[2]}`
+    }
+  }
+  return dateStr
+}
 
 const formatDate = (year, month, day) => {
     return `${year}-${month}-${String(day).padStart(2, '0')}`;
@@ -142,7 +156,7 @@ async function dayPerWeek(paramsFunc){
 
   let weeksMap = weeks.map(week => ({
     value: week.startDate+'/'+week.endDate,
-    text: `${week.week} ${week.startDate}/${week.endDate}`
+    text: `${week.week} ${formatDmy(week.startDate)} s/d ${formatDmy(week.endDate)}`
   }));
 
   weeksOptions.value = weeksMap
@@ -174,7 +188,10 @@ const loadData = async () => {
   try {
     const dataURL = `${store.server.url_backend}/operation${endpointApi}/get_by_daily`
 
-    const fixedParams = new URLSearchParams(headerValues)
+    const cleanHeaderValues = Object.fromEntries(
+      Object.entries(headerValues).filter(([_, v]) => v !== null && v !== undefined && v !== '' && v !== 'null')
+    )
+    const fixedParams = new URLSearchParams(cleanHeaderValues)
     const res = await fetch(dataURL + '?' + fixedParams, {
       headers: {
         'Content-Type': 'Application/json',
@@ -215,7 +232,10 @@ const openDate = async (date) => {
 
   headerValues.date = date
 
-  const fixedParams = new URLSearchParams(headerValues)
+  const cleanHeaderValues = Object.fromEntries(
+    Object.entries(headerValues).filter(([_, v]) => v !== null && v !== undefined && v !== '' && v !== 'null')
+  )
+  const fixedParams = new URLSearchParams(cleanHeaderValues)
   const res = await fetch(dataURL + '?' + fixedParams, {
     headers: {
       'Content-Type': 'Application/json',
@@ -261,6 +281,7 @@ onBeforeMount(async () => {
       if (!res.ok) throw new Error("Failed when trying to read data")
       const resultJson = await res.json()
       initialValues = resultJson.data
+      initialValues.company_name = resultJson.data.company_name || resultJson.data['default_user.m_dir.nama'] || '-'
       const regex = new RegExp(`(${store.server.url_backend})(\/?)(${store.server.url_backend})`, 'g')
       const image_checkin = initialValues.checkin_foto?.replace(regex, '$1')
       const image_checkout = initialValues.checkout_foto?.replace(regex, '$1')
@@ -268,17 +289,6 @@ onBeforeMount(async () => {
       const segments = new URL(initialValues.checkout_foto).pathname.split('/').filter(Boolean)
       if(segments.length === 0){
         isCheckout.value=true
-        // const params2 = { join: true, transform: true, where: `this.name='default-no-image'` }
-        // const fixedParams2 = new URLSearchParams(params2)
-        // const res2 = await fetch(`${store.server.url_backend}/operation/m_file` + '?' + fixedParams2, {
-        //   headers: {
-        //     'Content-Type': 'Application/json',
-        //     Authorization: `${store.user.token_type} ${store.user.token}`
-        //   },
-        // })
-        // if (!res2.ok) throw new Error("Failed when trying to read data")
-        // const resultJson2 = await res2.json()
-        // initialValues.checkout_foto = resultJson2.data[0].filename
       }else{
         initialValues.checkout_foto = image_checkout
       }
@@ -288,14 +298,6 @@ onBeforeMount(async () => {
       if(initialValues.checkout_lat && initialValues.checkout_long){
         initialValues.geo_checkout = `POINT(${initialValues.checkout_long} ${initialValues.checkout_lat})`
       }
-      // values.absen_checkin_on_scope= resultJson.data['checkin_on_scope'] ? true  : false
-      // values.absen_checkout_on_scope = resultJson.data['checkout_on_scope'] ? true  : false
-      // console.log( resultJson.data)
-      // console.log(resultJson.data['checkin_on_scope'] ? true  : false)
-      
-      // const tempTanggal = route.query.ts.split('-')
-      // initialValues.tanggal = `${tempTanggal[2]}/${tempTanggal[1]}/${tempTanggal[0]}`
-      
     } catch (err) {
       isBadForm.value = true
       swal.fire({
@@ -313,18 +315,21 @@ onBeforeMount(async () => {
       isRequesting.value = true
       isCheckout.value=true
       initialValues.default_user_id = route.query.user_id
-      // const params = { join: true, transform: true, where: `this.name='default-no-image'` }
-      // const fixedParams = new URLSearchParams(params)
-      // const res = await fetch(`${store.server.url_backend}/operation/m_file` + '?' + fixedParams, {
-      //   headers: {
-      //     'Content-Type': 'Application/json',
-      //     Authorization: `${store.user.token_type} ${store.user.token}`
-      //   },
-      // })
-      // if (!res.ok) throw new Error("Failed when trying to read data")
-      // const resultJson = await res.json()
-      // initialValues.checkin_foto = resultJson.data[0].filename
-      // initialValues.checkout_foto = resultJson.data[0].filename
+      initialValues.company_name = route.query.company ? decodeURIComponent(route.query.company) : '-'
+      if (initialValues.default_user_id && (!initialValues.company_name || initialValues.company_name === '-')) {
+        try {
+          const resUser = await fetch(`${store.server.url_backend}/operation/default_users/${initialValues.default_user_id}?join=true`, {
+            headers: {
+              'Content-Type': 'Application/json',
+              Authorization: `${store.user.token_type} ${store.user.token}`
+            }
+          })
+          if (resUser.ok) {
+            const jsonUser = await resUser.json()
+            initialValues.company_name = jsonUser.data?.['m_dir.nama'] || jsonUser.data?.m_dir?.nama || '-'
+          }
+        } catch(e) {}
+      }
     } catch (err) {
       isBadForm.value = true
       swal.fire({
@@ -337,8 +342,9 @@ onBeforeMount(async () => {
       })
     }
     isRequesting.value = false
-    const tempTanggal = route.query.ts.split('-')
-    initialValues.tanggal = `${tempTanggal[2]}/${tempTanggal[1]}/${tempTanggal[0]}`
+    if (route.query.ts) {
+      initialValues.tanggal = route.query.ts
+    }
   }
 
   for (const key in initialValues) {
@@ -382,6 +388,12 @@ function onSave() {
         }else if(values.checkin_time && !values.checkout_time){
           values.status='WORKING'
         }
+        if (values.tanggal) {
+          const parts = String(values.tanggal).split(/[-/]/)
+          if (parts.length === 3 && parts[2].length === 4) {
+            values.tanggal = `${parts[2]}-${parts[1].padStart(2, '0')}-${parts[0].padStart(2, '0')}`
+          }
+        }
         const isCreating = ['Create','Copy','Tambah'].includes(actionText.value)
         const dataURL = `${store.server.url_backend}/operation${endpointApi}${isCreating ? '' : ('/' + route.params.id)}`
         isRequesting.value = true
@@ -422,6 +434,7 @@ function onBackReal() {
     router.replace('/'+modulPath)
     dataByDateDetail.value = []
     openDateSelected.value = null
+    headerValues.m_dir_id = null
     headerValues.dept_id = null
     headerValues.divisi_id = null
     loadData()
@@ -504,7 +517,8 @@ const landing = reactive({
     },
     params: {
       simplest: true,
-      searchfield:'tanggal, creator.name, status, checkin_time, checkin_on_scope, checkout_time, checkout_on_scope',
+      join: true,
+      searchfield:'tanggal, default_user.m_dir.nama, creator.name, status, checkin_time, checkin_on_scope, checkout_time, checkout_on_scope',
     },
     onsuccess(response) {
       response.page = response.current_page
@@ -529,7 +543,18 @@ const landing = reactive({
     flex:1,
     filter: 'ColFilter',
     resizable: true,
-    cellClass: [ 'border-r', '!border-gray-200', 'justify-left']
+    cellClass: [ 'border-r', '!border-gray-200', 'justify-left'],
+    cellRenderer: ({ value }) => formatDmy(value)
+  },
+  {
+    field: 'default_user.m_dir.nama',
+    headerName: 'Company',
+    filter: true,
+    sortable: true,
+    flex:1,
+    filter: 'ColFilter',
+    resizable: true,
+    cellClass: [ 'border-r', '!border-gray-200', 'justify-start']
   },
   {
     field: 'creator.name',

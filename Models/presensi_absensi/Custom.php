@@ -25,6 +25,26 @@ class presensi_absensi extends \App\Models\BasicModels\presensi_absensi
     {
         $model->checkout_foto = url('').'/'.$model->checkout_foto;
         $model->checkin_foto = url('').'/'.$model->checkin_foto;
+        $user = \DB::table('default_users')
+            ->leftJoin('m_dir', 'm_dir.id', '=', 'default_users.m_dir_id')
+            ->leftJoin('m_kary', 'm_kary.id', '=', 'default_users.m_kary_id')
+            ->leftJoin('m_dir as kary_dir', 'kary_dir.id', '=', 'm_kary.m_dir_id')
+            ->where('default_users.id', $model->default_user_id)
+            ->select('m_dir.nama as dir_nama', 'kary_dir.nama as kary_dir_nama')
+            ->first();
+        $model->company_name = $user ? ($user->dir_nama ?? $user->kary_dir_nama ?? '-') : '-';
+    }
+
+    public function setTanggalAttribute($value)
+    {
+        if ($value) {
+            $parts = preg_split('/[-\/]/', $value);
+            if (count($parts) === 3 && strlen($parts[0]) <= 2 && strlen($parts[2]) === 4) {
+                $this->attributes['tanggal'] = "{$parts[2]}-{$parts[1]}-{$parts[0]}";
+                return;
+            }
+        }
+        $this->attributes['tanggal'] = $value;
     }
 
     // public function custom_get_by_daily($req)
@@ -105,10 +125,13 @@ class presensi_absensi extends \App\Models\BasicModels\presensi_absensi
             $req
         ) {
             $q->where("is_active", true);
-            if ($req->divisi_id) {
+            if ($req->filled('m_dir_id') && $req->m_dir_id !== 'null') {
+                $q->where("m_dir_id", $req->m_dir_id);
+            }
+            if ($req->filled('divisi_id') && $req->divisi_id !== 'null') {
                 $q->where("m_divisi_id", $req->divisi_id);
             }
-            if ($req->dept_id) {
+            if ($req->filled('dept_id') && $req->dept_id !== 'null') {
                 $q->where("m_dept_id", $req->dept_id);
             }
         })->count();
@@ -132,10 +155,13 @@ class presensi_absensi extends \App\Models\BasicModels\presensi_absensi
                 $req
             ) {
                 $q1->where("is_active", true);
-                if ($req->divisi_id) {
+                if ($req->filled('m_dir_id') && $req->m_dir_id !== 'null') {
+                    $q1->where("m_dir_id", $req->m_dir_id);
+                }
+                if ($req->filled('divisi_id') && $req->divisi_id !== 'null') {
                     $q1->where("m_divisi_id", $req->divisi_id);
                 }
-                if ($req->dept_id) {
+                if ($req->filled('dept_id') && $req->dept_id !== 'null') {
                     $q1->where("m_dept_id", $req->dept_id);
                 }
             })
@@ -147,17 +173,25 @@ class presensi_absensi extends \App\Models\BasicModels\presensi_absensi
             $cuti = t_cuti::whereIn("status", ["APPROVED", "POSTED"])
                 ->whereDate("date_from", "<=", $date)
                 ->whereDate("date_to", ">=", $date)
-                ->when($req->divisi_id || $req->dept_id, function ($q) use ($req) {
-                    $q->whereHas("m_kary", function ($qKary) use ($req) {
-                        $qKary->where("is_active", true);
-                        if ($req->divisi_id) {
-                            $qKary->where("m_divisi_id", $req->divisi_id);
-                        }
-                        if ($req->dept_id) {
-                            $qKary->where("m_dept_id", $req->dept_id);
-                        }
-                    });
-                })
+                ->when(
+                    ($req->filled('m_dir_id') && $req->m_dir_id !== 'null') ||
+                    ($req->filled('divisi_id') && $req->divisi_id !== 'null') ||
+                    ($req->filled('dept_id') && $req->dept_id !== 'null'),
+                    function ($q) use ($req) {
+                        $q->whereHas("m_kary", function ($qKary) use ($req) {
+                            $qKary->where("is_active", true);
+                            if ($req->filled('m_dir_id') && $req->m_dir_id !== 'null') {
+                                $qKary->where("m_dir_id", $req->m_dir_id);
+                            }
+                            if ($req->filled('divisi_id') && $req->divisi_id !== 'null') {
+                                $qKary->where("m_divisi_id", $req->divisi_id);
+                            }
+                            if ($req->filled('dept_id') && $req->dept_id !== 'null') {
+                                $qKary->where("m_dept_id", $req->dept_id);
+                            }
+                        });
+                    }
+                )
                 ->count();
 
             $alpha = $totalKary - $hadir - $cuti;
@@ -248,6 +282,9 @@ class presensi_absensi extends \App\Models\BasicModels\presensi_absensi
 
     public function custom_get_by_date($req)
     {
+        $divisiId = ($req->filled('divisi_id') && $req->divisi_id !== 'null') ? $req->divisi_id : null;
+        $deptId = ($req->filled('dept_id') && $req->dept_id !== 'null') ? $req->dept_id : null;
+
         $data = \DB::select("
             SELECT json_agg(json_build_object(
                 'm_kary_id', m_kary_id,
@@ -257,13 +294,21 @@ class presensi_absensi extends \App\Models\BasicModels\presensi_absensi
                 'dept', dept,
                 'absensi', absensi
             )) AS att_report
-            FROM get_employee_attendance_report(?,?,?)",[$req->date,$req->divisi_id,$req->dept_id]);
+            FROM get_employee_attendance_report(?,?,?)",[$req->date, $divisiId, $deptId]);
 
         if (!count($data) || !$data[0]->att_report) {
             return $this->helper->customResponse('OK', 200, []);
         }
 
         $att_report = json_decode($data[0]->att_report);
+
+        $karyIds = array_filter(array_column($att_report, 'm_kary_id'));
+        $karyMap = \DB::table('m_kary')
+            ->leftJoin('m_dir', 'm_dir.id', '=', 'm_kary.m_dir_id')
+            ->whereIn('m_kary.id', $karyIds)
+            ->select('m_kary.id', 'm_kary.m_dir_id', 'm_dir.nama as company_nama')
+            ->get()
+            ->keyBy('id');
 
         $cutiAll = \DB::table("t_cuti")
             ->leftJoin("m_general as al", "al.id", "=", "t_cuti.alasan_id")
@@ -283,6 +328,10 @@ class presensi_absensi extends \App\Models\BasicModels\presensi_absensi
             ->get();
 
         foreach ($att_report as $report) {
+            $karyInfo = $karyMap->get($report->m_kary_id);
+            $report->m_dir_id = $karyInfo ? $karyInfo->m_dir_id : null;
+            $report->company = $karyInfo ? ($karyInfo->company_nama ?? '-') : '-';
+
             $currentStatus = @$report->absensi->status;
             if (!$currentStatus || $currentStatus === "NOT ATTEND" || $currentStatus === "CUTI") {
                 $matchingCuti = $cutiAll->first(function ($c) use ($report) {
@@ -304,6 +353,12 @@ class presensi_absensi extends \App\Models\BasicModels\presensi_absensi
                     }
                 }
             }
+        }
+
+        if ($req->filled('m_dir_id') && $req->m_dir_id !== 'null') {
+            $att_report = array_values(array_filter($att_report, function($report) use ($req) {
+                return $report->m_dir_id == $req->m_dir_id;
+            }));
         }
 
         return $this->helper->customResponse('OK', 200, $att_report);

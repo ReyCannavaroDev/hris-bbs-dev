@@ -1,7 +1,7 @@
 @if(!$req->has('id'))
 @verbatim
 <div class="bg-white p-6 rounded-md">
-  <div class="flex grid-cols-3 gap-3">
+  <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3">
     <FieldX :bind="{ readonly: openDateSelected ? true : false , required: true}" class="w-full py-2 !mt-0"
       :value="headerValues.month" :check="false" type="month" label="Filter" placeholder="Periode" @input="(v)=>{
         dayPerWeek(v)
@@ -15,6 +15,22 @@
         loadData()
       }" displayField="text" valueField="value" :options="weeksOptions" placeholder="Periode Tgl" fa-icon="calendar"
       :check="true" />
+    <FieldSelect class="w-full py-2 !mt-0" :bind="{ disabled: false, clearable:true }" :value="headerValues.m_dir_id"
+      :check="false" @input="(v)=>{
+        headerValues.m_dir_id = v
+        loadData()
+      }" displayField="nama" valueField="id" :api="{
+          url: `${store.server.url_backend}/operation/m_dir`,
+          headers: {
+            Authorization: `${store.user.token_type} ${store.user.token}`
+          },
+          params: {
+            simplest:true,
+            single:true,
+            where:`this.is_active='true'`,
+            transform:false,
+          }
+      }" placeholder="Company" fa-icon="search" :check="true" />
     <FieldSelect class="w-full py-2 !mt-0" :bind="{ disabled: false, clearable:true }" :value="headerValues.divisi_id"
       :check="false" @input="(v)=>{
         headerValues.divisi_id = v
@@ -54,19 +70,20 @@
   <h2 v-if="loaderData" class="text-center">
     <span class="italic">Harap tunggu, kami sedang menyiapkan data untuk anda..</span> &#128522;
   </h2>
-  <button  v-if="openDateSelected" @click="onBackReal" class="bg-blue-500 mb-2 text-white hover:bg-blue-600 rounded-[6px] py-2 px-[12.5px]">Kembail ke list</button>
-  <h3 v-if="openDateSelected" class="font-semibold">Tanggal : {{openDateSelected}}</h3>
+  <button  v-if="openDateSelected" @click="onBackReal" class="bg-blue-500 mb-2 text-white hover:bg-blue-600 rounded-[6px] py-2 px-[12.5px]">Kembali ke list</button>
+  <h3 v-if="openDateSelected" class="font-semibold">Tanggal : {{formatDmy(openDateSelected)}}</h3>
   <div class="overflow-auto w-full rounded-lg">
     <table class="table-auto w-full" v-if="openDateSelected && dataByDateDetail.length">
       <thead class="bg-blue-600 text-white ">
         <tr>
-          <th class="border-1 border-gray-500 px-3 py-2 w-[5%]">No</th>
-          <th class="border-1 border-gray-500 px-3 py-2 w-[10%]">NIK</th>
-          <th class="border-1 border-gray-500 px-3 py-2 w-[25%]">Nama</th>
-          <th class="border-1 border-gray-500 px-3 py-2 w-[27%]">Departemen</th>
+          <th class="border-1 border-gray-500 px-3 py-2 w-[4%]">No</th>
+          <th class="border-1 border-gray-500 px-3 py-2 w-[9%]">NIK</th>
+          <th class="border-1 border-gray-500 px-3 py-2 w-[20%]">Nama</th>
+          <th class="border-1 border-gray-500 px-3 py-2 w-[15%]">Company</th>
+          <th class="border-1 border-gray-500 px-3 py-2 w-[18%]">Departemen</th>
           <th class="border-1 border-gray-500 px-3 py-2 w-[10%]">Status</th>
-          <th class="border-1 border-gray-500 px-3 py-2 w-[12%]">Waktu Checkin</th>
-          <th class="border-1 border-gray-500 px-3 py-2 w-[12%]">Waktu Checkout</th>
+          <th class="border-1 border-gray-500 px-3 py-2 w-[11%]">Waktu Checkin</th>
+          <th class="border-1 border-gray-500 px-3 py-2 w-[11%]">Waktu Checkout</th>
           <th class="border-1 border-gray-500 px-3 py-2 w-[50px]">Aksi</th>
         </tr>
       </thead>
@@ -77,6 +94,7 @@
           <td class="text-left border-1 border-gray-500 px-3">{{idx+1}}</td>
           <td class="text-left border-1 border-gray-500 px-3">{{item.kode}}</td>
           <td class="text-left border-1 border-gray-500 px-3">{{item.nama_lengkap}}</td>
+          <td class="text-left border-1 border-gray-500 px-3">{{item.company ?? '-'}}</td>
           <td class="text-left border-1 border-gray-500 px-3">{{item.dept}}</td>
           <td class="text-left border-1 border-gray-500 px-3 font-medium"
             :class="item.absensi?.status === 'CUTI (SAKIT)' ? 'text-blue-700 font-semibold' : (item.absensi?.status === 'CUTI' ? 'text-amber-700' : '')">
@@ -100,11 +118,11 @@
           </td>
           <td class="text-center border-1 border-gray-500 px-3">
             <RouterLink v-if="!item.absensi?.presensi_absensi_id && item.absensi?.status?.toLowerCase() === 'not attend'"
-              :to="$route.path+'/create?ts='+openDateSelected+`&user_id=${item.default_user_id}`" class="text-gray-600">
+              :to="$route.path+'/create?ts='+openDateSelected+`&user_id=${item.default_user_id}&company=${encodeURIComponent(item.company || '')}`" class="text-gray-600">
               <icon fa="plus" />
             </RouterLink>
             <RouterLink v-else-if="item.absensi?.presensi_absensi_id"
-              :to="$route.path+`/${item.absensi?.presensi_absensi_id}?action=Edit&ts=`+item.absensi?.tanggal"
+              :to="$route.path+`/${item.absensi?.presensi_absensi_id}?action=Edit&ts=`+(item.absensi?.tanggal || openDateSelected)"
               class="text-gray-600">
               <icon fa="edit" />
             </RouterLink>
@@ -134,7 +152,7 @@
             :class="item.type == 'Hari Libur' ? 'bg-gray-500 text-white' : (item.type == 'Cuti Bersama' ? 'bg-red-400 text-white' : '')"
             :title="item.type">
             <td class="text-left border-1 border-gray-500 px-3">{{item.day_name_idn}}</td>
-            <td class="text-left border-1 border-gray-500 px-3">{{item.all_days_of_month}}</td>
+            <td class="text-left border-1 border-gray-500 px-3">{{item.date_to_idn || formatDmy(item.all_days_of_month)}}</td>
             <td class="text-right border-1 border-gray-500 px-3">{{item.attend}}</td>
             <td class="text-right border-1 border-gray-500 px-3">{{item.cuti}}</td>
             <td class="text-right border-1 border-gray-500 px-3">{{item.alpha}}</td>
@@ -182,6 +200,11 @@
             <td class="w-[30%] py-1 px-2">Nama </td>
             <td class="align-top py-1 px-1">:</td>
             <td class=" py-1 px-1">{{dataDetail.nama_lengkap}}</td>
+          </tr>
+          <tr class="font-semibold">
+            <td class="w-[30%] py-1 px-2">Company </td>
+            <td class="align-top py-1 px-1">:</td>
+            <td class=" py-1 px-1">{{dataDetail.company ?? '-'}}</td>
           </tr>
           <tr class="font-semibold">
             <td class="w-[30%] py-1 px-2">Departemen </td>
@@ -243,9 +266,15 @@
       <div class="grid <md:grid-cols-1 grid-cols-2 gap-x-[80px] gap-y-2">
         <!-- START COLUMN -->
         <div>
-          <label class="font-semibold">Karyawan</span></label>
+          <label class="font-semibold">Karyawan</label>
           <FieldPopup class="w-full py-2 !mt-0" :bind="{ readonly: true }" :value="values.default_user_id"
-            @input="(v)=>values.default_user_id=v" :errorText="formErrors.default_user_id?'failed':''"
+            @input="(v)=>values.default_user_id=v"
+            @update:valueFull="(objVal)=>{
+              if(objVal){
+                values.company_name = objVal['m_dir.nama'] || (objVal.m_dir ? objVal.m_dir.nama : '-')
+              }
+            }"
+            :errorText="formErrors.default_user_id?'failed':''"
             :hints="formErrors.default_user_id" label="" valueField="id" displayField="name" :api="{
                 url: `${store.server.url_backend}/operation/default_users`,
                 headers: { 'Content-Type': 'Application/json', Authorization: `${store.user.token_type} ${store.user.token}`},
@@ -270,7 +299,7 @@
             {
               flex: 1,
               field: 'm_dir.nama',
-              headerName:  'Direktorat',
+              headerName:  'Company',
               sortable: false, resizable: true, filter: 'ColFilter',
               cellClass: ['border-r', '!border-gray-200', 'justify-center']
             },
@@ -282,34 +311,24 @@
               cellClass: ['border-r', '!border-gray-200', 'justify-center']
             },
             ]" />
-
-          <!-- <FieldX 
-            :bind="{ readonly: true }" 
-            label="" 
-            class="w-full py-2 !mt-0"
-            :value="values.creator_name"
-            :errorText="formErrors.creator ? 'failed' : ''"
-            @input="v=>values.creator=v" 
-            :hints="formErrors.creator" 
-            :check="false"
-            label=""
-            placeholder="Karyawan"
-          /> -->
-
         </div>
         <div>
-          <label class="font-semibold">Tanggal</span></label>
-          <FieldX :bind="{ readonly: true, disabled: true }" label="" class="w-full py-2 !mt-0" :value="values.tanggal"
-            type="date" :errorText="formErrors.tanggal ? 'failed' : ''" @input="v=>values.tanggal=v"
+          <label class="font-semibold">Company</label>
+          <FieldX :bind="{ readonly: true, disabled: true }" label="" class="w-full py-2 !mt-0" :value="values.company_name"
+            :check="false" label="" placeholder="Company" />
+        </div>
+        <div>
+          <label class="font-semibold">Tanggal</label>
+          <FieldX :bind="{ readonly: true, disabled: true }" label="" class="w-full py-2 !mt-0" :value="formatDmy(values.tanggal)"
+            :errorText="formErrors.tanggal ? 'failed' : ''" @input="v=>values.tanggal=v"
             :hints="formErrors.tanggal" :check="false" label="" placeholder="Tanggal" />
         </div>
         <div>
-          <label class="font-semibold">Status</span></label>
+          <label class="font-semibold">Status</label>
           <FieldX :bind="{ readonly: true }" label="" class="w-full py-2 !mt-0" :value="values.status"
             :errorText="formErrors.status ? 'failed' : ''" @input="v=>values.status=v" :hints="formErrors.status"
             :check="false" label="" placeholder="Status" />
         </div>
-        <div></div>
 
 
         <!-- Check IN -->
