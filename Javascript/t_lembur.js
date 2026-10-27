@@ -40,9 +40,18 @@ onBeforeMount(() => {
 let initialValues = {}
 const changedValues = []
 
+const getTodayDate = () => {
+  const d = new Date()
+  const year = d.getFullYear()
+  const month = String(d.getMonth() + 1).padStart(2, '0')
+  const day = String(d.getDate()).padStart(2, '0')
+  return `${year}-${month}-${day}`
+}
+
 const values = reactive({
   m_comp_id: null,
   m_dir_id: null,
+  tanggal: getTodayDate(),
 })
 
 
@@ -53,6 +62,9 @@ onBeforeMount(async () => {
   if (!isRead) {
     values.m_comp_id = store.user.data?.m_comp_id ?? 1
     values.m_dir_id = store.user.data?.m_dir_id ?? null
+    if (!values.tanggal) {
+      values.tanggal = getTodayDate()
+    }
   }
 
   if (isRead) {
@@ -199,6 +211,9 @@ function onReset() {
     if (res.isConfirmed) {
       for (const key in initialValues) {
         values[key] = initialValues[key]
+      }
+      if (!isRead && !values.tanggal) {
+        values.tanggal = getTodayDate()
       }
     }
   })
