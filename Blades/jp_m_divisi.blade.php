@@ -47,11 +47,11 @@
             @input="v => values.m_dir_id = v" 
             :hints="formErrors.m_dir_id" 
             :check="false"
-            label="Company / Cabang"
+            label="Company"
             @update:valueFull="(objVal)=>{
               values.m_divisi_id = null
             }"
-            placeholder="Pilih Company / Cabang"
+            placeholder="Pilih Company"
             valueField="id" 
             displayField="nama"
             :api="{

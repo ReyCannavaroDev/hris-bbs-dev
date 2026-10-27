@@ -140,7 +140,7 @@ async function onSave() {
       swal.fire({
         icon: 'error',
         title: 'Waduuh',
-        text: 'Jangan Lupa Isi From Direktorat',
+        text: 'Jangan Lupa Isi Form Company',
       });
       return;
     }
@@ -187,23 +187,16 @@ async function onSave() {
 }
 
 //  @else----------------------- LANDING
-const activeBtn = ref()
+const activeBtn = ref(null)
 
-function filterShowData(params,noBtn){
-  if(activeBtn.value === noBtn){
+function filterShowData(params, noBtn) {
+  if (activeBtn.value === noBtn) {
     activeBtn.value = null
-  }else{
-    activeBtn.value = noBtn
-  }
-  if(params){
-    landing.api.params.where = `this.is_active=true`
-  }else if(activeBtn.value == null){
-    // clear params filter
     landing.api.params.where = null
-  }else{
-    landing.api.params.where = `this.is_active=false`
+  } else {
+    activeBtn.value = noBtn
+    landing.api.params.where = `this.is_active=${params ? 'true' : 'false'}`
   }
-
   apiTable.value.reload()
 }
 
@@ -285,7 +278,7 @@ const landing = reactive({
     },
     params: {
       simplest: true,
-      searchfield:'this.nama, this.desc, m_dir.nama',
+      searchfield:'this.nama, this.desc, m_dir.nama, this.is_active',
     },
     onsuccess(response) {
       response.page = response.current_page
@@ -303,7 +296,7 @@ const landing = reactive({
     cellClass: ['justify-center', 'bg-gray-50', 'border-r', '!border-gray-200']
   },
   {
-    headerName: 'Company / Cabang',
+    headerName: 'Company',
     field: 'm_dir.nama',
     filter: true,
     sortable: true,
@@ -341,8 +334,9 @@ const landing = reactive({
     resizable: true,
     flex:1,
     cellClass: [ 'border-r', '!border-gray-200', 'justify-center'],
+    valueGetter: (params) => (params.data?.is_active ? 'Active' : 'Inactive'),
     cellRenderer: ({ value }) => {
-    return value === true
+    return value === 'Active' || value === true
       ? `<span class="text-green-500 rounded-md text-xs font-medium px-4 py-1 inline-block capitalize">Active</span>`
       : `<span class="text-gray-500 rounded-md text-xs font-medium px-4 py-1 inline-block capitalize">Inactive</span>`
   }},
