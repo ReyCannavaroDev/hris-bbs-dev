@@ -185,12 +185,14 @@ async function onSave() {
         const dataURL = `${store.server.url_backend}/operation${endpointApi}${isCreating ? '' : ('/' + route.params.id)}`
         isRequesting.value = true
          values.is_active = values.is_active ? 1 : 0
-        for (const key in informasiCuti) {
-          if(['sisa_cuti_masa_kerja','sisa_cuti_p24','sisa_cuti_reguler'].includes(key)){            
-            if (informasiCuti[key] != null && informasiCuti[key] != undefined && informasiCuti[key] < 0 ) {
-              throw(`Data Tidak Boleh Kurang Dari 0`)
-            } 
-          }
+        const tipeMap = {
+          '01': 'sisa_cuti_masa_kerja',
+          '02': 'sisa_cuti_reguler',
+          '03': 'sisa_cuti_p24'
+        }
+        const activeKey = tipeMap[values.tipe_key]
+        if (activeKey && informasiCuti[activeKey] != null && informasiCuti[activeKey] != undefined && informasiCuti[activeKey] < 0 && (tempInfo[activeKey] ?? 0) >= 0) {
+          throw(`Data Tidak Boleh Kurang Dari 0`)
         }
         const res = await fetch(dataURL, {
           method: isCreating ? 'POST' : 'PUT',

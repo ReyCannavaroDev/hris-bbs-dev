@@ -4,9 +4,12 @@ namespace App\Models\CustomModels;
 
 class t_cuti_adjustment extends \App\Models\BasicModels\t_cuti_adjustment
 {    
+    private $helper;
+
     public function __construct()
     {
         parent::__construct();
+        $this->helper = getCore('Helper');
     }
     
     public $fileColumns    = [ /*file_column*/ ];
@@ -17,9 +20,6 @@ class t_cuti_adjustment extends \App\Models\BasicModels\t_cuti_adjustment
     public function createBefore( $model, $arrayData, $metaData, $id=null )
     {
       $newArrayData = $arrayData;
-      if (empty($newArrayData['nomor'])) {
-        $newArrayData['nomor'] = $this->helper->generateNomor("KODE CUTI");
-      }
       if (empty($newArrayData['m_comp_id'])) {
         $newArrayData['m_comp_id'] = 1;
       }
