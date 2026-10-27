@@ -72,6 +72,7 @@
             :errorText="formErrors.m_dir_id?'failed':''"
             :hints="formErrors.m_dir_id"
             placeholder="Pilih Company / Cabang"
+            label=""
             displayField="nama"
             valueField="id"
             :api="{
@@ -104,6 +105,7 @@
             :errorText="formErrors.divisi?'failed':''"
             :hints="formErrors.divisi"
             placeholder="Pilih Divisi"
+            label=""
             displayField="nama"
             valueField="id"
             :api="{
@@ -134,6 +136,7 @@
             :errorText="formErrors.m_dept_id?'failed':''"
             :hints="formErrors.m_dept_id"
             placeholder="Pilih Departemen"
+            label=""
             displayField="nama"
             valueField="id"
             :api="{
@@ -164,6 +167,7 @@
             :errorText="formErrors.periode_gaji_id?'failed':''"
             :hints="formErrors.periode_gaji_id"
             placeholder="Pilih Periode Gaji (Semua / Bulanan / Mingguan)"
+            label=""
             displayField="value"
             valueField="id"
             :api="{
@@ -199,7 +203,7 @@
               <td class="text-[#8F8F8F] font-semibold text-[14px] text-capitalize px-2 text-center w-[10%] border bg-[#f8f8f8] border-[#CACACA]">Periode</td>
               <td class="text-[#8F8F8F] font-semibold text-[14px] text-capitalize px-2 text-center w-[12%] border bg-[#f8f8f8] border-[#CACACA]">NIK</td>
               <td class="text-[#8F8F8F] font-semibold text-[14px] text-capitalize px-2 text-center w-[20%] border bg-[#f8f8f8] border-[#CACACA]">Karyawan</td>
-              <td class="text-[#8F8F8F] font-semibold text-[14px] text-capitalize px-2 text-center w-[12%] border bg-[#f8f8f8] border-[#CACACA]">Company / Cabang</td>
+              <td class="text-[#8F8F8F] font-semibold text-[14px] text-capitalize px-2 text-center w-[12%] border bg-[#f8f8f8] border-[#CACACA]">Company</td>
               <td class="text-[#8F8F8F] font-semibold text-[14px] text-capitalize px-2 text-center w-[12%] border bg-[#f8f8f8] border-[#CACACA]">Divisi</td>
               <td class="text-[#8F8F8F] font-semibold text-[14px] text-capitalize px-2 text-center w-[12%] border bg-[#f8f8f8] border-[#CACACA]">Departemen</td>
               <td class="text-[#8F8F8F] font-semibold text-[14px] text-capitalize px-2 text-center w-[15%] border bg-[#f8f8f8] border-[#CACACA]">Gaji Bersih</td>
@@ -216,7 +220,7 @@
                 {{ item.periode }}
               </td>
               <td class="text-left border border-[#CACACA] px-2">
-                {{ item['m_kary.nik'] }}
+                {{ item['m_kary.nik'] || item.nik || item.kode || '-' }}
               </td>
               <td class="text-left border border-[#CACACA] px-2">
                 {{ item.karyawan }}

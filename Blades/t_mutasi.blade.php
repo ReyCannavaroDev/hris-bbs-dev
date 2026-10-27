@@ -70,7 +70,7 @@
     headers: { 'Content-Type': 'Application/json', Authorization: `${store.user.token_type} ${store.user.token}`},
     params: {
       simplest:true,
-      searchfield:'nik, nama_depan, m_dir.nama, m_divisi.nama, id'
+      searchfield:'nik, kode, nama_depan, m_dir.nama, m_divisi.nama, id'
     }
   }"  placeholder="Pilih Karyawan" label="" :check="false" :columns="[
     {
@@ -89,7 +89,8 @@
       sortable: false, 
       resizable: true, 
       filter: 'ColFilter',
-      cellClass: ['border-r', '!border-gray-200', 'justify-center']
+      cellClass: ['border-r', '!border-gray-200', 'justify-center'],
+      valueGetter: (p) => p.data?.nik || p.data?.kode || ''
     },
     {
       flex: 1,

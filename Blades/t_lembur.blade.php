@@ -120,7 +120,7 @@
                   params: {
                     simplest:true,
                     where: (values.m_dir_id ? `this.m_dir_id=${values.m_dir_id} AND ` : '') + `this.is_active='true'`,
-                    searchfield:'id, nama_depan, nik, m_divisi.nama, m_zona.nama, m_dir.nama',
+                    searchfield:'id, nama_depan, nik, kode, m_divisi.nama, m_zona.nama, m_dir.nama',
                   }
                 }" placeholder="Pilih Karyawan" label="" :check="false" :columns="[
               {
@@ -139,7 +139,8 @@
                 sortable: false, 
                 resizable: true, 
                 filter: 'ColFilter',
-                cellClass: ['border-r', '!border-gray-200', 'justify-center']
+                cellClass: ['border-r', '!border-gray-200', 'justify-center'],
+                valueGetter: (p) => p.data?.nik || p.data?.kode || ''
               },
               {
                 flex: 1,

@@ -54,6 +54,12 @@ class m_kary extends \App\Models\BasicModels\m_kary
             $object['jadwal_kerja'] = $jadwal_kerja;
         }
         $object['nomor_ktp'] = \DB::table('m_kary_det_kartu')->where('m_kary_id', $row['id'] ?? 0)->value('ktp_no') ?? null ;
+        if (empty($row['nik']) && !empty($row['kode'])) {
+            $object['nik'] = $row['kode'];
+        }
+        if (empty($row['kode']) && !empty($row['nik'])) {
+            $object['kode'] = $row['nik'];
+        }
         return array_merge( $row, $object );
     }
 

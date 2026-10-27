@@ -381,7 +381,7 @@ const landing = reactive({
   },
   {
     field: 'm_kary_dir.nama',
-    headerName: 'Company / Cabang',
+    headerName: 'Company',
     filter: true,
     wrapText: true,
     sortable: true,

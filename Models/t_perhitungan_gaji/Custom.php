@@ -515,6 +515,7 @@ class t_perhitungan_gaji extends \App\Models\BasicModels\t_perhitungan_gaji
             if($req->m_divisi_id) $kary = $kary->where('m_kary.m_divisi_id', $req->m_divisi_id);
             if($req->m_dept_id) $kary = $kary->where('m_kary.m_dept_id', $req->m_dept_id);
             if($req->periode_gaji_id) $kary = $kary->where('m_kary.periode_gaji_id', $req->periode_gaji_id);
+            if($req->m_kary_id) $kary = $kary->where('m_kary.id', $req->m_kary_id);
 
             $kary = $kary->get();
             
@@ -545,16 +546,18 @@ class t_perhitungan_gaji extends \App\Models\BasicModels\t_perhitungan_gaji
             $data = [];
             foreach ($kary as $key) {
                 $gaji = $this->salaryOfKary($key->id, $strDateFrom, $strDateTo);
+                $nikVal = $key->nik ?: $key->kode;
                 $data[] = [
                     'm_kary_id'         => $key->id,
-                    'm_kary.nik'        => $key->nik,
+                    'm_kary.nik'        => $nikVal,
                     'm_kary_dir_id'     => $key->m_dir_id,
                     'm_kary_dir.nama'   => $key->dir,
                     'm_kary_divisi_id'  => $key->m_divisi_id,
                     'm_kary_divisi.nama'=> $key->divisi,
                     'm_kary_dept_id'    => $key->m_dept_id,
                     'm_kary_dept.nama'  => $key->dept,
-                    'nik'               => $key->nik,
+                    'nik'               => $nikVal,
+                    'kode'              => $key->kode,
                     'nama_lengkap'      => $key->nama_lengkap,
                     'periode'           => $periodeLabel,
                     'periode_in_date'   => $strDateFrom,
