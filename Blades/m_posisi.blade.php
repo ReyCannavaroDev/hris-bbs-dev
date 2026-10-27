@@ -1,12 +1,20 @@
 @if(!$req->has('id'))
-<div class="bg-white p-6 rounded-xl h-[570px]">
+<div class="bg-white p-6 rounded-xl min-h-[570px]">
+  <div class="flex justify-between items-center mb-4">
+    <div class="flex items-center gap-x-4">
+      <p class="font-medium text-gray-700">Filter Status :</p>
+      <div class="flex gap-x-2">
+        <button @click="filterShowData(true, 1)" :class="activeBtn === 1 ? 'bg-green-600 text-white hover:bg-green-700' : 'border border-green-600 text-green-600 bg-white hover:bg-green-600 hover:text-white'" class="duration-300 transform hover:-translate-y-0.5 rounded-md py-1 px-3 text-sm font-medium">Active</button>
+        <div class="flex my-auto h-4 w-0.5 bg-gray-300"></div>
+        <button @click="filterShowData(false, 2)" :class="activeBtn === 2 ? 'bg-red-600 text-white hover:bg-red-700' : 'border border-red-600 text-red-600 bg-white hover:bg-red-600 hover:text-white'" class="duration-300 transform hover:-translate-y-0.5 rounded-md py-1 px-3 text-sm font-medium">Inactive</button>
+      </div>
+    </div>
+    <RouterLink v-if="currentMenu?.can_create||true||store.user.data.username==='developer'" :to="$route.path+'/create?'+(Date.parse(new Date()))" class="bg-green-500 text-white hover:bg-green-600 rounded-[6px] py-2 px-[12.5px]">
+      <icon fa="plus" />
+      Tambah Data
+    </RouterLink>
+  </div>
   <TableApi ref='apiTable' :api="landing.api" :columns="landing.columns" :actions="landing.actions">
-    <template #header>
-      <RouterLink v-if="currentMenu?.can_create||true||store.user.data.username==='developer'" :to="$route.path+'/create?'+(Date.parse(new Date()))" class="bg-green-500 text-white hover:bg-green-600 rounded-[6px] py-2 px-[12.5px]">
-        <icon fa="plus" />
-        Tambah Data
-      </RouterLink>
-    </template>
   </TableApi>
 </div>
 @else

@@ -71,7 +71,14 @@ onBeforeMount(async () => {
       })
       if (!res.ok) throw new Error("Failed when trying to read data")
       const resultJson = await res.json()
-      initialValues = resultJson.data
+      initialValues = resultJson.data || {}
+      if (initialValues.is_active !== undefined) {
+        initialValues.is_active = (initialValues.is_active === 1 || initialValues.is_active === true || initialValues.is_active === '1' || initialValues.is_active === 'true')
+      }
+      if (route.query.action === 'Copy') {
+        delete initialValues.id
+        delete initialValues.kode
+      }
     } catch (err) {
       isBadForm.value = true
       swal.fire({
@@ -88,6 +95,9 @@ onBeforeMount(async () => {
 
   for (const key in initialValues) {
     values[key] = initialValues[key]
+  }
+  if (values.is_active === undefined) {
+    values.is_active = true
   }
 })
 
@@ -140,41 +150,135 @@ function onReset() {
 }
 
 async function onSave() {
-  //values.tags = JSON.stringify(values.tags)
-      try {
-        values.is_active=(values.is_active===true)?1:0
-        const isCreating = ['Create','Copy','Tambah'].includes(actionText.value)
-        const dataURL = `${store.server.url_backend}/operation${endpointApi}${isCreating ? '' : ('/' + route.params.id)}`
-        isRequesting.value = true
-        const res = await fetch(dataURL, {
-          method: isCreating ? 'POST' : 'PUT',
-          headers: {
-            'Content-Type': 'Application/json',
-            Authorization: `${store.user.token_type} ${store.user.token}`
-          },
-          body: JSON.stringify(values)
-        })
-        if (!res.ok) {
-          if ([400, 422].includes(res.status)) {
-            const responseJson = await res.json()
-            formErrors.value = responseJson.errors || {}
-            throw (responseJson.errors.length ? responseJson.errors[0] : responseJson.message || "Failed when trying to post data")
-          } else {
-            throw ("Failed when trying to post data")
-          }
+  try {
+    const errors = {}
+
+    if (!values.desc_kerja || !String(values.desc_kerja).trim()) {
+      errors.desc_kerja = 'Deskripsi wajib diisi'
+    }
+
+    if (values.min_pengalaman === undefined || values.min_pengalaman === null || String(values.min_pengalaman).trim() === '') {
+      errors.min_pengalaman = 'Minimal pengalaman wajib diisi'
+    } else if (Number(values.min_pengalaman) < 0) {
+      errors.min_pengalaman = 'Minimal pengalaman tidak boleh kurang dari 0'
+    }
+
+    if (!values.min_pendidikan_id) {
+      errors.min_pendidikan_id = 'Minimal pendidikan wajib diisi'
+    }
+
+    if (values.min_gaji_pokok === undefined || values.min_gaji_pokok === null || String(values.min_gaji_pokok).trim() === '') {
+      errors.min_gaji_pokok = 'Minimal gaji pokok wajib diisi'
+    } else if (Number(values.min_gaji_pokok) < 0) {
+      errors.min_gaji_pokok = 'Minimal gaji pokok tidak boleh kurang dari 0'
+    }
+
+    if (values.max_gaji_pokok === undefined || values.max_gaji_pokok === null || String(values.max_gaji_pokok).trim() === '') {
+      errors.max_gaji_pokok = 'Maksimal gaji pokok wajib diisi'
+    } else if (Number(values.max_gaji_pokok) < 0) {
+      errors.max_gaji_pokok = 'Maksimal gaji pokok tidak boleh kurang dari 0'
+    }
+
+    if (
+      values.min_gaji_pokok !== undefined && values.min_gaji_pokok !== null && String(values.min_gaji_pokok).trim() !== '' &&
+      values.max_gaji_pokok !== undefined && values.max_gaji_pokok !== null && String(values.max_gaji_pokok).trim() !== '' &&
+      Number(values.max_gaji_pokok) < Number(values.min_gaji_pokok)
+    ) {
+      errors.max_gaji_pokok = 'Maksimal gaji pokok tidak boleh lebih kecil dari minimal gaji pokok'
+    }
+
+    if (values.potongan_bpjs === undefined || values.potongan_bpjs === null || String(values.potongan_bpjs).trim() === '') {
+      errors.potongan_bpjs = 'Potongan BPJS wajib diisi'
+    } else if (Number(values.potongan_bpjs) < 0) {
+      errors.potongan_bpjs = 'Potongan BPJS tidak boleh kurang dari 0'
+    }
+
+    if (!values.tipe_bpjs_id) {
+      errors.tipe_bpjs_id = 'Tipe BPJS wajib diisi'
+    }
+
+    if (!values.desc || !String(values.desc).trim()) {
+      errors.desc = 'Keterangan wajib diisi'
+    }
+
+    if (Object.keys(errors).length > 0) {
+      formErrors.value = errors
+      isBadForm.value = true
+      swal.fire({
+        icon: 'warning',
+        title: 'Data Belum Lengkap',
+        text: 'Silakan lengkapi semua kolom yang bertanda bintang (*)'
+      })
+      return
+    }
+
+    formErrors.value = {}
+    values.is_active = (values.is_active === true || values.is_active == 1 || values.is_active === '1' || values.is_active === 'true') ? 1 : 0
+    const isCreating = ['Create','Copy','Tambah'].includes(actionText.value)
+    const dataURL = `${store.server.url_backend}/operation${endpointApi}${isCreating ? '' : ('/' + route.params.id)}`
+    isRequesting.value = true
+    const res = await fetch(dataURL, {
+      method: isCreating ? 'POST' : 'PUT',
+      headers: {
+        'Content-Type': 'Application/json',
+        Authorization: `${store.user.token_type} ${store.user.token}`
+      },
+      body: JSON.stringify(values)
+    })
+    if (!res.ok) {
+      const responseJson = await res.json().catch(() => ({}))
+      formErrors.value = responseJson.errors || {}
+      let errMsg = responseJson.error || responseJson.message || "Failed when trying to post data"
+      if (Array.isArray(responseJson.errors) && responseJson.errors.length) {
+        errMsg = responseJson.errors.join('\n')
+      } else if (typeof responseJson.errors === 'object' && responseJson.errors !== null && !Array.isArray(responseJson.errors)) {
+        const firstErrKey = Object.keys(responseJson.errors)[0]
+        if (firstErrKey && responseJson.errors[firstErrKey]) {
+          errMsg = Array.isArray(responseJson.errors[firstErrKey]) ? responseJson.errors[firstErrKey][0] : responseJson.errors[firstErrKey]
         }
-        router.replace('/' + modulPath + '?reload='+(Date.parse(new Date())))
-      } catch (err) {
-        isBadForm.value = true
-        swal.fire({
-          icon: 'error',
-          text: err
-        })
       }
-      isRequesting.value = false
+      throw new Error(errMsg)
+    }
+    swal.fire({
+      icon: 'success',
+      text: 'Data posisi berhasil disimpan!',
+    }).then(() => {
+      router.replace('/' + modulPath + '?reload='+(Date.parse(new Date())))
+    })
+  } catch (err) {
+    isBadForm.value = true
+    swal.fire({
+      icon: 'error',
+      text: err.message || err || 'Terjadi kesalahan saat menyimpan data'
+    })
+  } finally {
+    isRequesting.value = false
+  }
 }
 
 //  @else----------------------- LANDING
+const activeBtn = ref(null)
+
+function filterShowData(params, noBtn) {
+  if (activeBtn.value === noBtn) {
+    activeBtn.value = null
+  } else {
+    activeBtn.value = noBtn
+  }
+
+  if (activeBtn.value === null) {
+    landing.api.params.where = null
+  } else if (params) {
+    landing.api.params.where = `this.is_active=true`
+  } else {
+    landing.api.params.where = `this.is_active=false`
+  }
+
+  if (apiTable.value) {
+    apiTable.value.reload()
+  }
+}
+
 const landing = reactive({
   actions: [
     {
@@ -253,7 +357,7 @@ const landing = reactive({
     },
     params: {
       simplest: true,
-      searchfield:'this.id, this.kode, this.desc_kerja, this.min_gaji_pokok, this.max_gaji_pokok, this.desc',
+      searchfield:'this.id, this.kode, this.desc_kerja, this.min_gaji_pokok, this.max_gaji_pokok, this.desc, this.is_active',
     },
     onsuccess(response) {
       response.page = response.current_page
@@ -291,29 +395,29 @@ const landing = reactive({
   },
   {
     headerName: 'Gaji Rata-Rata',
-    cellRenderer: ( params ) => {
-      return formatCurrency(params.data.min_gaji_pokok) + ' - ' + formatCurrency(params.data.max_gaji_pokok)
-    },
+    field: 'min_gaji_pokok',
     filter: true,
     sortable: true,
     filter: 'ColFilter',
     resizable: true,
     wrapText: true,
-    flex:1,
+    flex: 1,
+    valueGetter: (params) => formatCurrency(params.data?.min_gaji_pokok) + ' - ' + formatCurrency(params.data?.max_gaji_pokok),
+    cellRenderer: (params) => formatCurrency(params.data?.min_gaji_pokok) + ' - ' + formatCurrency(params.data?.max_gaji_pokok),
     cellClass: [ 'border-r', '!border-gray-200', 'justify-end']
   },
   {
+    headerName: 'Status',
     field: 'is_active',
     filter: true,
-    
-    headerName: 'Status',
-    // resizable: true,
-    // valueGetter: (p) => p.node.data['status'].toLowerCase()==='active'? 'Aktif':'Tidak Aktif',
     sortable: true,
-    flex:1,
+    filter: 'ColFilter',
+    resizable: true,
+    flex: 1,
+    valueGetter: (params) => (params.data?.is_active ? 'Active' : 'Inactive'),
     cellClass: [ 'border-r', '!border-gray-200', 'justify-center'],
     cellRenderer: ({ value }) => {
-      return value === true
+      return value === 'Active' || value === true
         ? `<span class="text-green-500 rounded-md text-xs font-medium px-4 py-1 inline-block capitalize">Active</span>`
         : `<span class="text-gray-500 rounded-md text-xs font-medium px-4 py-1 inline-block capitalize">Inactive</span>`
     },
