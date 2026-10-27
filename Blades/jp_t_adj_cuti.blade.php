@@ -112,9 +112,12 @@
               @update:valueFull="(v)=>{
                 if(v === null){
                   adjKary = false
+                  values.m_dir_id = null
                 }else{              
                   infoCuti(v.id)
                   values.value=null
+                  values.m_dir_id = v['m_dir.id'] || v.m_dir_id || (v.m_dir ? v.m_dir.id : null)
+                  values.m_comp_id = v['m_comp.id'] || v.m_comp_id || store.user.data?.m_comp_id || 1
                 }
               }"
               :errorText="formErrors.m_kary_id?'failed':''" :hints="formErrors.m_kary_id"
@@ -165,7 +168,7 @@
               {
                 flex: 1,
                 field: 'm_dir.nama',
-                headerName: 'Direktorat',
+                headerName: 'Company',
                 sortable: false, 
                 resizable: true, 
                 filter: 'ColFilter',

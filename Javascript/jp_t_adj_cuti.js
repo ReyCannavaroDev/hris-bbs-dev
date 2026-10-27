@@ -50,6 +50,14 @@ const infoCuti = async (id) => {
   if (!res.ok) throw new Error("Failed when trying to read data")
   const resultJson = await res.json()
   let tempValues = resultJson.data
+  if (tempValues) {
+    if (!values.m_dir_id && tempValues.m_dir_id) {
+      values.m_dir_id = tempValues.m_dir_id
+    }
+    if (!values.m_comp_id && tempValues.m_comp_id) {
+      values.m_comp_id = tempValues.m_comp_id
+    }
+  }
   if(tempValues.info_cuti){
       for (let key in tempValues.info_cuti) {
           if (tempValues.info_cuti.hasOwnProperty(key) && tempValues.info_cuti[key] === null) {
@@ -291,8 +299,8 @@ const landing = reactive({
     },
     params: {
       simplest: true,
-            join: true,
-            searchfield: 'nomor, m_kary.nama_depan, tipe_cuti.value, value, keterangan, status',
+      join: true,
+      searchfield: 'nomor, m_kary.nama_depan, m_kary.nama_lengkap, m_dir.nama, tipe_cuti.value, value, keterangan, status',
     },
     onsuccess(response) {
       response.page = response.current_page
@@ -320,6 +328,17 @@ const landing = reactive({
     cellClass: ['border-r', '!border-gray-200', 'justify-left']
   },
   {
+    field: 'm_dir.nama',
+    headerName: 'Company',
+    filter: true,
+    sortable: true,
+    flex: 1,
+    filter: 'ColFilter',
+    resizable: true,
+    valueGetter: (p) => p.data['m_dir.nama'] || p.data['m_kary.m_dir.nama'] || p.data.m_dir?.nama || '-',
+    cellClass: ['border-r', '!border-gray-200', 'justify-start']
+  },
+  {
     field: 'm_kary.nama_depan',
     headerName: 'Nama Karyawan',
     filter: true,
@@ -327,6 +346,7 @@ const landing = reactive({
     flex: 1,
     filter: 'ColFilter',
     resizable: true,
+    valueGetter: (p) => p.data['m_kary.nama_lengkap'] || p.data['m_kary.nama_depan'] || '-',
     cellClass: ['border-r', '!border-gray-200', 'justify-start']
   },
   {
@@ -340,6 +360,7 @@ const landing = reactive({
     cellClass: ['border-r', '!border-gray-200', 'justify-left']
   },{
     field: 'value',
+    headerName: 'Nilai',
     filter: true,
     sortable: true,
     flex: 1,
@@ -349,6 +370,7 @@ const landing = reactive({
   },
   {
     field: 'keterangan',
+    headerName: 'Keterangan',
     filter: true,
     sortable: true,
     flex: 1,
