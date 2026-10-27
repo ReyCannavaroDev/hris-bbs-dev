@@ -27,6 +27,8 @@ let initialValues = {}
 const changedValues = []
 
 const values = reactive({
+  m_comp_id: null,
+  m_dir_id: null,
   is_active : true
 })
 
@@ -49,6 +51,11 @@ const removeDetail = (detailItem) => {
 onBeforeMount(async () => {
   // tampilkan default direktorat dengan store user comp.nama
   values.direktorat = store.user.data?.direktorat
+
+  if (!isRead) {
+    values.m_comp_id = store.user.data?.m_comp_id ?? 1
+    values.m_dir_id = store.user.data?.m_dir_id ?? null
+  }
 
   if (isRead) {
     //  READ DATA
@@ -88,6 +95,10 @@ onBeforeMount(async () => {
 
   for (const key in initialValues) {
     values[key] = initialValues[key]
+  }
+
+  if (!values.m_comp_id) {
+    values.m_comp_id = store.user.data?.m_comp_id ?? 1
   }
 })
 
@@ -245,7 +256,7 @@ const landing = reactive({
     },
     params: {
       simplest: true,
-      searchfield:'this.id, this.kode, this.desc, this.nama',
+      searchfield:'this.id, this.kode, this.desc, this.nama, m_comp.nama, m_dir.nama',
     },
     onsuccess(response) {
       response.page = response.current_page
@@ -262,16 +273,28 @@ const landing = reactive({
     filter: true,
     cellClass: ['justify-center', 'bg-gray-50', 'border-r', '!border-gray-200']
   },
-  // {
-  //   headerName: 'Direktorat',
-  //   field: 'm_dir.nama',
-  //   filter: true,
-  //   sortable: true,
-  //   flex:1,
-  //   filter: 'ColFilter',
-  //   resizable: true,
-  //   cellClass: [ 'border-r', '!border-gray-200', 'justify-start']
-  // },
+  {
+    headerName: 'Company',
+    field: 'm_comp.nama',
+    filter: true,
+    sortable: true,
+    flex: 1,
+    filter: 'ColFilter',
+    resizable: true,
+    valueGetter: (p) => p.data['m_comp.nama'] || '-',
+    cellClass: [ 'border-r', '!border-gray-200', 'justify-start']
+  },
+  {
+    headerName: 'Direktorat',
+    field: 'm_dir.nama',
+    filter: true,
+    sortable: true,
+    flex: 1,
+    filter: 'ColFilter',
+    resizable: true,
+    valueGetter: (p) => p.data['m_dir.nama'] || '-',
+    cellClass: [ 'border-r', '!border-gray-200', 'justify-start']
+  },
     {
     headerName: 'Kode',
     field: 'kode',

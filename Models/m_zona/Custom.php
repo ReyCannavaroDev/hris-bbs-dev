@@ -18,12 +18,19 @@ class m_zona extends \App\Models\BasicModels\m_zona
 
     public function createBefore( $model, $arrayData, $metaData, $id=null )
     {
+        $newArrayData = array_merge($arrayData, [
+            'kode' => $this->helper->generateNomor('KODE ZONA'),
+        ]);
+        if (empty($newArrayData['m_comp_id'])) {
+            $newArrayData['m_comp_id'] = 1;
+        }
+        if (empty($newArrayData['m_dir_id']) && auth()->check() && !empty(auth()->user()->m_dir_id)) {
+            $newArrayData['m_dir_id'] = auth()->user()->m_dir_id;
+        }
+
         return [
             "model"  => $model,
-            "data"   => array_merge($arrayData,[
-                'kode' =>  $this->helper->generateNomor('KODE ZONA'),
-                //'m_dir_id' =>  $m_dir_id
-            ])
+            "data"   => $newArrayData
         ];
     }
     

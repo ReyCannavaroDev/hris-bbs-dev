@@ -48,6 +48,60 @@
   <div class="p-4 grid <md:grid-cols-1 grid-cols-3 gap-2 ">
     <!-- START COLUMN -->
     <div>
+      <FieldSelect
+        :bind="{ disabled: !actionText, clearable: false }"
+        class="w-full mt-3"
+        :value="values.m_comp_id"
+        @input="v=>values.m_comp_id=v"
+        :errorText="formErrors.m_comp_id?'failed':''"
+        :hints="formErrors.m_comp_id"
+        placeholder="Pilih Company"
+        label="Company"
+        displayField="nama"
+        valueField="id"
+        :api="{
+            url: `${store.server.url_backend}/operation/m_comp`,
+            headers: {
+              'Content-Type': 'Application/json',
+              Authorization: `${store.user.token_type} ${store.user.token}`
+            },
+            params: {
+              simplest:true,
+              where:`this.is_active='true'`,
+              transform:false,
+              selectfield: 'this.id, this.nama, this.is_active'
+            }
+        }"
+        fa-icon="search" :check="false" />
+    </div>
+    <div>
+      <FieldSelect
+        :bind="{ disabled: !actionText, clearable: true }"
+        class="w-full mt-3"
+        :value="values.m_dir_id"
+        @input="v=>values.m_dir_id=v"
+        :errorText="formErrors.m_dir_id?'failed':''"
+        :hints="formErrors.m_dir_id"
+        placeholder="Pilih Direktorat / Cabang"
+        label="Direktorat / Cabang"
+        displayField="nama"
+        valueField="id"
+        :api="{
+            url: `${store.server.url_backend}/operation/m_dir`,
+            headers: {
+              'Content-Type': 'Application/json',
+              Authorization: `${store.user.token_type} ${store.user.token}`
+            },
+            params: {
+              simplest:true,
+              where: `this.is_active='true'`,
+              transform:false,
+              selectfield: 'this.id, this.nama, this.is_active'
+            }
+        }"
+        fa-icon="search" :check="false" />
+    </div>
+    <div>
       <FieldX :bind="{ readonly: true }" type="text" :value="values.nomor" class="w-full mt-3"
         @input="v=>values.nomor=v" :check="false" placeholder="Masukan Nomor" label="Nomor" />
     </div>
@@ -56,11 +110,16 @@
           placeholder="Masukan Karyawan" label="Karyawan"
            :bind="{ readonly: !actionText || !store.user.data?.is_superadmin }" class="w-full mt-3" :value="values.m_kary_id"
             @input="(v)=>values.m_kary_id=v" :errorText="formErrors.m_kary_id?'failed':''" :hints="formErrors.m_kary_id"
+            @update:valueFull="(objVal) => {
+              if (objVal['m_comp.id']) values.m_comp_id = objVal['m_comp.id']
+              if (objVal['m_dir.id']) values.m_dir_id = objVal['m_dir.id']
+            }"
             valueField="id" displayField="nama_depan" :api="{
                   url: `${store.server.url_backend}/operation/m_kary`,
                   headers: { 'Content-Type': 'Application/json', Authorization: `${store.user.token_type} ${store.user.token}`},
                   params: {
                     simplest:true,
+                    where: (values.m_dir_id ? `this.m_dir_id=${values.m_dir_id} AND ` : '') + `this.is_active='true'`,
                     searchfield:'id, nama_depan, nik, m_divisi.nama, m_zona.nama, m_dir.nama',
                   }
                 }" placeholder="Pilih Karyawan" label="" :check="false" :columns="[

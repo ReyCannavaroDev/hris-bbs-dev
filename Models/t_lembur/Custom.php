@@ -143,6 +143,13 @@ class t_lembur extends \App\Models\BasicModels\t_lembur
             "pic_id"                => @app()->request->pic_id ?? auth()->user()->id,
         ]);
 
+        if (empty($newArrayData['m_comp_id'])) {
+            $newArrayData['m_comp_id'] = 1;
+        }
+        if (empty($newArrayData['m_dir_id']) && !empty($newArrayData['m_kary_id'])) {
+            $newArrayData['m_dir_id'] = \DB::table('m_kary')->where('id', $newArrayData['m_kary_id'])->value('m_dir_id');
+        }
+
         if (app()->request->header("Source") == "mobile") {
             $newArrayData["status"] = "IN APPROVAL";
         }
@@ -175,6 +182,13 @@ class t_lembur extends \App\Models\BasicModels\t_lembur
             'total_lembur'          => $kalkulasi['total_lembur'],
             'pic_id'                => @app()->request->pic_id ?? ($existing->pic_id ?? auth()->user()->id),
         ]);
+
+        if (empty($newArrayData['m_comp_id'])) {
+            $newArrayData['m_comp_id'] = $existing->m_comp_id ?? 1;
+        }
+        if (empty($newArrayData['m_dir_id']) && !empty($newArrayData['m_kary_id'])) {
+            $newArrayData['m_dir_id'] = \DB::table('m_kary')->where('id', $newArrayData['m_kary_id'])->value('m_dir_id');
+        }
 
         return [
             "model"  => $model,
