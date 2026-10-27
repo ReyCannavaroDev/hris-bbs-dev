@@ -280,14 +280,13 @@
                 :api="{
                     url: `${store.server.url_backend}/operation/m_tunj_kemahalan`,
                     headers: {
-                      //'Content-Type': 'Application/json',
                       Authorization: `${store.user.token_type} ${store.user.token}`
                     },
                     params: {
                       simplest:true,
                       single:true,
                       where:`this.is_active='true'`,
-                      transform:false,
+                      transform:true,
                       searchfield: 'this.kode,this.besaran,this.desc'
                     }
                 }"
@@ -302,20 +301,24 @@
                 {
                   flex: 1,
                   field: 'kode',
+                  headerName: 'Kode',
                   sortable: false, resizable: true, filter: 'ColFilter',
                   cellClass: ['border-r', '!border-gray-200', 'justify-center']
                 },
                 {
                   flex: 1,
                   field: 'besaran',
+                  headerName: 'Besaran',
+                  valueGetter: (p) => p.data?.besaran ? (isNaN(p.data.besaran) ? p.data.besaran : Number(p.data.besaran).toLocaleString('id-ID')) : '0',
                   sortable: false, resizable: true, filter: 'ColFilter',
-                  cellClass: ['border-r', '!border-gray-200', 'justify-center']
+                  cellClass: ['border-r', '!border-gray-200', 'justify-end']
                 },
                 {
                   flex: 1,
                   field: 'desc',
+                  headerName: 'Keterangan',
                   sortable: false, resizable: true, filter: 'ColFilter',
-                  cellClass: ['border-r', '!border-gray-200', 'justify-center']
+                  cellClass: ['border-r', '!border-gray-200', 'justify-start']
                 },
                 ]"
               />

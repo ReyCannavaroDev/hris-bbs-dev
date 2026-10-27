@@ -26,5 +26,14 @@ class m_tunj_kemahalan extends \App\Models\BasicModels\m_tunj_kemahalan
             ])
         ];
     }
+
+    public function transformRowData( array $row )
+    {
+        if (isset($row['besaran'])) {
+            $row['besaran_raw'] = $row['besaran'];
+            $row['besaran'] = number_format((float)$row['besaran'], 0, ',', '.');
+        }
+        return $row;
+    }
     
 }

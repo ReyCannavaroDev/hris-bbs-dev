@@ -28,8 +28,14 @@ let initialValues = {}
 const changedValues = []
 
 const values = reactive({
-  is_active:true,
+  is_active: 1,
   direktorat: store.user.data?.direktorat,
+  gaji_pokok_periode: 'Bulanan',
+  uang_saku_periode: 'Bulanan',
+  tunjangan_posisi_periode: 'Bulanan',
+  tunjangan_kemahalan_periode: 'Bulanan',
+  uang_makan_periode: 'Bulanan',
+  tunjangan_tetap_periode: 'Bulanan',
 })
 
 watchEffect(() => {
@@ -96,9 +102,11 @@ onBeforeMount(async () => {
       if (!res.ok) throw new Error("Failed when trying to read data")
       const resultJson = await res.json()
       initialValues = resultJson.data
+      initialValues.is_active = (initialValues.is_active === true || initialValues.is_active == 1 || initialValues.is_active === '1' || initialValues.is_active === 'true') ? 1 : 0
+      detailArr.value = []
+      _id = 0
       initialValues.m_standart_gaji_det?.forEach((items)=>{
-        items.__id = ++_id
-        detailArr.value = [items, ...detailArr.value]
+        detailArr.value.push({ ...items, __id: ++_id })
       })
     } catch (err) {
       isBadForm.value = true
@@ -112,10 +120,16 @@ onBeforeMount(async () => {
       })
     }
     isRequesting.value = false
+  } else {
+    values.is_active = 1
+    detailArr.value = []
   }
 
   for (const key in initialValues) {
     values[key] = initialValues[key]
+  }
+  if (isRead) {
+    values.is_active = (initialValues.is_active === true || initialValues.is_active == 1 || initialValues.is_active === '1' || initialValues.is_active === 'true') ? 1 : 0
   }
 })
 
@@ -124,6 +138,10 @@ const detailArr = ref([])
 const addDetail = () => {
   const tempItem = {
     __id: ++_id,
+    komponen: '',
+    faktor: '+',
+    nilai: 0,
+    periode: 'Bulanan',
   }
   detailArr.value = [...detailArr.value, tempItem]
 }
@@ -146,8 +164,7 @@ function onBack() {
     return
   }
 
-      router.replace('/' + modulPath)
-    
+  router.replace('/' + modulPath)
 }
 
 function onReset() {
@@ -157,47 +174,89 @@ function onReset() {
     showDenyButton: true
   }).then((res) => {
     if (res.isConfirmed) {
-      for (const key in initialValues) {
-        values[key] = initialValues[key]
+      if (isRead) {
+        for (const key in initialValues) {
+          values[key] = initialValues[key]
+        }
+        values.is_active = (initialValues.is_active === true || initialValues.is_active == 1 || initialValues.is_active === '1' || initialValues.is_active === 'true') ? 1 : 0
+        detailArr.value = []
+        _id = 0
+        if (initialValues.m_standart_gaji_det && Array.isArray(initialValues.m_standart_gaji_det)) {
+          initialValues.m_standart_gaji_det.forEach((item) => {
+            detailArr.value.push({ ...item, __id: ++_id })
+          })
+        }
+      } else {
+        for (const key in values) {
+          delete values[key]
+        }
+        values.is_active = 1
+        values.direktorat = store.user.data?.direktorat
+        values.gaji_pokok_periode = 'Bulanan'
+        values.uang_saku_periode = 'Bulanan'
+        values.tunjangan_posisi_periode = 'Bulanan'
+        values.tunjangan_kemahalan_periode = 'Bulanan'
+        values.uang_makan_periode = 'Bulanan'
+        values.tunjangan_tetap_periode = 'Bulanan'
+        detailArr.value = []
       }
+      formErrors.value = {}
     }
   })
 }
 
 async function onSave() {
-  //values.tags = JSON.stringify(values.tags)
-      try {
-        values.is_active=(values.is_active===true)?1:0
-        values.m_standart_gaji_det = detailArr.value
-        const isCreating = ['Create','Copy','Tambah'].includes(actionText.value)
-        const dataURL = `${store.server.url_backend}/operation${endpointApi}${isCreating ? '' : ('/' + route.params.id)}`
-        isRequesting.value = true
-        const res = await fetch(dataURL, {
-          method: isCreating ? 'POST' : 'PUT',
-          headers: {
-            'Content-Type': 'Application/json',
-            Authorization: `${store.user.token_type} ${store.user.token}`
-          },
-          body: JSON.stringify(values)
-        })
-        if (!res.ok) {
-          if ([400, 422].includes(res.status)) {
-            const responseJson = await res.json()
-            formErrors.value = responseJson.errors || {}
-            throw (responseJson.errors.length ? responseJson.errors[0] : responseJson.message || "Failed when trying to post data")
-          } else {
-            throw ("Failed when trying to post data")
-          }
-        }
-        router.replace('/' + modulPath + '?reload='+(Date.parse(new Date())))
-      } catch (err) {
-        isBadForm.value = true
-        swal.fire({
-          icon: 'error',
-          text: err
-        })
+  try {
+    if (!detailArr.value || detailArr.value.length === 0) {
+      swal.fire({
+        icon: 'warning',
+        title: 'Perhatian',
+        text: 'Detail komponen gaji belum diisi. Silakan tambahkan minimal 1 detail komponen gaji.',
+      })
+      return
+    }
+
+    const invalidRow = detailArr.value.find(item => !item.komponen || item.nilai === undefined || item.nilai === null || item.nilai === '')
+    if (invalidRow) {
+      swal.fire({
+        icon: 'warning',
+        title: 'Perhatian',
+        text: 'Mohon lengkapi Komponen dan Nilai pada setiap baris tabel detail.',
+      })
+      return
+    }
+
+    values.is_active = (values.is_active === true || values.is_active == 1 || values.is_active === '1' || values.is_active === 'true') ? 1 : 0
+    values.m_standart_gaji_det = detailArr.value
+    const isCreating = ['Create','Copy','Tambah'].includes(actionText.value)
+    const dataURL = `${store.server.url_backend}/operation${endpointApi}${isCreating ? '' : ('/' + route.params.id)}`
+    isRequesting.value = true
+    const res = await fetch(dataURL, {
+      method: isCreating ? 'POST' : 'PUT',
+      headers: {
+        'Content-Type': 'Application/json',
+        Authorization: `${store.user.token_type} ${store.user.token}`
+      },
+      body: JSON.stringify(values)
+    })
+    if (!res.ok) {
+      if ([400, 422].includes(res.status)) {
+        const responseJson = await res.json()
+        formErrors.value = responseJson.errors || {}
+        throw (responseJson.errors.length ? responseJson.errors[0] : responseJson.message || "Failed when trying to post data")
+      } else {
+        throw ("Failed when trying to post data")
       }
-      isRequesting.value = false
+    }
+    router.replace('/' + modulPath + '?reload='+(Date.parse(new Date())))
+  } catch (err) {
+    isBadForm.value = true
+    swal.fire({
+      icon: 'error',
+      text: err
+    })
+  }
+  isRequesting.value = false
 }
 
 //  @else----------------------- LANDING
