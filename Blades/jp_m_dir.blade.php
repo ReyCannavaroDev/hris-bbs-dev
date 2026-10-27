@@ -31,8 +31,8 @@
       <div class="flex items-center">
         <Icon fa="arrow-left" class="cursor-pointer mr-2 font-bold hover:text-yellow-500" title="Kembali" @click="onBack"/>
         <div>
-          <h1 class="text-20px font-bold">Form Direktorat</h1>
-          <p class="text-gray-100">Master Direktorat</p>
+          <h1 class="text-20px font-bold">Form Company</h1>
+          <p class="text-gray-100">Master Company</p>
         </div>
       </div>
     </div>
@@ -41,12 +41,12 @@
       <div>
         <FieldX  
             class="w-full !mt-3"
-            label="Instansi"
-            placeholder="Masukan Nama"
-            :bind="{ disabled:true, readonly:true }"
-            :value="values.company" :errorText="formErrors.company?'failed':''"
-            @input="v=>values.company=v"
-            :hints="formErrors.company"
+            label="Kode"
+            placeholder="Masukan Kode"
+            :bind="{ readonly: !actionText }"
+            :value="values.kode" :errorText="formErrors.kode?'failed':''"
+            @input="v=>values.kode=v"
+            :hints="formErrors.kode"
             :check="false" />
       </div>
       <div>

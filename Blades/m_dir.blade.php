@@ -1,12 +1,20 @@
 @if(!$req->has('id'))
 <div class="bg-white p-6 rounded-xl h-[570px]">
+  <div class="flex justify-between items-center mb-4">
+    <div class="flex items-center gap-x-4">
+      <p class="text-sm font-medium">Filter Status :</p>
+      <div class="flex gap-x-2">
+        <button @click="filterShowData(true,1)" :class="activeBtn === 1?'bg-green-600 text-white hover:bg-green-400':'border border-green-600 text-green-600 bg-white hover:bg-green-600 hover:text-white'" class="duration-300 transform hover:-translate-y-0.5 rounded-md py-1 px-2 text-sm">Active</button>
+        <div class="flex my-auto h-4 w-0.5 bg-[#6E91D1]"></div>
+        <button @click="filterShowData(false,2)" :class="activeBtn === 2?'bg-red-600 text-white hover:bg-red-400':'border border-red-600 text-red-600 bg-white hover:bg-red-600 hover:text-white'" class="duration-300 transform hover:-translate-y-0.5 rounded-md py-1 px-2 text-sm">Inactive</button>
+      </div>
+    </div>
+    <RouterLink :to="$route.path+'/create?'+(Date.parse(new Date()))" class="bg-green-500 text-white hover:bg-green-600 rounded-[6px] py-2 px-[12.5px]">
+      <icon fa="plus" />
+      Tambah Data
+    </RouterLink>
+  </div>
   <TableApi ref='apiTable' :api="landing.api" :columns="landing.columns" :actions="landing.actions">
-    <template #header>
-      <RouterLink :to="$route.path+'/create?'+(Date.parse(new Date()))" class="bg-green-500 text-white hover:bg-green-600 rounded-[6px] py-2 px-[12.5px]">
-        <icon fa="plus" />
-        Tambah Data
-      </RouterLink>
-    </template>
   </TableApi>
 </div>
 @else
@@ -20,7 +28,7 @@
       <!-- HEADER START -->
       <div class="flex items-center justify-between mb-2 pb-4">
         <h2 class="font-sans text-xl flex justify-left font-bold">
-          Form Direktorat
+          Form Company
         </h2>
       
       </div>
@@ -29,13 +37,15 @@
       <!-- FORM START -->
       <div class="grid <md:grid-cols-1 grid-cols-2 grid-flow-row gap-x-4 gap-y-4 mb-5">
         <div class="grid grid-cols-12 items-center gap-y-2">
-          <label class="col-span-12">Instansi</label>
+          <label class="col-span-12">Kode</label>
           <FieldX  
             class="col-span-12 !mt-0"
-            :bind="{ disabled:true, readonly:true }"
-            :value="values.company" :errorText="formErrors.company?'failed':''"
-            @input="v=>values.company=v"
-            :hints="formErrors.company"
+            :bind="{ readonly: !actionText }"
+            :value="values.kode" :errorText="formErrors.kode?'failed':''"
+            @input="v=>values.kode=v"
+            :hints="formErrors.kode"
+            label=""
+            placeholder="Masukan Kode"
             :check="false" />
         </div>
         <div class="grid grid-cols-12 items-center gap-y-2">

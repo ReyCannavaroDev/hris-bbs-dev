@@ -10,9 +10,9 @@ class mdir extends Migration
     public function up()
     {
         Schema::table($this->tableName, function (Blueprint $table) {
-            //$table->string('_existColumnName_')->change();
-            //$table->string('_columnName_');
-            //$table->dropColumn([ ]);
+            if (!Schema::hasColumn($this->tableName, 'kode')) {
+                $table->string('kode', 50)->nullable()->after('id');
+            }
         });
     }
 }

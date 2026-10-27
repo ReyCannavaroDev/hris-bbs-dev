@@ -17,7 +17,7 @@ class m_dir extends \App\Models\BasicModels\m_dir
     public function createBefore( $model, $arrayData, $metaData, $id=null )
     {
       $newArrayData  = array_merge( $arrayData,[
-        'm_comp_id' => auth()->user()->m_comp_id ?? 0
+        'm_comp_id' => auth()->user()->m_comp_id ?? 1
       ] );
       return [
           "model"  => $model,

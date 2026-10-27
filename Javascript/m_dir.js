@@ -19,7 +19,7 @@ const tsId = `ts=`+(Date.parse(new Date()))
 // ------------------------------ PERSIAPAN
 const endpointApi = '/m_dir'
 onBeforeMount(()=>{
-  document.title = 'Master Direktorat'
+  document.title = 'Master Company'
 })
 
 //  @if( $id )------------------- VALUES FORM ! PENTING JANGAN DIHAPUS
@@ -27,12 +27,11 @@ let initialValues = {}
 const changedValues = []
 
 const values = reactive({
+  kode: null,
   is_active : true
 })
 
 onBeforeMount(async () => {
-  // tampilkan default company dengan store user comp.nama
-  values.company = store.user.data?.company
   if (isRead) {
     //  READ DATA
     try {
@@ -159,6 +158,19 @@ async function onSave() {
 }
 
 //  @else----------------------- LANDING
+const activeBtn = ref(null)
+
+function filterShowData(params, noBtn) {
+  if (activeBtn.value === noBtn) {
+    activeBtn.value = null
+    landing.api.params.where = null
+  } else {
+    activeBtn.value = noBtn
+    landing.api.params.where = `this.is_active=${params ? 'true' : 'false'}`
+  }
+  apiTable.value.reload()
+}
+
 const landing = reactive({
   actions: [
     {
@@ -238,7 +250,7 @@ const landing = reactive({
     },
     params: {
       simplest: true,
-      searchfield:'this.id, this.nama, this.desc',
+      searchfield:'this.id, this.kode, this.nama, this.desc, this.is_active',
     },
     onsuccess(response) {
       response.page = response.current_page
@@ -254,6 +266,16 @@ const landing = reactive({
     resizable: true,
     filter: true,
     cellClass: ['justify-center', 'bg-gray-50', 'border-r', '!border-gray-200']
+  },
+  {
+    headerName: 'Kode',
+    field: 'kode',
+    filter: true,
+    sortable: true,
+    flex: 1,
+    filter: 'ColFilter',
+    resizable: true,
+    cellClass: [ 'border-r', '!border-gray-200', 'justify-start']
   },
   {
     headerName: 'Nama',
@@ -284,8 +306,9 @@ const landing = reactive({
     resizable: true,
     flex:1,
     cellClass: [ 'border-r', '!border-gray-200', 'justify-center'],
+    valueGetter: (params) => (params.data?.is_active ? 'Active' : 'Inactive'),
     cellRenderer: ({ value }) => {
-    return value === true
+    return value === 'Active' || value === true
       ? `<span class="text-green-500 rounded-md text-xs font-medium px-4 py-1 inline-block capitalize">Active</span>`
       : `<span class="text-gray-500 rounded-md text-xs font-medium px-4 py-1 inline-block capitalize">Inactive</span>`
   }},
