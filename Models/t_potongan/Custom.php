@@ -21,6 +21,9 @@ class t_potongan extends \App\Models\BasicModels\t_potongan
         $newArrayData  = array_merge( $arrayData,[
             'nomor' => $this->helper->generateNomor('KODE POTONGAN')
         ]);
+        if (empty($newArrayData['m_comp_id'])) {
+            $newArrayData['m_comp_id'] = 1;
+        }
        
         return [
             "model"  => $model,

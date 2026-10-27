@@ -419,10 +419,27 @@ class PerhitunganGaji
      */
     public function tarikPotonganKasbon($m_kary_id, $startDate, $endDate)
     {
+        $kary = DB::table('m_kary')->where('id', $m_kary_id)->first();
         $potonganList = DB::table('t_potongan')
-            ->where(function ($q) use ($m_kary_id) {
-                $q->where('m_kary_id', $m_kary_id)
-                  ->orWhere('is_all_kary', 1);
+            ->where(function ($q) use ($m_kary_id, $kary) {
+                $q->where('m_kary_id', $m_kary_id);
+                if ($kary) {
+                    $q->orWhere(function ($q2) use ($kary) {
+                        $q2->where('is_all_kary', 1)
+                           ->where(function ($qComp) use ($kary) {
+                               $qComp->whereNull('m_comp_id')
+                                     ->orWhere('m_comp_id', $kary->m_comp_id ?? 1);
+                           });
+                        if (!empty($kary->m_dir_id)) {
+                            $q2->where(function ($qDir) use ($kary) {
+                                $qDir->whereNull('m_dir_id')
+                                     ->orWhere('m_dir_id', $kary->m_dir_id);
+                            });
+                        }
+                    });
+                } else {
+                    $q->orWhere('is_all_kary', 1);
+                }
             })
             ->where('status', 'POSTED')
             ->where('is_lunas', 0)

@@ -42,8 +42,69 @@
   <div class="p-4 grid <md:grid-cols-1 grid-cols-3 gap-2 ">
     <!-- START COLUMN -->
     <div>
+      <FieldSelect
+        :bind="{ disabled: !actionText, clearable: false }"
+        class="w-full mt-3"
+        :value="values.m_comp_id"
+        @input="v=>{
+          values.m_comp_id=v
+          values.m_dir_id=null
+          values.m_kary_id=null
+        }"
+        :errorText="formErrors.m_comp_id?'failed':''"
+        :hints="formErrors.m_comp_id"
+        placeholder="Pilih Company"
+        label="Company"
+        displayField="nama"
+        valueField="id"
+        :api="{
+            url: `${store.server.url_backend}/operation/m_comp`,
+            headers: {
+              'Content-Type': 'Application/json',
+              Authorization: `${store.user.token_type} ${store.user.token}`
+            },
+            params: {
+              simplest:true,
+              where:`this.is_active='true'`,
+              transform:false,
+              selectfield: 'this.id, this.nama, this.is_active'
+            }
+        }"
+        fa-icon="search" :check="false" />
+    </div>
+    <div>
+      <FieldSelect
+        :bind="{ disabled: !actionText, clearable: true }"
+        class="w-full mt-3"
+        :value="values.m_dir_id"
+        @input="v=>{
+          values.m_dir_id=v
+          values.m_kary_id=null
+        }"
+        :errorText="formErrors.m_dir_id?'failed':''"
+        :hints="formErrors.m_dir_id"
+        placeholder="Pilih Direktorat / Cabang"
+        label="Direktorat / Cabang"
+        displayField="nama"
+        valueField="id"
+        :api="{
+            url: `${store.server.url_backend}/operation/m_dir`,
+            headers: {
+              'Content-Type': 'Application/json',
+              Authorization: `${store.user.token_type} ${store.user.token}`
+            },
+            params: {
+              simplest:true,
+              where: values.m_comp_id ? `this.m_comp_id=${values.m_comp_id} AND this.is_active='true'` : `this.is_active='true'`,
+              transform:false,
+              selectfield: 'this.id, this.nama, this.is_active'
+            }
+        }"
+        fa-icon="search" :check="false" />
+    </div>
+    <div>
       <FieldX :bind="{ readonly: true }" type="text" :value="values.nomor" class="w-full mt-3"
-        @input="v=>values.nomor=v" :check="false" placeholder="Masukan Nomor" label="Nomor" />
+        @input="v=>values.nomor=v" :check="false" placeholder="Auto Generate" label="Nomor" />
     </div>
     <div>
           <FieldPopup :bind="{ readonly: !actionText || values.is_all_kary }" class="w-full mt-3" :value="values.m_kary_id"
@@ -53,11 +114,14 @@
           values.m_dept_lama_id = objVal['m_dept.id']
           values.m_posisi_lama_id = objVal['m_posisi.id']
           values.m_standart_posisi_id = objVal['m_standart_gaji.gaji_pokok']
+          if (objVal['m_comp.id']) values.m_comp_id = objVal['m_comp.id']
+          if (objVal['m_dir.id']) values.m_dir_id = objVal['m_dir.id']
         }" :api="{
           url: `${store.server.url_backend}/operation/m_kary`,
           headers: { 'Content-Type': 'Application/json', Authorization: `${store.user.token_type} ${store.user.token}`},
           params: {
             simplest:true,
+            where: (values.m_comp_id ? `this.m_comp_id=${values.m_comp_id} AND ` : '') + (values.m_dir_id ? `this.m_dir_id=${values.m_dir_id} AND ` : '') + `this.is_active='true'`,
             searchfield:'nik, nama_depan, m_dir.nama, m_divisi.nama, id'
           }
         }"  :placeholder="values.is_all_kary ? 'Berlaku untuk semua karyawan' : 'Pilih Karyawan'" :label="values.is_all_kary ? 'Karyawan (Semua Karyawan)' : 'Karyawan*'" :check="false" :columns="[
@@ -92,6 +156,15 @@
             flex: 1,
             field: 'm_zona.nama',
             headerName: 'Zona',
+            sortable: false, 
+            resizable: true, 
+            filter: 'ColFilter',
+            cellClass: ['border-r', '!border-gray-200', 'justify-center']
+          },              
+          {
+            flex: 1,
+            field: 'm_comp.nama',
+            headerName: 'Company',
             sortable: false, 
             resizable: true, 
             filter: 'ColFilter',

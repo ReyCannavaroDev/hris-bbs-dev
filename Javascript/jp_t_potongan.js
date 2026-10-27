@@ -29,6 +29,8 @@ let initialValues = {}
 const changedValues = []
 
 const values = reactive({
+  m_comp_id: null,
+  m_dir_id: null,
   status: 'DRAFT',
   is_all_kary: false,
   is_lunas: false
@@ -38,6 +40,11 @@ const values = reactive({
 onBeforeMount(async () => {
   // tampilkan default direktorat dengan store user comp.nama
   values.direktorat = store.user.data?.direktorat
+
+  if (!isRead) {
+    values.m_comp_id = store.user.data?.m_comp_id ?? 1
+    values.m_dir_id = store.user.data?.m_dir_id ?? null
+  }
 
   if (isRead) {
     //  READ DATA
@@ -73,6 +80,10 @@ onBeforeMount(async () => {
 
   for (const key in initialValues) {
     values[key] = initialValues[key]
+  }
+
+  if (!values.m_comp_id) {
+    values.m_comp_id = store.user.data?.m_comp_id ?? 1
   }
 })
 
@@ -274,7 +285,7 @@ const landing = reactive({
     },
     params: {
       simplest: true,
-      searchfield:'this.id, this.nomor, m_kary.nama_depan, m_general.value, this.keterangan, this.status',
+      searchfield:'this.id, this.nomor, m_comp.nama, m_dir.nama, m_kary.nama_depan, m_general.value, this.keterangan, this.status',
     },
     onsuccess(response) {
       response.page = response.current_page
@@ -299,6 +310,28 @@ const landing = reactive({
     flex:1,
     filter: 'ColFilter',
     resizable: true,
+    cellClass: [ 'border-r', '!border-gray-200', 'justify-start']
+  },
+  {
+    field: 'm_comp.nama',
+    headerName: 'Company',
+    filter: true,
+    sortable: true,
+    flex: 1,
+    filter: 'ColFilter',
+    resizable: true,
+    valueGetter: (p) => p.data['m_comp.nama'] || '-',
+    cellClass: [ 'border-r', '!border-gray-200', 'justify-start']
+  },
+  {
+    field: 'm_dir.nama',
+    headerName: 'Direktorat',
+    filter: true,
+    sortable: true,
+    flex: 1,
+    filter: 'ColFilter',
+    resizable: true,
+    valueGetter: (p) => p.data['m_dir.nama'] || '-',
     cellClass: [ 'border-r', '!border-gray-200', 'justify-start']
   },
   {
