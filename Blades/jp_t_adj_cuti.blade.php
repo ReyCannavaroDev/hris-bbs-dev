@@ -25,8 +25,8 @@
       <Icon fa="arrow-left" class="cursor-pointer mr-2 font-bold hover:text-yellow-500" title="Kembali"
         @click="onBack" />
       <div>
-        <h1 class="text-20px font-bold">Form Hasil Test Lamaran Kerja</h1>
-        <p class="text-gray-100">Hasil Test Lamaran Kerja</p>
+        <h1 class="text-20px font-bold">Form Adjustment Jatah Cuti</h1>
+        <p class="text-gray-100">Penyesuaian Jatah Cuti Karyawan</p>
       </div>
     </div>
   </div>

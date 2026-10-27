@@ -292,7 +292,7 @@ const landing = reactive({
     params: {
       simplest: true,
             join: true,
-            searchfield: 'm_kary.nama_depan, alasan.value, tipe_cuti.value, date_from, date_to, status',
+            searchfield: 'nomor, m_kary.nama_depan, tipe_cuti.value, value, keterangan, status',
     },
     onsuccess(response) {
       response.page = response.current_page
