@@ -88,7 +88,7 @@
               },
               params: {
                 simplest:true,
-                where: values.m_comp_id ? `this.m_comp_id=${values.m_comp_id} AND this.is_active='true'` : `this.is_active='true'`,
+                where: `this.is_active='true'`,
                 transform:false,
                 selectfield: 'this.id, this.nama, this.is_active'
               }

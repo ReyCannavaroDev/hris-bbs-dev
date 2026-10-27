@@ -46,11 +46,7 @@
         :bind="{ disabled: !actionText, clearable: false }"
         class="w-full mt-3"
         :value="values.m_comp_id"
-        @input="v=>{
-          values.m_comp_id=v
-          values.m_dir_id=null
-          values.m_kary_id=null
-        }"
+        @input="v=>values.m_comp_id=v"
         :errorText="formErrors.m_comp_id?'failed':''"
         :hints="formErrors.m_comp_id"
         placeholder="Pilih Company"
@@ -77,10 +73,7 @@
         :bind="{ disabled: !actionText, clearable: true }"
         class="w-full mt-3"
         :value="values.m_dir_id"
-        @input="v=>{
-          values.m_dir_id=v
-          values.m_kary_id=null
-        }"
+        @input="v=>values.m_dir_id=v"
         :errorText="formErrors.m_dir_id?'failed':''"
         :hints="formErrors.m_dir_id"
         placeholder="Pilih Direktorat / Cabang"
@@ -95,7 +88,7 @@
             },
             params: {
               simplest:true,
-              where: values.m_comp_id ? `this.m_comp_id=${values.m_comp_id} AND this.is_active='true'` : `this.is_active='true'`,
+              where: `this.is_active='true'`,
               transform:false,
               selectfield: 'this.id, this.nama, this.is_active'
             }
@@ -121,7 +114,7 @@
           headers: { 'Content-Type': 'Application/json', Authorization: `${store.user.token_type} ${store.user.token}`},
           params: {
             simplest:true,
-            where: (values.m_comp_id ? `this.m_comp_id=${values.m_comp_id} AND ` : '') + (values.m_dir_id ? `this.m_dir_id=${values.m_dir_id} AND ` : '') + `this.is_active='true'`,
+            where: (values.m_dir_id ? `this.m_dir_id=${values.m_dir_id} AND ` : '') + `this.is_active='true'`,
             searchfield:'nik, nama_depan, m_dir.nama, m_divisi.nama, id'
           }
         }"  :placeholder="values.is_all_kary ? 'Berlaku untuk semua karyawan' : 'Pilih Karyawan'" :label="values.is_all_kary ? 'Karyawan (Semua Karyawan)' : 'Karyawan*'" :check="false" :columns="[

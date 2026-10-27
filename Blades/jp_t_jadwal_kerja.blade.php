@@ -93,8 +93,8 @@
               params: {
                 simplest:true,
                 transform:false,
-                where: values.m_comp_id ? `this.is_active='true' AND (this.m_comp_id=${values.m_comp_id} OR this.m_comp_id IS NULL)` : `this.is_active='true'`,
-                selectfield: 'this.id, this.nama, this.m_comp_id, this.is_active'
+                where: `this.is_active='true'`,
+                selectfield: 'this.id, this.nama, this.is_active'
               }
             }"
             :check="false"
