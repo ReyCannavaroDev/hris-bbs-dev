@@ -15,44 +15,73 @@ class Middleware
         $user = auth()->user();
         $requestData = $request->all();
 
-        // Normalisasi filter is_active agar support 'Active' dan 'Inactive'
+        // Normalisasi filter is_active agar support 'Active' dan 'Inactive' via query where
         if (isset($requestData['filter_is_active'])) {
             $val = strtolower(trim((string)$requestData['filter_is_active']));
-            if ($val === 'active') {
-                $requestData['filter_is_active'] = 'true';
-            } elseif ($val === 'inactive') {
-                $requestData['filter_is_active'] = 'false';
+            $boolVal = in_array($val, ['active', 'true', '1'], true) ? 'true' : (in_array($val, ['inactive', 'false', '0'], true) ? 'false' : null);
+            if ($boolVal !== null) {
+                $condition = "this.is_active=$boolVal";
+                if (!empty($requestData['where'])) {
+                    if (preg_match('/\bthis\.is_active\s*=\s*(?:true|false|1|0)\b/i', $requestData['where'])) {
+                        $requestData['where'] = preg_replace('/\bthis\.is_active\s*=\s*(?:true|false|1|0)\b/i', $condition, $requestData['where']);
+                    } else {
+                        $requestData['where'] .= " and $condition";
+                    }
+                } else {
+                    $requestData['where'] = $condition;
+                }
+                if ($request->query) {
+                    $request->query->set('where', $requestData['where']);
+                    $request->query->remove('filter_is_active');
+                }
+                $_GET['where'] = $requestData['where'];
+                unset($_GET['filter_is_active']);
+                unset($requestData['filter_is_active']);
             }
-            if ($request->query) {
-                $request->query->set('filter_is_active', $requestData['filter_is_active']);
-            }
-            $_GET['filter_is_active'] = $requestData['filter_is_active'];
         }
         if (isset($requestData['filter_status']) && $modelInstance && in_array('is_active', $modelInstance->columns ?? []) && !in_array('status', $modelInstance->columns ?? [])) {
             $val = strtolower(trim((string)$requestData['filter_status']));
-            if ($val === 'active') {
-                $requestData['filter_is_active'] = 'true';
-            } elseif ($val === 'inactive') {
-                $requestData['filter_is_active'] = 'false';
+            $boolVal = in_array($val, ['active', 'true', '1'], true) ? 'true' : (in_array($val, ['inactive', 'false', '0'], true) ? 'false' : null);
+            if ($boolVal !== null) {
+                $condition = "this.is_active=$boolVal";
+                if (!empty($requestData['where'])) {
+                    if (preg_match('/\bthis\.is_active\s*=\s*(?:true|false|1|0)\b/i', $requestData['where'])) {
+                        $requestData['where'] = preg_replace('/\bthis\.is_active\s*=\s*(?:true|false|1|0)\b/i', $condition, $requestData['where']);
+                    } else {
+                        $requestData['where'] .= " and $condition";
+                    }
+                } else {
+                    $requestData['where'] = $condition;
+                }
+                if ($request->query) {
+                    $request->query->set('where', $requestData['where']);
+                    $request->query->remove('filter_status');
+                }
+                $_GET['where'] = $requestData['where'];
+                unset($_GET['filter_status']);
+                unset($requestData['filter_status']);
             }
-            if ($request->query) {
-                $request->query->set('filter_is_active', $requestData['filter_is_active']);
-                $request->query->remove('filter_status');
-            }
-            $_GET['filter_is_active'] = $requestData['filter_is_active'];
-            unset($_GET['filter_status']);
-            unset($requestData['filter_status']);
         }
         if (isset($requestData['search'])) {
             $searchVal = strtolower(trim((string)$requestData['search']));
             if ($searchVal === 'active' || $searchVal === 'inactive') {
                 if ($modelInstance && in_array('is_active', $modelInstance->columns ?? [])) {
-                    $requestData['filter_is_active'] = ($searchVal === 'active') ? 'true' : 'false';
+                    $boolVal = ($searchVal === 'active') ? 'true' : 'false';
+                    $condition = "this.is_active=$boolVal";
+                    if (!empty($requestData['where'])) {
+                        if (preg_match('/\bthis\.is_active\s*=\s*(?:true|false|1|0)\b/i', $requestData['where'])) {
+                            $requestData['where'] = preg_replace('/\bthis\.is_active\s*=\s*(?:true|false|1|0)\b/i', $condition, $requestData['where']);
+                        } else {
+                            $requestData['where'] .= " and $condition";
+                        }
+                    } else {
+                        $requestData['where'] = $condition;
+                    }
                     if ($request->query) {
-                        $request->query->set('filter_is_active', $requestData['filter_is_active']);
+                        $request->query->set('where', $requestData['where']);
                         $request->query->remove('search');
                     }
-                    $_GET['filter_is_active'] = $requestData['filter_is_active'];
+                    $_GET['where'] = $requestData['where'];
                     unset($_GET['search']);
                     unset($requestData['search']);
                 }

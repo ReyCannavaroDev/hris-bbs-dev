@@ -19,18 +19,26 @@ class presensi_lokasi extends \App\Models\BasicModels\presensi_lokasi
         $request = app()->request;
         if ($request && $request->has('filter_is_active')) {
             $val = strtolower(trim((string)$request->filter_is_active));
-            if ($val === 'active') {
-                $request->merge(['filter_is_active' => 'true']);
-                if ($request->query) {
-                    $request->query->set('filter_is_active', 'true');
+            $boolVal = in_array($val, ['active', 'true', '1'], true) ? 'true' : (in_array($val, ['inactive', 'false', '0'], true) ? 'false' : null);
+            if ($boolVal !== null) {
+                $condition = "this.is_active=$boolVal";
+                $where = $request->where;
+                if (!empty($where)) {
+                    if (preg_match('/\bthis\.is_active\s*=\s*(?:true|false|1|0)\b/i', $where)) {
+                        $where = preg_replace('/\bthis\.is_active\s*=\s*(?:true|false|1|0)\b/i', $condition, $where);
+                    } else {
+                        $where .= " and $condition";
+                    }
+                } else {
+                    $where = $condition;
                 }
-                $_GET['filter_is_active'] = 'true';
-            } elseif ($val === 'inactive') {
-                $request->merge(['filter_is_active' => 'false']);
+                $request->merge(['where' => $where]);
                 if ($request->query) {
-                    $request->query->set('filter_is_active', 'false');
+                    $request->query->set('where', $where);
+                    $request->query->remove('filter_is_active');
                 }
-                $_GET['filter_is_active'] = 'false';
+                $_GET['where'] = $where;
+                unset($_GET['filter_is_active']);
             }
         }
         return true;

@@ -166,7 +166,9 @@ function filterShowData(params, noBtn) {
     activeBtn.value = noBtn
     landing.api.params.where = `this.is_active=${params ? 'true' : 'false'}`
   }
-  apiTable.value.reload()
+  if (apiTable.value) {
+    apiTable.value.reload()
+  }
 }
 
 const landing = reactive({
@@ -307,20 +309,25 @@ const landing = reactive({
   {
     headerName: 'Status',
     field: 'is_active',
+    filter: true,
+    sortable: true,
     filter: 'ColFilter',
     filterParams: {
       options: ['Active', 'Inactive']
     },
-    sortable: true,
     resizable: true,
     flex: 1,
     cellClass: [ 'border-r', '!border-gray-200', 'justify-center'],
-    valueGetter: (params) => (params.data?.is_active ? 'Active' : 'Inactive'),
+    valueGetter: (params) => {
+      const val = params.data?.is_active
+      return (val === true || val === 1 || val === '1' || val === 'true' || val === 't') ? 'Active' : 'Inactive'
+    },
     cellRenderer: ({ value }) => {
-    return value === 'Active' || value === true
-      ? `<span class="text-green-500 rounded-md text-xs font-medium px-4 py-1 inline-block capitalize">Active</span>`
-      : `<span class="text-gray-500 rounded-md text-xs font-medium px-4 py-1 inline-block capitalize">Inactive</span>`
-  }},
+      return value === 'Active' || value === true
+        ? `<span class="text-green-500 rounded-md text-xs font-medium px-4 py-1 inline-block capitalize">Active</span>`
+        : `<span class="text-gray-500 rounded-md text-xs font-medium px-4 py-1 inline-block capitalize">Inactive</span>`
+    }
+  },
   ]
 })
 
