@@ -60,86 +60,108 @@
           <label class="font-semibold">NIK<span class="text-red-500 space-x-0 pl-0">*</span></label>
           <FieldPopup :bind="{ readonly: !actionText }" class="w-full py-2 !mt-0" :value="values.m_kary_id"
             @input="(v)=>values.m_kary_id=v" :errorText="formErrors.m_kary_id?'failed':''" :hints="formErrors.m_kary_id"
-            valueField="id" displayField="nama_depan" @update:valueFull="(objVal)=>{
-    values.m_divisi_lama_id = objVal['m_divisi.id']
-    values.m_dept_lama_id = objVal['m_dept.id']
-    values.m_posisi_lama_id = objVal['m_posisi.id']
-    values.m_standart_posisi_id = objVal['m_standart_gaji.id']
-  }" :api="{
-    url: `${store.server.url_backend}/operation/m_kary`,
-    headers: { 'Content-Type': 'Application/json', Authorization: `${store.user.token_type} ${store.user.token}`},
-    params: {
-      simplest:true,
-      searchfield:'nik, kode, nama_depan, m_dir.nama, m_divisi.nama, id'
-    }
-  }"  placeholder="Pilih Karyawan" label="" :check="false" :columns="[
-    {
-      headerName: 'No',
-      valueGetter: (p) => p.node.rowIndex + 1,
-      width: 60,
-      sortable: false, 
-      resizable: false, 
-      filter: false,
-      cellClass: ['justify-center', 'bg-gray-50']
-    },
-    {
-      flex: 1,
-      field: 'nik',
-      headerName: 'NIK',
-      sortable: false, 
-      resizable: true, 
-      filter: 'ColFilter',
-      cellClass: ['border-r', '!border-gray-200', 'justify-center'],
-      valueGetter: (p) => p.data?.nik || p.data?.kode || ''
-    },
-    {
-      flex: 1,
-      field: 'nama_depan',
-      headerName: 'Nama',
-      sortable: false, 
-      resizable: true, 
-      filter: 'ColFilter',
-      cellClass: ['border-r', '!border-gray-200', 'justify-center']
-    },
-    {
-      flex: 1,
-      field: 'm_dir.nama',
-      headerName: 'Company / Cabang',
-      sortable: false, 
-      resizable: true, 
-      filter: 'ColFilter',
-      cellClass: ['border-r', '!border-gray-200', 'justify-center']
-    },
-    {
-      flex: 1,
-      field: 'm_divisi.nama',
-      headerName: 'Divisi',
-      sortable: false, 
-      resizable: true, 
-      filter: 'ColFilter',
-      cellClass: ['border-r', '!border-gray-200', 'justify-center']
-    },
-    // Add columns for m_posisi data if needed
-  ]" />
+            valueField="id" displayField="kode" @update:valueFull="(objVal)=>{
+              if (objVal) {
+                values.m_dir_id = objVal['m_dir.id'] || objVal.m_dir_id
+                values.m_comp_id = objVal['m_comp.id'] || objVal.m_comp_id || 1
+                values.m_zona_id = objVal['m_zona.id'] || objVal.m_zona_id
+                values.m_divisi_lama_id = objVal['m_divisi.id'] || objVal.m_divisi_id
+                values.m_dept_lama_id = objVal['m_dept.id'] || objVal.m_dept_id
+                values.m_posisi_lama_id = objVal['m_posisi.id'] || objVal.m_posisi_id
+                values.m_standart_posisi_id = objVal['m_standart_gaji.id'] || objVal.m_standart_gaji_id
+                values.status_kary_id = objVal.status_kary_id || objVal['m_general.id'] || 1
+                if (values.tipe_mutasi === 'Antar Departement') {
+                  values.m_devisi_baru_id = values.m_divisi_lama_id
+                }
+              }
+            }" :api="{
+              url: `${store.server.url_backend}/operation/m_kary`,
+              headers: { 'Content-Type': 'Application/json', Authorization: `${store.user.token_type} ${store.user.token}`},
+              params: {
+                simplest: true,
+                single: true,
+                where: `this.is_active='true'`,
+                searchfield: 'kode, nik, nama_depan, nama_lengkap, m_dir.nama, m_divisi.nama, id'
+              }
+            }" placeholder="Pilih Karyawan" label="" :check="false" :columns="[
+            {
+              headerName: 'No',
+              valueGetter: (p) => p.node.rowIndex + 1,
+              width: 60,
+              sortable: false, 
+              resizable: false, 
+              filter: false,
+              cellClass: ['justify-center', 'bg-gray-50']
+            },
+            {
+              flex: 1,
+              field: 'kode',
+              headerName: 'NIK',
+              sortable: false, 
+              resizable: true, 
+              filter: 'ColFilter',
+              cellClass: ['border-r', '!border-gray-200', 'justify-center'],
+              valueGetter: (p) => p.data?.kode || p.data?.nik || ''
+            },
+            {
+              flex: 1,
+              field: 'nama_lengkap',
+              headerName: 'Nama',
+              sortable: false, 
+              resizable: true, 
+              filter: 'ColFilter',
+              cellClass: ['border-r', '!border-gray-200', 'justify-center'],
+              valueGetter: (p) => p.data?.nama_lengkap || p.data?.nama_depan || ''
+            },
+            {
+              flex: 1,
+              field: 'm_dir.nama',
+              headerName: 'Company / Cabang',
+              sortable: false, 
+              resizable: true, 
+              filter: 'ColFilter',
+              cellClass: ['border-r', '!border-gray-200', 'justify-center']
+            },
+            {
+              flex: 1,
+              field: 'm_divisi.nama',
+              headerName: 'Divisi',
+              sortable: false, 
+              resizable: true, 
+              filter: 'ColFilter',
+              cellClass: ['border-r', '!border-gray-200', 'justify-center']
+            },
+          ]" />
         </div>
 
         <div>
-          <label class="font-semibold">Tanggal<label class="text-red-500 space-x-0 pl-0">*</label></label>
+          <label class="font-semibold">Tanggal Mutasi<label class="text-red-500 space-x-0 pl-0">*</label></label>
           <FieldX :bind="{ readonly: !actionText }" type="date" class="w-full py-2 !mt-0" :value="values.tgl" label=""
-            placeholder="Pilih Tanggal" :errorText="formErrors.tgl?'failed':''" @input="v=>values.tgl=v"
+            placeholder="Pilih Tanggal Mutasi" :errorText="formErrors.tgl?'failed':''" @input="v=>values.tgl=v"
             :hints="formErrors.tgl" :check="false" />
         </div>
 
         <div>
           <label class="font-semibold">Status Karyawan<span class="text-red-500 space-x-0 pl-0">*</span></label>
-          <FieldSelect class="w-full py-2 !mt-0" :value="values.status_kary_id" @input="v=>values.status_kary_id=v"
-            valueField="id" displayField="nama" :options="status_kary" placeholder="Pilih Status" label=""
+          <FieldSelect :bind="{ disabled: true }" class="w-full py-2 !mt-0" :value="values.status_kary_id" @input="v=>values.status_kary_id=v"
+            valueField="id" displayField="nama" :options="status_kary" placeholder="Status Karyawan" label=""
             :check="false" />
         </div>
 
         <div>
           <label class="font-semibold">Tipe Mutasi<span class="text-red-500 space-x-0 pl-0">*</span></label>
-          <FieldSelect class="w-full py-2 !mt-0" :value="values.tipe_mutasi" @input="v => values.tipe_mutasi=v"
+          <FieldSelect class="w-full py-2 !mt-0" :value="values.tipe_mutasi" 
+            @input="(v) => {
+              values.tipe_mutasi = v
+              if (v === 'Antar Departement') {
+                values.m_devisi_baru_id = values.m_divisi_lama_id
+              } else if (v === 'Antar Divisi') {
+                if (values.m_devisi_baru_id == values.m_divisi_lama_id) {
+                  values.m_devisi_baru_id = null
+                }
+              }
+              values.m_dept_baru_id = null
+            }"
             placeholder="Pilih Tipe Mutasi" label="" :check="false" :options="['Antar Divisi', 'Antar Departement']" />
         </div>
 
@@ -213,57 +235,69 @@
 
         <div>
           <label class="font-semibold">Divisi Baru<span class="text-red-500 space-x-0 pl-0">*</span></label>
-          <FieldSelect class="w-full py-2 !mt-0" :value="values.m_devisi_baru_id" @input="v=>values.m_devisi_baru_id=v"
+          <FieldSelect :bind="{ disabled: !actionText || values.tipe_mutasi === 'Antar Departement' }" 
+            class="w-full py-2 !mt-0" :value="values.m_devisi_baru_id" 
+            @input="(v) => {
+              values.m_devisi_baru_id = v
+              values.m_dept_baru_id = null
+            }"
+            :key="values.tipe_mutasi + '_' + values.m_divisi_lama_id"
             valueField="id" displayField="nama" :api="{
                 url: `${store.server.url_backend}/operation/m_divisi`,
                 headers: { 'Content-Type': 'Application/json', Authorization: `${store.user.token_type} ${store.user.token}`},
                 params: {
-                  simplest:true,
-                  single:true,
-                  where:`this.is_active='true'`,
-                  transform:false,
+                  simplest: true,
+                  single: true,
+                  where: `this.is_active='true'` + (values.tipe_mutasi === 'Antar Divisi' && values.m_divisi_lama_id ? ` AND this.id != ${values.m_divisi_lama_id}` : ''),
+                  transform: false,
                 }
             }" placeholder="Pilih Divisi" label="" :check="false" />
         </div>
         <div>
           <label class="font-semibold">Departemen Baru<span class="text-red-500 space-x-0 pl-0">*</span></label>
           <FieldSelect class="w-full py-2 !mt-0" :value="values.m_dept_baru_id" @input="v=>values.m_dept_baru_id=v"
+            :key="values.m_devisi_baru_id"
             valueField="id" displayField="nama" :api="{
-                url: `${store.server.url_backend}/operation/m_dir`,
+                url: `${store.server.url_backend}/operation/m_dept`,
                 headers: { 'Content-Type': 'Application/json', Authorization: `${store.user.token_type} ${store.user.token}`},
                 params: {
-                  simplest:true,
-                  single:true,
-                  where:`this.is_active='true'`,
-                  transform:false,
+                  simplest: true,
+                  single: true,
+                  where: `this.is_active='true'` + (values.m_devisi_baru_id ? ` AND this.m_divisi_id = ${values.m_devisi_baru_id}` : ''),
+                  transform: false,
                 }
             }" placeholder="Pilih Departemen" label="" :check="false" />
         </div>
         <div>
           <label class="font-semibold">Posisi Baru<span class="text-red-500 space-x-0 pl-0">*</span></label>
-          <FieldSelect class="w-full py-2 !mt-0" :value="values.m_posisi_baru_id" @input="v=>values.m_posisi_baru_id=v"
+          <FieldSelect class="w-full py-2 !mt-0" :value="values.m_posisi_baru_id" 
+            @input="(v) => {
+              values.m_posisi_baru_id = v
+              values.m_standart_baru_id = null
+            }"
             valueField="id" displayField="desc_kerja" :api="{
                 url: `${store.server.url_backend}/operation/m_posisi`,
                 headers: { 'Content-Type': 'Application/json', Authorization: `${store.user.token_type} ${store.user.token}`},
                 params: {
-                  simplest:true,
-                  single:true,
-                  where:`this.is_active='true'`,
-                  transform:false,
+                  simplest: true,
+                  single: true,
+                  where: `this.is_active='true'`,
+                  transform: false,
                 }
             }" placeholder="Pilih Posisi" label="" :check="false" />
         </div>
         <div>
           <label class="font-semibold">Standar Gaji Baru<span class="text-red-500 space-x-0 pl-0">*</span></label>
           <FieldSelect class="w-full py-2 !mt-0" :value="values.m_standart_baru_id"
+            :key="`${values.m_posisi_baru_id}_${values.m_dir_id}_${values.m_zona_id}`"
             @input="v=>values.m_standart_baru_id=v" valueField="id" displayField="kode" :api="{
                 url: `${store.server.url_backend}/operation/m_standart_gaji`,
                 headers: { 'Content-Type': 'Application/json', Authorization: `${store.user.token_type} ${store.user.token}`},
                 params: {
-                  simplest:true,
-                  single:true,
-                  where:`this.is_active='true'`,
-                  transform:false,
+                  simplest: true,
+                  single: true,
+                  where: `this.is_active='true'` + (values.m_posisi_baru_id ? ` AND this.m_posisi_id = ${values.m_posisi_baru_id}` : '') + (values.m_dir_id ? ` AND this.m_dir_id = ${values.m_dir_id}` : '') + (values.m_zona_id ? ` AND (this.m_zona_id = ${values.m_zona_id} OR this.m_zona_id IS NULL)` : ''),
+                  transform: false,
                 }
             }" placeholder="Pilih gaji baru" label="" :check="false" />
         </div>
@@ -279,6 +313,7 @@
           <label class="font-semibold">Upload Dokumen<span class="text-red-500 space-x-0 pl-0">*</span></label>
           <FieldUpload class="col-span-12 !mt-0 w-full" :bind="{ readonly: !actionText }" :value="values.file_dokumen"
             @input="(v)=>values.file_dokumen=v" :maxSize="10"
+            :errorText="formErrors.file_dokumen ? 'failed' : ''"
             :reducerDisplay="val=>!val?null:val.split(':::')[val.split(':::').length-1]" :api="{
                   url: `${store.server.url_backend}/operation/t_mutasi/upload`,
                   headers: { Authorization: `${store.user.token_type} ${store.user.token}`},
@@ -287,6 +322,8 @@
                   onerror:(error)=>{},
                  }" :hints="formErrors.file_dokumen" label="" placeholder="Upload Berkas" fa-icon="upload"
             accept="application/pdf" :check="false" />
+          <span v-if="formErrors.file_dokumen" class="text-xs text-red-500 italic mt-1 block">{{formErrors.file_dokumen}}</span>
+          <span v-else-if="!values.file_dokumen" class="text-xs text-amber-600 italic mt-1 block">* Dokumen pendukung mutasi (PDF maks 10MB) wajib diunggah</span>
         </div>
         <div>
           <label class="font-semibold">Keterangan<span class="text-red-500 space-x-0 pl-0"></span></label>

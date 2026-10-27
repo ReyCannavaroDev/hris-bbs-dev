@@ -24,6 +24,21 @@ onBeforeMount(()=>{
   document.title = 'Transaksi Mutasi'
 })
 
+const formatDmy = (dateStr) => {
+  if (!dateStr) return '-'
+  const str = String(dateStr).trim()
+  const parts = str.split(/[-/]/)
+  if (parts.length === 3) {
+    if (parts[0].length === 4) {
+      return `${parts[2].padStart(2, '0')}-${parts[1].padStart(2, '0')}-${parts[0]}`
+    }
+    if (parts[2].length === 4) {
+      return `${parts[0].padStart(2, '0')}-${parts[1].padStart(2, '0')}-${parts[2]}`
+    }
+  }
+  return dateStr
+}
+
 //  @if( $id )------------------- VALUES FORM ! PENTING JANGAN DIHAPUS
 let initialValues = {}
 const changedValues = []
@@ -80,7 +95,11 @@ onBeforeMount(async () => {
       if (!res.ok) throw new Error("Failed when trying to read data")
       const resultJson = await res.json()
       initialValues = resultJson.data
-      // initialValues.status=(initialValues.status==='Aktif')?true:false
+      if (route.query.action === 'Copy') {
+        initialValues.status = 'DRAFT'
+        delete initialValues.nomor
+        initialValues.tgl = new Date().toISOString().split('T')[0]
+      }
     } catch (err) {
       isBadForm.value = true
       swal.fire({
@@ -93,6 +112,9 @@ onBeforeMount(async () => {
       })
     }
     isRequesting.value = false
+  } else {
+    initialValues.status = 'DRAFT'
+    initialValues.tgl = new Date().toISOString().split('T')[0]
   }
 
   for (const key in initialValues) {
@@ -134,15 +156,16 @@ async function posted() {
       body: JSON.stringify(payload)
     })
     if (!res.ok) {
-      if ([400, 422].includes(res.status)) {
-        const responseJson = await res.json()
-        formErrors.value = responseJson.errors || {}
-        throw (responseJson.message || "Failed when trying to post data")
-      } else {
-        throw ("Failed when trying to post data")
-      }
+      const responseJson = await res.json().catch(() => ({}))
+      formErrors.value = responseJson.errors || {}
+      throw (responseJson.error || responseJson.message || "Failed when trying to post data")
     }
-    router.replace('/' + modulPath + '?reload='+(Date.parse(new Date())))
+    swal.fire({
+      icon: 'success',
+      text: 'Data mutasi berhasil diposting!',
+    }).then(() => {
+      router.replace('/' + modulPath + '?reload='+(Date.parse(new Date())))
+    })
   } catch (err) {
     isBadForm.value = true
     swal.fire({
@@ -183,20 +206,16 @@ function onSave() {
       body: JSON.stringify(values)
     }).then(async (res) => {
       if (!res.ok) {
-        if ([400, 422].includes(res.status)) {
-          const responseJson = await res.json()
-          formErrors.value = responseJson.errors || {}
-          throw new Error(responseJson.message || "Failed when trying to post data")
-        } else {
-          throw new Error("Failed when trying to post data")
-        }
+        const responseJson = await res.json().catch(() => ({}))
+        formErrors.value = responseJson.errors || {}
+        throw new Error(responseJson.error || responseJson.message || "Harap Lengkapi Data")
       }
       router.replace('/' + modulPath + '?reload=' + (Date.parse(new Date())))
     }).catch((err) => {
       isBadForm.value = true
       swal.fire({
         icon: 'error',
-        text: 'Harap Lengkapi Data'
+        text: err.message || 'Harap Lengkapi Data'
       })
     }).finally(() => {
       isRequesting.value = false
@@ -205,7 +224,7 @@ function onSave() {
     isBadForm.value = true
     swal.fire({
       icon: 'error',
-      text: 'Harap Lengkapi Data'
+      text: err.message || 'Harap Lengkapi Data'
     })
     isRequesting.value = false
   }
@@ -297,7 +316,8 @@ const landing = reactive({
     },
     params: {
       simplest: true,
-      searchfield:'id, m_kary.nik, m_kary.nama_depan, m_dir.nama, tgl, m_divisi_lama.nama, m_dept_lama.nama, m_posisi_lama.desc_kerja, m_devisi_baru.nama, m_dept_baru.nama, m_posisi_baru.desc_kerja, status',
+      join: true,
+      searchfield:'id, m_kary.kode, m_kary.nama_depan, m_dir.nama, tgl, m_divisi_lama.nama, m_dept_lama.nama, m_posisi_lama.desc_kerja, m_devisi_baru.nama, m_dept_baru.nama, m_posisi_baru.desc_kerja, status',
     },
     onsuccess(response) {
       response.page = response.current_page
@@ -315,7 +335,7 @@ const landing = reactive({
     cellClass: ['justify-left', 'bg-gray-50', 'border-r', '!border-gray-200']
   },
   {
-    field: 'm_kary.nik',
+    field: 'm_kary.kode',
     headerName: 'NIK',
     filter: true,
     sortable: true,
@@ -346,13 +366,14 @@ const landing = reactive({
   },
   {
     field: 'tgl',
-    headerName: 'Tanggal Tranfer',
+    headerName: 'Tanggal Mutasi',
     filter: true,
     sortable: true,
     flex:1,
     filter: 'ColFilter',
     resizable: true,
-    cellClass: [ 'border-r', '!border-gray-200', 'justify-left']
+    cellClass: [ 'border-r', '!border-gray-200', 'justify-left'],
+    cellRenderer: ({ value }) => formatDmy(value)
   },
     {
     field: 'm_divisi_lama.nama',
