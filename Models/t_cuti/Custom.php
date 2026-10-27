@@ -116,6 +116,12 @@ class t_cuti extends \App\Models\BasicModels\t_cuti
                 "interval_min" => @$interval_min
             ]);
         }
+        if (empty($newArrayData['m_comp_id'])) {
+            $newArrayData['m_comp_id'] = 1;
+        }
+        if (empty($newArrayData['m_dir_id']) && !empty($newArrayData['m_kary_id'])) {
+            $newArrayData['m_dir_id'] = \DB::table('m_kary')->where('id', $newArrayData['m_kary_id'])->value('m_dir_id');
+        }
 
         return [
             "model" => $model,
@@ -149,6 +155,9 @@ class t_cuti extends \App\Models\BasicModels\t_cuti
             "interval" =>@ $interval ?? @$arrayData['interval'],
             "interval_min" => @$interval_min ?? @$arrayData['interval_min'] 
         ]);
+        if (empty($newArrayData['m_dir_id']) && !empty($newArrayData['m_kary_id'])) {
+            $newArrayData['m_dir_id'] = \DB::table('m_kary')->where('id', $newArrayData['m_kary_id'])->value('m_dir_id');
+        }
 
 
         return [

@@ -54,7 +54,14 @@
         <div>
           <label class="font-semibold">Karyawan<span class="text-red-500 space-x-0 pl-0">*</span></label>
           <FieldPopup :bind="{ readonly: !actionText || !store.user.data?.is_superadmin }" class="w-full py-2 !mt-0" :value="values.m_kary_id"
-            @input="(v)=>values.m_kary_id=v" :errorText="formErrors.m_kary_id?'failed':''" :hints="formErrors.m_kary_id"
+            @input="(v)=>values.m_kary_id=v"
+            @update:valueFull="(v)=>{
+              if(v){
+                values.m_dir_id = v['m_dir.id'] || v.m_dir_id || (v.m_dir ? v.m_dir.id : null)
+                values.m_comp_id = v['m_comp.id'] || v.m_comp_id || store.user.data?.m_comp_id || 1
+              }
+            }"
+            :errorText="formErrors.m_kary_id?'failed':''" :hints="formErrors.m_kary_id"
             valueField="id" displayField="nama_lengkap" :api="{
                   url: `${store.server.url_backend}/operation/m_kary`,
                   headers: { 'Content-Type': 'Application/json', Authorization: `${store.user.token_type} ${store.user.token}`},
@@ -103,7 +110,7 @@
               {
                 flex: 1,
                 field: 'm_dir.nama',
-                headerName: 'Direktorat',
+                headerName: 'Company',
                 sortable: false, 
                 resizable: true, 
                 filter: 'ColFilter',
