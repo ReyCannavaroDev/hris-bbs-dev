@@ -91,7 +91,7 @@
           :errorText="formErrors.is_active?'failed':''" 
           :hints="formErrors.is_active"
           valueField="id" displayField="key"
-          :options="[{'id' : 1 , 'key' : 'Active'},{'id': 0, 'key' : 'InActive'}]"
+          :options="[{'id' : 1 , 'key' : 'Active'},{'id': 0, 'key' : 'Inactive'}]"
           placeholder="Pilih Status" label="Status" :check="false"
         />
       </div>
