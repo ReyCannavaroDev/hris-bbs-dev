@@ -56,7 +56,7 @@
           />
         </div>
         <div>
-          <label class="font-semibold">Company / Cabang</label>
+          <label class="font-semibold">Company</label>
           <FieldSelect
             class="w-full py-2 !mt-0"
             :bind="{ disabled: !actionText, clearable:true }"
@@ -71,7 +71,7 @@
             }"
             :errorText="formErrors.m_dir_id?'failed':''"
             :hints="formErrors.m_dir_id"
-            placeholder="Pilih Company / Cabang"
+            placeholder="Pilih Company"
             label=""
             displayField="nama"
             valueField="id"
