@@ -126,9 +126,9 @@
                   headers: { 'Content-Type': 'Application/json', Authorization: `${store.user.token_type} ${store.user.token}`},
                   params: {
                     simplest:true,
-                    single:true,
                     where: values.m_comp_id ? `this.m_comp_id=${values.m_comp_id} AND this.is_active = 'true'` : `this.is_active = 'true'`,
-                    transform:false
+                    transform:false,
+                    selectfield: 'this.id, this.nama, this.is_active'
                   }
               }" valueField="id" displayField="nama" fa-icon="search" :check="true" />
           </div>

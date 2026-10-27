@@ -43,7 +43,10 @@
           :bind="{ disabled: !actionText, clearable: false }"
           class="w-full !mt-3"
           :value="values.m_comp_id"
-          @input="v=>values.m_comp_id=v"
+          @input="v=>{
+            values.m_comp_id=v
+            values.m_dir_id=null
+          }"
           :errorText="formErrors.m_comp_id?'failed':''"
           :hints="formErrors.m_comp_id"
           placeholder="Pilih Company"
@@ -53,13 +56,14 @@
           :api="{
               url: `${store.server.url_backend}/operation/m_comp`,
               headers: {
+                'Content-Type': 'Application/json',
                 Authorization: `${store.user.token_type} ${store.user.token}`
               },
               params: {
                 simplest:true,
-                single:true,
                 where:`this.is_active='true'`,
                 transform:false,
+                selectfield: 'this.id, this.nama, this.is_active'
               }
           }"
           fa-icon="search" :check="false" />
@@ -79,13 +83,14 @@
           :api="{
               url: `${store.server.url_backend}/operation/m_dir`,
               headers: {
+                'Content-Type': 'Application/json',
                 Authorization: `${store.user.token_type} ${store.user.token}`
               },
               params: {
                 simplest:true,
-                single:true,
                 where: values.m_comp_id ? `this.m_comp_id=${values.m_comp_id} AND this.is_active='true'` : `this.is_active='true'`,
                 transform:false,
+                selectfield: 'this.id, this.nama, this.is_active'
               }
           }"
           fa-icon="search" :check="false" />
