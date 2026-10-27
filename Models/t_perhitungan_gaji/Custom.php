@@ -514,6 +514,7 @@ class t_perhitungan_gaji extends \App\Models\BasicModels\t_perhitungan_gaji
             if($req->m_dir_id) $kary = $kary->where('m_kary.m_dir_id', $req->m_dir_id);
             if($req->m_divisi_id) $kary = $kary->where('m_kary.m_divisi_id', $req->m_divisi_id);
             if($req->m_dept_id) $kary = $kary->where('m_kary.m_dept_id', $req->m_dept_id);
+            if($req->periode_gaji_id) $kary = $kary->where('m_kary.periode_gaji_id', $req->periode_gaji_id);
 
             $kary = $kary->get();
             
@@ -629,6 +630,16 @@ class t_perhitungan_gaji extends \App\Models\BasicModels\t_perhitungan_gaji
         if($req->m_dir_id) $model = $model->where('t_perhitungan_gaji.m_kary_dir_id', $req->m_dir_id);
         if($req->m_divisi_id) $model = $model->where('t_perhitungan_gaji.m_kary_divisi_id', $req->m_divisi_id);
         if($req->m_dept_id) $model = $model->where('t_perhitungan_gaji.m_kary_dept_id', $req->m_dept_id);
+        if($req->periode_gaji_id) $model = $model->where('t_perhitungan_gaji.periode_id', $req->periode_gaji_id);
+
+        // Proteksi anti-double finalize: data perhitungan gaji yang sudah masuk ke finalisasi berstatus POSTED tidak ditarik ulang
+        $model = $model->whereNotIn('t_perhitungan_gaji.id', function($q) {
+            $q->select('t_perhitungan_gaji_id')
+              ->from('t_final_gaji_det')
+              ->join('t_final_gaji', 't_final_gaji.id', '=', 't_final_gaji_det.t_final_gaji_id')
+              ->where('t_final_gaji.status', 'POSTED')
+              ->whereNotNull('t_final_gaji_det.t_perhitungan_gaji_id');
+        });
 
         return $model;
     }

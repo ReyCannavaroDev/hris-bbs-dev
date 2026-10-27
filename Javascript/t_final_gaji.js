@@ -51,6 +51,7 @@ const values = reactive({
   m_dir_id: null,
   m_divisi_id: null,
   m_dept_id: null,
+  periode_gaji_id: null,
   desc: '',
   total_pengeluaran_gaji: 0,
 })
@@ -215,6 +216,7 @@ async function generatePerhitungan() {
     if (values.m_dir_id) params.m_dir_id = values.m_dir_id
     if (values.m_divisi_id) params.m_divisi_id = values.m_divisi_id
     if (values.m_dept_id) params.m_dept_id = values.m_dept_id
+    if (values.periode_gaji_id) params.periode_gaji_id = values.periode_gaji_id
 
     const fixedParams = new URLSearchParams(params)
     const res = await fetch(dataURL + '?' + fixedParams, {
@@ -338,6 +340,7 @@ async function posted() {
 async function onSave() {
   const isCreating = ['Create', 'Copy', 'Tambah'].includes(actionText.value)
   let dataSave = JSON.parse(JSON.stringify(values))
+  delete dataSave['periode_gaji_id']
   
   dataSave['periode_awal'] = formatDate(dataSave['periode_awal'])
   dataSave['periode_akhir'] = formatDate(dataSave['periode_akhir'])

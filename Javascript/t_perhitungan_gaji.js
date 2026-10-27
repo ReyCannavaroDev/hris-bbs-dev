@@ -62,7 +62,8 @@ const values = reactive({
   m_dir_id: null,
   m_divisi_id: null,
   m_dept_id: null,
-  divisi: null
+  divisi: null,
+  periode_gaji_id: null
 })
 
 function openDetail(i) {

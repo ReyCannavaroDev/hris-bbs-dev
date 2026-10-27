@@ -150,6 +150,36 @@
             }"
             fa-icon="search" :check="true" />
         </div>
+        <div>
+          <label class="font-semibold">Periode Gaji (Tipe Penggajian)</label>
+          <FieldSelect
+            class="w-full py-2 !mt-0"
+            :bind="{ disabled: !actionText, clearable:true }"
+            :value="values.periode_gaji_id" 
+            :check="false"
+            @input="(v)=>{
+              values.periode_gaji_id=v
+              detailArr = []
+            }"
+            :errorText="formErrors.periode_gaji_id?'failed':''"
+            :hints="formErrors.periode_gaji_id"
+            placeholder="Pilih Periode Gaji (Semua / Bulanan / Mingguan)"
+            displayField="value"
+            valueField="id"
+            :api="{
+                url: `${store.server.url_backend}/operation/m_general`,
+                headers: {
+                  Authorization: `${store.user.token_type} ${store.user.token}`
+                },
+                params: {
+                  simplest:true,
+                  single:true,
+                  where:`this.group='PERIODE GAJI' and this.is_active='true'`,
+                  transform:false,
+                }
+            }"
+            fa-icon="search" :check="true" />
+        </div>
       </div>
       
       <div class="flex flex-row justify-center space-x-[10px] mt-[1em]">
