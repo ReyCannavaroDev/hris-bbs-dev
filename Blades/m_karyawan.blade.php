@@ -99,6 +99,42 @@
         <!-- NOT PROFILE -->
         <div v-if="!isProfile" class="col-span-8 md:col-span-6">
           <div class="grid grid-cols-12 items-center">
+            <label class="col-span-12">Company<label class="text-red-500 space-x-0 pl-0">*</label></label>
+            <FieldSelect :bind="{ disabled: !actionText && !isProfile, clearable:false }"
+              class="col-span-12 !mt-0 w-full" :value="values.m_comp_id" @input="v=>values.m_comp_id=v"
+              :errorText="formErrors.m_comp_id?'failed':''" label="" placeholder="Pilih Company" :hints="formErrors.m_comp_id" :api="{
+                  url: `${store.server.url_backend}/operation/m_comp`,
+                  headers: { 'Content-Type': 'Application/json', Authorization: `${store.user.token_type} ${store.user.token}`},
+                  params: {
+                    simplest:true,
+                    where: `this.is_active = 'true'`
+                  }
+              }" valueField="id" displayField="nama" :check="false" />
+          </div>
+        </div>
+        <div v-if="!isProfile" class="col-span-8 md:col-span-6">
+          <div class="grid grid-cols-12 items-center">
+            <label class="col-span-12">Direktorat / Cabang<label class="text-red-500 space-x-0 pl-0">*</label></label>
+            <FieldSelect :bind="{ disabled: !actionText && !isProfile, clearable:true }"
+              class="col-span-12 !mt-0 w-full" :value="values.m_dir_id" @input="(v)=>{
+                values.m_dir_id = v
+                values.m_divisi_id = null
+                values.m_dept_id = null
+              }"
+              :errorText="formErrors.m_dir_id?'failed':''" label="" placeholder="Pilih Direktorat / Cabang" :hints="formErrors.m_dir_id" :api="{
+                  url: `${store.server.url_backend}/operation/m_dir`,
+                  headers: { 'Content-Type': 'Application/json', Authorization: `${store.user.token_type} ${store.user.token}`},
+                  params: {
+                    simplest:true,
+                    single:true,
+                    where: values.m_comp_id ? `this.m_comp_id=${values.m_comp_id} AND this.is_active = 'true'` : `this.is_active = 'true'`,
+                    transform:false
+                  }
+              }" valueField="id" displayField="nama" fa-icon="search" :check="true" />
+          </div>
+        </div>
+        <div v-if="!isProfile" class="col-span-8 md:col-span-6">
+          <div class="grid grid-cols-12 items-center">
             <label class="col-span-12">Divisi<label class="text-red-500 space-x-0 pl-0">*</label></label>
             <FieldSelect :bind="{ disabled: !actionText && !isProfile, clearable:false }"
               class="col-span-12 !mt-0 w-full" :value="values.m_divisi_id" @input="v=>values.m_divisi_id=v"
@@ -109,7 +145,7 @@
                     headers: { 'Content-Type': 'Application/json', Authorization: `${store.user.token_type} ${store.user.token}`},
                     params: {
                       simplest:true,
-                      where: `this.is_active = 'true'`
+                      where: values.m_dir_id ? `this.m_dir_id=${values.m_dir_id} AND this.is_active = 'true'` : `this.is_active = 'true'`
                     }
                 }" valueField="id" displayField="nama" :check="false" />
           </div>

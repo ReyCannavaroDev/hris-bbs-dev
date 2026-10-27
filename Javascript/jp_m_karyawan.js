@@ -65,6 +65,8 @@ const setStandartGaji = async () => {
 
 const values = reactive({
   is_active: 1,
+  m_comp_id: null,
+  m_dir_id: null,
   direktorat: store.user.data?.direktorat,
   tgl_masuk: null,
   tgl_berhenti: null,
@@ -309,6 +311,13 @@ onBeforeMount(async () => {
 
   for (const key in initialValues) {
     values[key] = initialValues[key]
+  }
+
+  if (!isRead) {
+    values.m_comp_id = store.user.data?.m_comp_id ?? 1
+    values.m_dir_id = store.user.data?.m_dir_id ?? null
+  } else if (!values.m_comp_id) {
+    values.m_comp_id = store.user.data?.m_comp_id ?? 1
   }
   if(values.m_kary_det_pemb?.length > 0){
     values.periode_gaji_id = values.m_kary_det_pemb[0].periode_gaji_id
@@ -1001,7 +1010,7 @@ const landing = reactive({
     },
     params: {
       simplest: true,
-      searchfield:'this.id, this.nik, this.kode, atasan.nama_lengkap, this.nama_lengkap, m_dir.nama, m_dept.nama, this.alamat_domisili, this.no_tlp, this.tgl_masuk, this.tgl_berhenti',
+      searchfield:'this.id, this.nik, this.kode, atasan.nama_lengkap, this.nama_lengkap, m_dir.nama, m_divisi.nama, m_dept.nama, this.alamat_domisili, this.no_tlp, this.tgl_masuk, this.tgl_berhenti',
     },
     onsuccess(response) {
       response.page = response.current_page
@@ -1057,6 +1066,26 @@ const landing = reactive({
     filter: 'ColFilter',
     resizable: true,
     cellClass: [ 'border-r', '!border-gray-200', 'justify-start']
+  },
+  {
+    headerName: 'Direktorat',
+    field: 'm_dir.nama',
+    filter: true,
+    sortable: true,
+    flex: 1,
+    filter: 'ColFilter',
+    resizable: true,
+    cellClass: ['border-r', '!border-gray-200', 'justify-start']
+  },
+  {
+    headerName: 'Divisi',
+    field: 'm_divisi.nama',
+    filter: true,
+    sortable: true,
+    flex: 1,
+    filter: 'ColFilter',
+    resizable: true,
+    cellClass: ['border-r', '!border-gray-200', 'justify-start']
   },
   {
     headerName: 'Departemen',
