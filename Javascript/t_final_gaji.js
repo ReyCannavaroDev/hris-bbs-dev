@@ -45,9 +45,16 @@ function formatRupiah(amount) {
 //  @if( $id )------------------- VALUES FORM ! PENTING JANGAN DIHAPUS
 let initialValues = {}
 let _id = 0
+let now = new Date()
+let tempYear = now.getFullYear()
+let tempMonth = String(now.getMonth() + 1).padStart(2, '0')
+let firstDay = `${tempYear}-${tempMonth}-01`
+let lastDayDate = new Date(tempYear, now.getMonth() + 1, 0)
+let lastDay = `${tempYear}-${tempMonth}-${String(lastDayDate.getDate()).padStart(2, '0')}`
+
 const values = reactive({
-  periode_awal: '',
-  periode_akhir: '',
+  periode_awal: firstDay,
+  periode_akhir: lastDay,
   m_dir_id: null,
   m_divisi_id: null,
   m_dept_id: null,
@@ -55,6 +62,11 @@ const values = reactive({
   desc: '',
   total_pengeluaran_gaji: 0,
 })
+
+function clearDetail() {
+  detailArr.value = []
+  values.total_pengeluaran_gaji = 0
+}
 
 function openDetail(i) {
   idxOpen.value = i
@@ -187,10 +199,15 @@ async function generatePPH(popup = true) {
 
 function formatDate(dateStr) {
   if (!dateStr) return null
-  if (typeof dateStr === 'string' && dateStr.includes('/')) {
-    const parts = dateStr.split('/')
-    if (parts.length === 3) {
-      return `${parts[2]}-${parts[1].padStart(2, '0')}-${parts[0].padStart(2, '0')}`
+  if (typeof dateStr === 'string') {
+    if (dateStr.includes('/')) {
+      const parts = dateStr.split('/')
+      if (parts.length === 3) {
+        return `${parts[2]}-${parts[1].padStart(2, '0')}-${parts[0].padStart(2, '0')}`
+      }
+    } else if (/^\d{2}-\d{2}-\d{4}$/.test(dateStr)) {
+      const parts = dateStr.split('-')
+      return `${parts[2]}-${parts[1]}-${parts[0]}`
     }
   }
   return dateStr
@@ -204,13 +221,16 @@ async function generatePerhitungan() {
     })
   }
 
-  detailArr.value = []
+  clearDetail()
   try {
     const dataURL = `${store.server.url_backend}/operation/t_perhitungan_gaji`
+    const tglAwalFormatted = formatDate(values.periode_awal)
+    const tglAkhirFormatted = formatDate(values.periode_akhir)
+
     const params = {
       scopes: 'GenerateForFinal',
-      periode_awal: formatDate(values.periode_awal),
-      periode_akhir: formatDate(values.periode_akhir),
+      periode_awal: tglAwalFormatted,
+      periode_akhir: tglAkhirFormatted,
       paginate: 9999
     }
     if (values.m_dir_id) params.m_dir_id = values.m_dir_id
@@ -242,14 +262,28 @@ async function generatePerhitungan() {
     const result = await res.json()
     const resultData = result.data || []
 
-    if (!resultData.length) {
+    // Filter validasi sisi client: pastikan data perhitungan gaji yang ditarik benar-benar sesuai periode yang dipilih
+    const startParts = tglAwalFormatted.split('-')
+    const endParts = tglAkhirFormatted.split('-')
+    const expLabelAwal = `${startParts[2]}/${startParts[1]}/${startParts[0]}`
+    const expLabelAkhir = `${endParts[2]}/${endParts[1]}/${endParts[0]}`
+    const expPeriode = (expLabelAwal === expLabelAkhir) ? expLabelAwal : `${expLabelAwal} - ${expLabelAkhir}`
+
+    const filteredData = resultData.filter((item) => {
+      if (!item.periode) return true
+      return item.periode === expPeriode || 
+             (item.periode_in_date === tglAwalFormatted && item.periode.includes(expLabelAkhir)) ||
+             (item.periode.includes(expLabelAwal) && item.periode.includes(expLabelAkhir))
+    })
+
+    if (!filteredData.length) {
       return swal.fire({
         icon: 'warning',
         text: 'Tidak ditemukan data Perhitungan Gaji untuk periode ini. Pastikan Perhitungan Gaji sudah dilakukan terlebih dahulu.'
       })
     }
 
-    resultData.forEach((item) => {
+    filteredData.forEach((item) => {
       item._id = ++_id
       item.t_perhitungan_gaji_id = item.id
       item.karyawan = item['m_kary.nama_lengkap'] || item.karyawan
@@ -259,7 +293,7 @@ async function generatePerhitungan() {
       }
     })
 
-    detailArr.value = resultData
+    detailArr.value = filteredData
     summaryPengeluaranGaji()
   } catch (err) {
     isBadForm.value = true

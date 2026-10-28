@@ -29,7 +29,7 @@
             :value="values.periode_awal" :errorText="formErrors.periode_awal?'failed':''"
             :hints="formErrors.periode_awal" :check="false" type="date" label="" placeholder="YYYY-MM-DD" @input="(v)=>{
                 values.periode_awal=v
-                detailArr = []
+                clearDetail()
               }" />
         </div>
         <div>
@@ -38,7 +38,7 @@
             :value="values.periode_akhir" :errorText="formErrors.periode_akhir?'failed':''"
             :hints="formErrors.periode_akhir" :check="false" type="date" label="" placeholder="YYYY-MM-DD" @input="(v)=>{
                 values.periode_akhir=v
-                detailArr = []
+                clearDetail()
               }" />
         </div>
 
@@ -49,7 +49,7 @@
               values.m_dir_id=v
               values.m_divisi_id=null
               values.m_dept_id=null
-              detailArr = []
+              clearDetail()
             }" :errorText="formErrors.m_dir_id?'failed':''" :hints="formErrors.m_dir_id" placeholder="Pilih Company / Cabang"
             displayField="nama" valueField="id" :api="{
                 url: `${store.server.url_backend}/operation/m_dir`,
@@ -71,7 +71,7 @@
             :value="values.m_divisi_id" :check="false" @input="(v)=>{
               values.m_divisi_id=v
               values.m_dept_id=null
-              detailArr = []
+              clearDetail()
             }" :errorText="formErrors.m_divisi_id?'failed':''" :hints="formErrors.m_divisi_id" placeholder="Pilih Divisi"
             displayField="nama" valueField="id" :api="{
                 url: `${store.server.url_backend}/operation/m_divisi`,
@@ -92,7 +92,7 @@
           <FieldSelect class="w-full py-2 !mt-0" :bind="{ disabled: !actionText, clearable:true }"
             :value="values.m_dept_id" :check="false" @input="(v)=>{
               values.m_dept_id=v
-              detailArr = []
+              clearDetail()
             }" :errorText="formErrors.m_dept_id?'failed':''" :hints="formErrors.m_dept_id" placeholder="Pilih Departemen"
             displayField="nama" valueField="id" :api="{
                 url: `${store.server.url_backend}/operation/m_dept`,
@@ -117,7 +117,7 @@
             :check="false"
             @input="(v)=>{
               values.periode_gaji_id=v
-              detailArr = []
+              clearDetail()
             }"
             :errorText="formErrors.periode_gaji_id?'failed':''"
             :hints="formErrors.periode_gaji_id"
@@ -156,7 +156,7 @@
         <button v-show="actionText" :disabled="!actionText" @click="generatePerhitungan" class="bg-blue-500 hover:bg-blue-600 text-white text-sm px-[18px] py-[8px] rounded-[4px] ">
           <Icon fa="bolt"/> Generate
         </button>
-        <button v-show="actionText" :disabled="!actionText" @click="detailArr = []" class="bg-[#EF4444] hover:bg-[#ed3232] text-white text-sm px-[18px] py-[8px] rounded-[4px] ">
+        <button v-show="actionText" :disabled="!actionText" @click="clearDetail" class="bg-[#EF4444] hover:bg-[#ed3232] text-white text-sm px-[18px] py-[8px] rounded-[4px] ">
           Hapus Detail
         </button>
       </div>

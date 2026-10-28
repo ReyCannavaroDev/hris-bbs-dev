@@ -614,20 +614,44 @@ class t_perhitungan_gaji extends \App\Models\BasicModels\t_perhitungan_gaji
     public function scopeGenerateForFinal($model)
     {
         $req = app()->request;
-        $tglAwal = $req->periode_awal;
-        $tglAkhir = $req->periode_akhir;
+        $rawAwal = $req->periode_awal;
+        $rawAkhir = $req->periode_akhir;
 
-        if ($tglAwal) {
-            if (strlen($tglAwal) === 7) {
-                $tglAwal = $tglAwal . '-01';
-            }
-            $model = $model->where('t_perhitungan_gaji.periode_in_date', '>=', $tglAwal);
-        }
-        if ($tglAkhir) {
-            if (strlen($tglAkhir) === 7) {
-                $tglAkhir = date('Y-m-t', strtotime($tglAkhir . '-01'));
-            }
-            $model = $model->where('t_perhitungan_gaji.periode_in_date', '<=', $tglAkhir);
+        if ($rawAwal && $rawAkhir) {
+            $strDateFrom = (strlen($rawAwal) === 7) ? $rawAwal . '-01' : date('Y-m-d', strtotime($rawAwal));
+            $strDateTo = (strlen($rawAkhir) === 7) ? date('Y-m-t', strtotime($rawAkhir . '-01')) : date('Y-m-d', strtotime($rawAkhir));
+
+            $labelAwal = date('d/m/Y', strtotime($strDateFrom));
+            $labelAkhir = date('d/m/Y', strtotime($strDateTo));
+            $expectedPeriode = ($labelAwal === $labelAkhir) ? $labelAwal : ($labelAwal . ' - ' . $labelAkhir);
+
+            // Filter agar HANYA mengambil data perhitungan gaji yang sesuai persis dengan periode yang dipilih,
+            // atau yang periode_in_date-nya sama persis dan memuat label tanggal akhir
+            $model = $model->where(function($q) use ($expectedPeriode, $strDateFrom, $labelAwal, $labelAkhir) {
+                $q->where('t_perhitungan_gaji.periode', $expectedPeriode)
+                  ->orWhere(function($sub) use ($strDateFrom, $labelAkhir) {
+                      $sub->where('t_perhitungan_gaji.periode_in_date', $strDateFrom)
+                          ->where('t_perhitungan_gaji.periode', 'like', '%' . $labelAkhir . '%');
+                  })
+                  ->orWhere(function($sub2) use ($labelAwal, $labelAkhir) {
+                      $sub2->where('t_perhitungan_gaji.periode', 'like', '%' . $labelAwal . '%')
+                           ->where('t_perhitungan_gaji.periode', 'like', '%' . $labelAkhir . '%');
+                  });
+            });
+        } elseif ($rawAwal) {
+            $strDateFrom = (strlen($rawAwal) === 7) ? $rawAwal . '-01' : date('Y-m-d', strtotime($rawAwal));
+            $labelAwal = date('d/m/Y', strtotime($strDateFrom));
+            $model = $model->where(function($q) use ($strDateFrom, $labelAwal) {
+                $q->where('t_perhitungan_gaji.periode_in_date', '>=', $strDateFrom)
+                  ->orWhere('t_perhitungan_gaji.periode', 'like', '%' . $labelAwal . '%');
+            });
+        } elseif ($rawAkhir) {
+            $strDateTo = (strlen($rawAkhir) === 7) ? date('Y-m-t', strtotime($rawAkhir . '-01')) : date('Y-m-d', strtotime($rawAkhir));
+            $labelAkhir = date('d/m/Y', strtotime($strDateTo));
+            $model = $model->where(function($q) use ($strDateTo, $labelAkhir) {
+                $q->where('t_perhitungan_gaji.periode_in_date', '<=', $strDateTo)
+                  ->where('t_perhitungan_gaji.periode', 'like', '%' . $labelAkhir . '%');
+            });
         }
 
         if($req->m_dir_id) $model = $model->where('t_perhitungan_gaji.m_kary_dir_id', $req->m_dir_id);
