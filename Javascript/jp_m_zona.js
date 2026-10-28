@@ -151,6 +151,23 @@ function deleteAll(item) {
 }
 
 async function onSave() {
+  if (!detail.items || detail.items.length === 0) {
+    swal.fire({
+      icon: 'warning',
+      text: 'Harap mengisi detail zona terlebih dahulu!',
+    })
+    return
+  }
+
+  const hasEmptyLokasi = detail.items.some(item => !item.m_lokasi_id)
+  if (hasEmptyLokasi) {
+    swal.fire({
+      icon: 'warning',
+      text: 'Harap melengkapi lokasi pada detail zona!',
+    })
+    return
+  }
+
   //values.tags = JSON.stringify(values.tags)
       try {
          values.m_zona_det = detail.items.map(item => ({
@@ -159,8 +176,11 @@ async function onSave() {
         }));
 
          const isCreating = ['Create', 'Copy', 'Tambah'].includes(actionText.value);
-          const dataURL = `${store.server.url_backend}/operation${endpointApi}${isCreating ? '' : ('/' + route.params.id)}`;
-          isRequesting.value = true;
+         const dataURL = `${store.server.url_backend}/operation${endpointApi}${isCreating ? '' : ('/' + route.params.id)}`;
+         isRequesting.value = true;
+         if (!values.m_comp_id) {
+           values.m_comp_id = store.user.data?.m_comp_id ?? 1
+         }
          values.is_active = values.is_active ? 1 : 0
       const res = await fetch(dataURL, {
       method: isCreating ? 'POST' : 'PUT',
@@ -192,21 +212,15 @@ async function onSave() {
 
 //  @else----------------------- LANDING
 
-const activeBtn = ref()
+const activeBtn = ref(null)
 
-function filterShowData(params,noBtn){
-  if(activeBtn.value === noBtn){
+function filterShowData(params, noBtn) {
+  if (activeBtn.value === noBtn) {
     activeBtn.value = null
-  }else{
-    activeBtn.value = noBtn
-  }
-  if(params){
-    landing.api.params.where = `this.is_active=true`
-  }else if(activeBtn.value == null){
-    // clear params filter
     landing.api.params.where = null
-  }else{
-    landing.api.params.where = `this.is_active=false`
+  } else {
+    activeBtn.value = noBtn
+    landing.api.params.where = `this.is_active=${params ? 'true' : 'false'}`
   }
 
   apiTable.value.reload()
@@ -290,9 +304,16 @@ const landing = reactive({
     },
     params: {
       simplest: true,
-      searchfield:'this.kode, this.desc, this.nama, m_comp.nama, m_dir.nama',
+      join: true,
+      searchfield:'this.kode, this.desc, this.nama, m_comp.nama, m_dir.nama, this.is_active',
     },
     onsuccess(response) {
+      if (response && response.data) {
+        response.data = response.data.map((item) => {
+          item.status = (item.is_active === true || item.is_active === 1 || item.is_active === '1' || item.is_active === 'true') ? 'Active' : 'Inactive'
+          return item
+        })
+      }
       response.page = response.current_page
       response.hasNext = response.has_next
       return response
@@ -307,16 +328,6 @@ const landing = reactive({
     filter: true,
     cellClass: ['justify-center', 'bg-gray-50', 'border-r', '!border-gray-200']
   },
-    {
-    headerName: 'Kode',
-    field: 'kode',
-    filter: true,
-    sortable: true,
-    flex:1,
-    filter: 'ColFilter',
-    resizable: true,
-    cellClass: [ 'border-r', '!border-gray-200', 'justify-start']
-  },
   {
     headerName: 'Holding Company',
     field: 'm_comp.nama',
@@ -325,7 +336,10 @@ const landing = reactive({
     flex: 1,
     filter: 'ColFilter',
     resizable: true,
-    valueGetter: (p) => p.data['m_comp.nama'] || '-',
+    valueGetter: (p) => {
+      const d = p.data || {}
+      return d['m_comp.nama'] || d.m_comp?.nama || d['comp.nama'] || d.comp?.nama || d.m_comp_nama || (d['m_dir.nama'] || d.m_dir?.nama || d.m_dir_id ? 'BBS' : '-')
+    },
     cellClass: [ 'border-r', '!border-gray-200', 'justify-start']
   },
   {
@@ -336,7 +350,17 @@ const landing = reactive({
     flex: 1,
     filter: 'ColFilter',
     resizable: true,
-    valueGetter: (p) => p.data['m_dir.nama'] || '-',
+    valueGetter: (p) => p.data?.['m_dir.nama'] || p.data?.m_dir?.nama || p.data?.['dir.nama'] || p.data?.dir?.nama || p.data?.m_dir_nama || '-',
+    cellClass: [ 'border-r', '!border-gray-200', 'justify-start']
+  },
+  {
+    headerName: 'Kode',
+    field: 'kode',
+    filter: true,
+    sortable: true,
+    flex:1,
+    filter: 'ColFilter',
+    resizable: true,
     cellClass: [ 'border-r', '!border-gray-200', 'justify-start']
   },
   {
@@ -362,17 +386,24 @@ const landing = reactive({
   {
     headerName: 'Status',
     field: 'is_active',
-    filter: true,
-    sortable: true,
     filter: 'ColFilter',
+    filterParams: {
+      options: ['Active', 'Inactive']
+    },
+    sortable: true,
     resizable: true,
-    flex:1,
-    cellClass: [ 'border-r', '!border-gray-200', 'justify-center'],
+    flex: 1,
+    cellClass: ['border-r', '!border-gray-200', 'justify-center'],
+    valueGetter: (params) => {
+      const val = params.data?.is_active
+      return (val === true || val === 1 || val === '1' || val === 'true') ? 'Active' : 'Inactive'
+    },
     cellRenderer: ({ value }) => {
-    return value === true
-      ? `<span class="text-green-500 rounded-md text-xs font-medium px-4 py-1 inline-block capitalize">Active</span>`
-      : `<span class="text-red-500 rounded-md text-xs font-medium px-4 py-1 inline-block capitalize">Inactive</span>`
-  }},
+      return value === 'Active' || value === true
+        ? `<span class="text-green-500 rounded-md text-xs font-medium px-4 py-1 inline-block capitalize">Active</span>`
+        : `<span class="text-red-500 rounded-md text-xs font-medium px-4 py-1 inline-block capitalize">Inactive</span>`
+    }
+  },
   ]
 })
 

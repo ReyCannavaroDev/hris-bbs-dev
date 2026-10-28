@@ -168,9 +168,108 @@ class t_perhitungan_gaji extends \App\Models\BasicModels\t_perhitungan_gaji
         }
 
         // check kehadiran & denda/potongan presensi karyawan (MoM BBS 7 Oktober 2026)
-        $gaji_pokok = (float) (@$standart_gaji['gaji_pokok'] ?? 0);
-        $jml_hari_sebulan = 25; // default standar BBS
-        $gaji_per_hari = $gaji_pokok > 0 ? ($gaji_pokok / $jml_hari_sebulan) : 0;
+        $gaji_pokok = (float) (@$standart_gaji['gaji_pokok'] ?? ($standart_gaji->gaji_pokok ?? 0));
+        $gajiPokokPeriode = strtolower(trim($standart_gaji->gaji_pokok_periode ?? (@$standart_gaji['gaji_pokok_periode'] ?? 'Bulanan')));
+
+        $periodeGajiKary = null;
+        if (!empty($kary->periode_text)) {
+            $periodeGajiKary = strtolower(trim($kary->periode_text));
+        } elseif (!empty($kary->periode_gaji_id)) {
+            $val = \DB::table('m_general')->where('id', $kary->periode_gaji_id)->value('value');
+            $periodeGajiKary = strtolower(trim($val ?? ''));
+        }
+
+        // Ambil daftar tanggal merah / libur nasional dalam rentang periode
+        $liburNasional = [];
+        try {
+            $liburNasional = \DB::table('m_libur_nasional')
+                ->where('is_active', true)
+                ->whereBetween('tanggal', [$firstDayOfMonth, $lastDayOfMonth])
+                ->pluck('tanggal')
+                ->map(function($t) { return date('Y-m-d', strtotime($t)); })
+                ->toArray();
+        } catch (\Throwable $e) {
+            $liburNasional = [];
+        }
+
+        // Ambil konfigurasi nama hari libur mingguan dari m_general (default: Minggu)
+        $hariLiburNama = ['minggu', 'sunday'];
+        try {
+            $generalLibur = \DB::table('m_general')
+                ->where('group', 'HARI LIBUR')
+                ->where('is_active', true)
+                ->pluck('value')
+                ->map(function($v) { return strtolower(trim($v)); })
+                ->toArray();
+            if (count($generalLibur)) {
+                $hariLiburNama = array_unique(array_merge($hariLiburNama, $generalLibur));
+            }
+        } catch (\Throwable $e) {
+            // default tetap ['minggu', 'sunday']
+        }
+
+        // Hitung total hari kalender, hari minggu, tanggal merah, dan hari kerja efektif
+        $diffKalender = 0;
+        $totalHariLibur = 0;
+        $hariKerjaEfektif = 0;
+
+        if ($firstDayOfMonth && $lastDayOfMonth) {
+            $currDate = new \DateTime($firstDayOfMonth);
+            $endDateObj = new \DateTime($lastDayOfMonth);
+
+            $daysMapIdn = [
+                0 => 'minggu',
+                1 => 'senin',
+                2 => 'selasa',
+                3 => 'rabu',
+                4 => 'kamis',
+                5 => 'jumat',
+                6 => 'sabtu',
+            ];
+
+            while ($currDate <= $endDateObj) {
+                $diffKalender++;
+                $tglStr = $currDate->format('Y-m-d');
+                $dayOfWeek = (int) $currDate->format('w'); // 0 = Minggu
+                $namaHariIdn = $daysMapIdn[$dayOfWeek] ?? '';
+
+                $isHariLiburMingguan = ($dayOfWeek === 0 || in_array($namaHariIdn, $hariLiburNama));
+                $isTanggalMerah = in_array($tglStr, $liburNasional);
+
+                if ($isHariLiburMingguan || $isTanggalMerah) {
+                    $totalHariLibur++;
+                } else {
+                    $hariKerjaEfektif++;
+                }
+
+                $currDate->modify('+1 day');
+            }
+        } else {
+            $diffKalender = 25;
+            $hariKerjaEfektif = 25;
+        }
+
+        if ($hariKerjaEfektif <= 0) {
+            $hariKerjaEfektif = max(1, $diffKalender - $totalHariLibur);
+        }
+
+        $isMingguan = ($periodeGajiKary === 'mingguan' || str_contains($periodeGajiKary ?? '', 'minggu') || $diffKalender <= 7);
+        $isHarian = ($gajiPokokPeriode === 'harian' || $periodeGajiKary === 'harian');
+
+        if ($isHarian && !$isMingguan) {
+            // Standar gaji harian murni
+            $gaji_per_hari = $gaji_pokok;
+        } elseif ($isMingguan) {
+            // Periode mingguan: bagi berdasarkan hari kerja efektif (di luar hari Minggu dan tanggal merah)
+            $pembagiHari = ($hariKerjaEfektif > 0) ? $hariKerjaEfektif : 6;
+            $gaji_per_hari = $gaji_pokok > 0 ? ($gaji_pokok / $pembagiHari) : 0;
+        } else {
+            // Standar bulanan BBS (25 hari kerja)
+            $jml_hari_sebulan = 25;
+            $gaji_per_hari = $gaji_pokok > 0 ? ($gaji_pokok / $jml_hari_sebulan) : 0;
+        }
+
+        $tipePeriodeKolom = $isMingguan ? 'Mingguan' : ($isHarian ? 'Harian' : 'Bulanan');
 
         try {
             $coreGaji = new \App\Cores\PerhitunganGaji();
@@ -182,7 +281,7 @@ class t_perhitungan_gaji extends \App\Models\BasicModels\t_perhitungan_gaji
                     'label'      => "Denda Keterlambatan ({$dendaTelat['total_menit_telat']} Menit)",
                     'factor'     => '-',
                     'value'      => (float) $dendaTelat['total_denda'],
-                    'type'       => 'Bulanan',
+                    'type'       => $tipePeriodeKolom,
                     'can_adjust' => 1
                 ];
             }
@@ -194,7 +293,7 @@ class t_perhitungan_gaji extends \App\Models\BasicModels\t_perhitungan_gaji
                     'label'      => "Potongan Izin & Cuti Habis ({$potonganIzin['hari_potong_gaji']} Hari)",
                     'factor'     => '-',
                     'value'      => (float) $potonganIzin['nominal_potongan_proporsional'],
-                    'type'       => 'Bulanan',
+                    'type'       => $tipePeriodeKolom,
                     'can_adjust' => 1
                 ];
             }
@@ -202,23 +301,67 @@ class t_perhitungan_gaji extends \App\Models\BasicModels\t_perhitungan_gaji
             // Safe fallback jika table presensi belum ada data
         }
 
-        // Fallback untuk legacy employee_attendance jika masih ada stored procedure di database
+        // Cek kehadiran karyawan melalui stored procedure PostgreSQL
         try {
-            $attendance = \DB::select("select public.employee_attendance(?,?)", [$firstDayOfMonth, @$kary->id ?? 0]);
+            $attendance = null;
+            $isRange = ($firstDayOfMonth && $lastDayOfMonth && $firstDayOfMonth !== $lastDayOfMonth);
+            $isFullMonth = false;
+            if ($isRange) {
+                $isFullMonth = (date('Y-m-01', strtotime($firstDayOfMonth)) === $firstDayOfMonth
+                    && date('Y-m-t', strtotime($firstDayOfMonth)) === $lastDayOfMonth);
+            }
+
+            // Jika periode merupakan rentang tertentu (seperti mingguan / 7 hari), gunakan employee_attendance_range
+            if ($isRange && !$isFullMonth) {
+                try {
+                    $attendance = \DB::select("select public.employee_attendance_range(?,?,?) as employee_attendance", [
+                        $firstDayOfMonth,
+                        $lastDayOfMonth,
+                        @$kary->id ?? 0
+                    ]);
+                } catch (\Throwable $e) {
+                    $attendance = null;
+                }
+            }
+
+            // Fallback ke employee_attendance bulanan jika range tidak tersedia atau periode 1 bulan penuh
+            if (!$attendance || !count($attendance)) {
+                $attendance = \DB::select("select public.employee_attendance(?,?) as employee_attendance", [
+                    $firstDayOfMonth,
+                    @$kary->id ?? 0
+                ]);
+            }
+
             if (count($attendance)) {
                 $att = $attendance[0]->employee_attendance;
                 $att = json_decode($att);
 
-                $tidak_masuk_kerja = $att->work_not_present ?? 0;
-                $sisa_cuti = (@$att->sisa_cuti_reguler ?? 0) + (@$att->sisa_cuti_masa_kerja ?? 0);
+                $rawNotPresent = (int) ($att->work_not_present ?? 0);
+                $hadir = (int) ($att->work_present ?? 0);
+                $cutiTerpakai = (int) ($att->cuti_terpakai ?? 0);
+                $sisa_cuti = (int) ((@$att->sisa_cuti_reguler ?? 0) + (@$att->sisa_cuti_masa_kerja ?? 0));
+
+                if ($isRange && !$isFullMonth) {
+                    // Hari Minggu dan Tanggal Merah / Libur Nasional TIDAK dihitung kerja dan TIDAK dipotong
+                    if (isset($att->work_present)) {
+                        // Dihitung dari Hari Kerja Efektif dikurangi kehadiran dan cuti resmi
+                        $tidak_masuk_kerja = max(0, $hariKerjaEfektif - $hadir - $cutiTerpakai);
+                    } else {
+                        // Fallback: kurangi total hari libur (Minggu + tanggal merah) dari not present stored procedure
+                        $tidak_masuk_kerja = max(0, $rawNotPresent - $totalHariLibur);
+                    }
+                } else {
+                    $tidak_masuk_kerja = $rawNotPresent;
+                }
 
                 if (($sisa_cuti - $tidak_masuk_kerja) < 0) {
-                    $value = $gaji_per_hari * $tidak_masuk_kerja;
+                    $hariDipotong = $tidak_masuk_kerja - max(0, $sisa_cuti);
+                    $value = round($gaji_per_hari * $hariDipotong, 2);
                     $defaultColumns[] = [
                         'label'      => "Potongan Tidak Masuk Kerja ($tidak_masuk_kerja)",
                         'factor'     => '-',
                         'value'      => $value,
-                        'type'       => 'Bulanan',
+                        'type'       => $tipePeriodeKolom,
                         'can_adjust' => 1
                     ];
                 }

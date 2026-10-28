@@ -43,10 +43,8 @@
                   Authorization: `${store.user.token_type} ${store.user.token}`
                 },
                 params: {
-                  simplest:true,
-                  where:`this.is_active='true'`,
-                  transform:false,
-                  selectfield: 'this.id, this.nama, this.is_active'
+                  simplest: true,
+                  where: `this.is_active='true'`
                 }
             }"
             fa-icon="search" :check="false" />
@@ -58,6 +56,11 @@
             class="w-full py-2 !mt-0"
             :value="values.m_dir_id"
             @input="v=>values.m_dir_id=v"
+            @update:valueFull="(objVal)=>{
+              if (objVal && (objVal.m_comp_id || objVal['m_comp.id'])) {
+                values.m_comp_id = objVal.m_comp_id || objVal['m_comp.id']
+              }
+            }"
             :errorText="formErrors.m_dir_id?'failed':''"
             :hints="formErrors.m_dir_id"
             placeholder="Pilih Company / Cabang"
@@ -71,10 +74,8 @@
                   Authorization: `${store.user.token_type} ${store.user.token}`
                 },
                 params: {
-                  simplest:true,
-                  where: `this.is_active='true'`,
-                  transform:false,
-                  selectfield: 'this.id, this.nama, this.is_active'
+                  simplest: true,
+                  where: `this.is_active='true'`
                 }
             }"
             fa-icon="search" :check="false" />
@@ -138,7 +139,7 @@
       </div>
       <!-- END COLUMN -->
       <div class="mt-10">
-        <h2 class="font-bold capitalize text-lg">Detail Zona</div>
+        <h2 class="font-bold capitalize text-lg">Detail Zona</h2>
         <div v-show="actionText" class="mt-4">
           <button @click="addDetail" type="button"  :bind="{ readonly: !actionText }" class="bg-blue-600 hover:bg-blue-500 text-white p-2 px-4 flex items-center justify-center rounded">Tambah Baris</button>
         </div>

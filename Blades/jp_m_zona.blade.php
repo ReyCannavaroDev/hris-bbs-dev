@@ -57,10 +57,8 @@
                 Authorization: `${store.user.token_type} ${store.user.token}`
               },
               params: {
-                simplest:true,
-                where:`this.is_active='true'`,
-                transform:false,
-                selectfield: 'this.id, this.nama, this.is_active'
+                simplest: true,
+                where: `this.is_active='true'`
               }
           }"
           fa-icon="search" :check="false" />
@@ -71,6 +69,11 @@
           class="w-full !mt-3"
           :value="values.m_dir_id"
           @input="v=>values.m_dir_id=v"
+          @update:valueFull="(objVal)=>{
+            if (objVal && (objVal.m_comp_id || objVal['m_comp.id'])) {
+              values.m_comp_id = objVal.m_comp_id || objVal['m_comp.id']
+            }
+          }"
           :errorText="formErrors.m_dir_id?'failed':''"
           :hints="formErrors.m_dir_id"
           placeholder="Pilih Company / Cabang"
@@ -84,10 +87,8 @@
                 Authorization: `${store.user.token_type} ${store.user.token}`
               },
               params: {
-                simplest:true,
-                where: `this.is_active='true'`,
-                transform:false,
-                selectfield: 'this.id, this.nama, this.is_active'
+                simplest: true,
+                where: `this.is_active='true'`
               }
           }"
           fa-icon="search" :check="false" />
@@ -140,7 +141,7 @@
       
     
     <div class="flex items-stretch mt-2 mx-4">
-      <h3 class="font-semibold">Detail Zona</h4><br>
+      <h3 class="font-semibold">Detail Zona</h3><br>
       <div class="content-end flex">
         <button @click="addDetail" type="button"  v-show="actionText" class="bg-blue-500 hover:bg-blue-600 text-white font-semibold ml-2 px-2 py-1 rounded-md flex items-center justify-center mt-2">
             <icon fa="plus" size="sm mr-0.5"/> Tambah Baris
