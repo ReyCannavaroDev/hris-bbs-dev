@@ -67,6 +67,7 @@
               values.divisi=null
               values.m_divisi_id=null
               values.m_dept_id=null
+              values.m_kary_id=null
               detailArr = []
             }"
             :errorText="formErrors.m_dir_id?'failed':''"
@@ -100,6 +101,7 @@
               values.divisi=v
               values.m_divisi_id=v
               values.m_dept_id=null
+              values.m_kary_id=null
               detailArr = []
             }"
             :errorText="formErrors.divisi?'failed':''"
@@ -131,6 +133,7 @@
             :check="false"
             @input="(v)=>{
               values.m_dept_id=v
+              values.m_kary_id=null
               detailArr = []
             }"
             :errorText="formErrors.m_dept_id?'failed':''"
@@ -162,6 +165,7 @@
             :check="false"
             @input="(v)=>{
               values.periode_gaji_id=v
+              values.m_kary_id=null
               detailArr = []
             }"
             :errorText="formErrors.periode_gaji_id?'failed':''"
@@ -180,6 +184,49 @@
                   single:true,
                   where:`this.group='PERIODE GAJI' and this.is_active='true'`,
                   transform:false,
+                }
+            }"
+            fa-icon="search" :check="true" />
+        </div>
+        <div class="col-span-2">
+          <label class="font-semibold">Karyawan</label>
+          <FieldSelect
+            class="w-full py-2 !mt-0"
+            :bind="{ disabled: !actionText, clearable:true }"
+            :value="values.m_kary_id" 
+            :check="false"
+            @input="(v)=>{
+              values.m_kary_id=v
+              detailArr = []
+            }"
+            @update:valueFull="(objVal)=>{
+              if (objVal) {
+                if (objVal.m_dir_id && !values.m_dir_id) values.m_dir_id = objVal.m_dir_id
+                if (objVal.m_divisi_id && !values.m_divisi_id) {
+                  values.m_divisi_id = objVal.m_divisi_id
+                  values.divisi = objVal.m_divisi_id
+                }
+                if (objVal.m_dept_id && !values.m_dept_id) values.m_dept_id = objVal.m_dept_id
+                if (objVal.periode_gaji_id && !values.periode_gaji_id) values.periode_gaji_id = objVal.periode_gaji_id
+              }
+            }"
+            :errorText="formErrors.m_kary_id?'failed':''"
+            :hints="formErrors.m_kary_id"
+            placeholder="Pilih Karyawan (Kosongkan untuk Semua Karyawan)"
+            label=""
+            displayField="nama_lengkap"
+            valueField="id"
+            :api="{
+                url: `${store.server.url_backend}/operation/m_kary`,
+                headers: {
+                  Authorization: `${store.user.token_type} ${store.user.token}`
+                },
+                params: {
+                  simplest:true,
+                  single:true,
+                  where: (values.m_dir_id ? `this.m_dir_id=${values.m_dir_id} and ` : '') + (values.m_divisi_id ? `this.m_divisi_id=${values.m_divisi_id} and ` : '') + (values.m_dept_id ? `this.m_dept_id=${values.m_dept_id} and ` : '') + (values.periode_gaji_id ? `this.periode_gaji_id=${values.periode_gaji_id} and ` : '') + `this.is_active='true'`,
+                  transform:false,
+                  searchfield: 'this.nik, this.nama_lengkap, this.nama_depan, this.nama_belakang'
                 }
             }"
             fa-icon="search" :check="true" />

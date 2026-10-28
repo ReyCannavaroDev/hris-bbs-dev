@@ -63,7 +63,8 @@ const values = reactive({
   m_divisi_id: null,
   m_dept_id: null,
   divisi: null,
-  periode_gaji_id: null
+  periode_gaji_id: null,
+  m_kary_id: null
 })
 
 function openDetail(i) {
@@ -112,6 +113,16 @@ onBeforeMount(async () => {
 
   for (const key in initialValues) {
     values[key] = initialValues[key]
+  }
+
+  if (isRead && initialValues && initialValues.id) {
+    const itemData = { ...initialValues }
+    itemData.karyawan = itemData['m_kary.nama_lengkap'] || itemData.karyawan || itemData.nama_lengkap || '-'
+    itemData.deskripsi = itemData.deskripsi || ''
+    if (typeof itemData.detail_gaji === 'string') {
+      try { itemData.detail_gaji = JSON.parse(itemData.detail_gaji) } catch (e) {}
+    }
+    detailArr.value = [itemData]
   }
 })
 

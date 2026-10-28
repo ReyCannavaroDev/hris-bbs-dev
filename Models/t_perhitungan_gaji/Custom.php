@@ -658,6 +658,7 @@ class t_perhitungan_gaji extends \App\Models\BasicModels\t_perhitungan_gaji
         if($req->m_divisi_id) $model = $model->where('t_perhitungan_gaji.m_kary_divisi_id', $req->m_divisi_id);
         if($req->m_dept_id) $model = $model->where('t_perhitungan_gaji.m_kary_dept_id', $req->m_dept_id);
         if($req->periode_gaji_id) $model = $model->where('t_perhitungan_gaji.periode_id', $req->periode_gaji_id);
+        if($req->m_kary_id) $model = $model->where('t_perhitungan_gaji.m_kary_id', $req->m_kary_id);
 
         // Proteksi anti-double finalize: data perhitungan gaji yang sudah masuk ke finalisasi berstatus POSTED tidak ditarik ulang
         $model = $model->whereNotIn('t_perhitungan_gaji.id', function($q) {
