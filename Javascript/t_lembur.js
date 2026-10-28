@@ -458,7 +458,7 @@ const landing = reactive({
       class: 'bg-rose-700 rounded-lg text-white',
       show: (row) => {
         const status = row.status?.toUpperCase()
-        return ['POSTED', 'REVISED'].includes(status)
+        return ['DRAFT', 'POSTED', 'REVISED'].includes(status)
       },
       async click(row) {
         swal.fire({
