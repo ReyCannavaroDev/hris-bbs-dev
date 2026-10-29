@@ -32,6 +32,27 @@ onBeforeMount(async () => {
     
 })
 
+function formatDate(dateStr) {
+  if (!dateStr) return '-'
+  if (typeof dateStr === 'string') {
+    const raw = dateStr.trim().split(' ')[0]
+    const parts = raw.split(/[-/]/)
+    if (parts.length === 3) {
+      if (parts[0].length === 4) {
+        return `${parts[2].padStart(2, '0')}/${parts[1].padStart(2, '0')}/${parts[0]}`
+      } else if (parts[2].length === 4) {
+        return `${parts[0].padStart(2, '0')}/${parts[1].padStart(2, '0')}/${parts[2]}`
+      }
+    }
+  }
+  const d = new Date(dateStr)
+  if (isNaN(d.getTime())) return dateStr
+  const day = String(d.getDate()).padStart(2, '0')
+  const month = String(d.getMonth() + 1).padStart(2, '0')
+  const year = d.getFullYear()
+  return `${day}/${month}/${year}`
+}
+
 async function loadTable() {
   try {
       // reset landing
@@ -51,6 +72,14 @@ async function loadTable() {
       if (!res.ok) throw new Error("Failed when trying to read data")
       const resultJson = await res.json()
       let data = resultJson.data
+
+      if (Array.isArray(data)) {
+        data.forEach(item => {
+          if (item.trx_date) {
+            item.trx_date = formatDate(item.trx_date)
+          }
+        })
+      }
 
       const groupedData = data.reduce((result, item) => {
         const key = item.trx_name;

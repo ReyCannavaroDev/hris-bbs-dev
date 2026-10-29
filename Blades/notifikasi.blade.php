@@ -107,7 +107,7 @@
                             {{ d.creator }}
                         </td>
                         <td class="px-6 py-2">
-                            {{ d.trx_date }}
+                            {{ formatDate(d.trx_date) }}
                         </td>
                         <td class="px-6 py-2">
                             {{ d.created_at }}
