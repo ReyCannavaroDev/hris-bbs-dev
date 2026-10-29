@@ -48,7 +48,7 @@
 
 
 
-      <div class="grid <md:grid-cols-1 grid-cols-2 gap-2">
+      <div class="grid <md:grid-cols-1 grid-cols-2 gap-x-4 gap-y-2">
         <!-- START COLUMN -->
         <div>
           <label class="font-semibold">Company</label>
@@ -82,7 +82,7 @@
           <label class="font-semibold">Nomor<span class="text-red-500 space-x-0 pl-0">*</span></label>
           <FieldX :bind="{ readonly: true }" label="" class="w-full py-2 !mt-0" :value="values.nomor"
             :errorText="formErrors.nomor?'failed':''" @input="v=>values.nomor=v" :hints="formErrors.nomor"
-            :check="false" label="" placeholder="Nomor" />
+            :check="false" placeholder="Nomor" />
         </div>
         <div>
           <label class="font-semibold">Karyawan<span class="text-red-500 space-x-0 pl-0">*</span></label>
@@ -168,38 +168,34 @@
             ]" />
         </div>
         <div>
-          <label class="font-semibold">Tanggal Lembur<label class="text-red-500 space-x-0 pl-0">*</label></label>
+          <label class="font-semibold">Tanggal Lembur<span class="text-red-500 space-x-0 pl-0">*</span></label>
           <FieldX :bind="{ readonly: isReadOnly }" type="date" class="w-full py-2 !mt-0" :value="values.tanggal"
             label="" placeholder="Pilih Tanggal" :errorText="formErrors.tanggal?'failed':''"
             @input="v=>values.tanggal=v" :hints="formErrors.tanggal" :check="false" />
         </div>
 
-
         <div>
-        </div>
-
-        <div class="col-span-1 md:col-span-1">
-          <label class="font-semibold">Jam Mulai (SPK)<label class="text-red-500 space-x-0 pl-0">*</label></label>
-          <FieldX :bind="{ readonly: isReadOnly }" class="py-2 !mt-0 w-full" type="time" fa-icon="clock"
+          <label class="font-semibold">Jam Mulai (SPK)<span class="text-red-500 space-x-0 pl-0">*</span></label>
+          <FieldX :bind="{ readonly: isReadOnly }" class="w-full py-2 !mt-0" type="time" fa-icon="clock"
             :value="values.jam_mulai" :errorText="formErrors.jam_mulai ? 'failed' : ''"
             @input="v => { values.jam_mulai = v; hitungDurasi(); }" :hints="formErrors.jam_mulai" :check="false" />
         </div>
-        <div class="col-span-1 md:col-span-1">
-          <label class="font-semibold">Jam Selesai (SPK)<label class="text-red-500 space-x-0 pl-0">*</label></label>
-          <FieldX :bind="{ readonly: isReadOnly }" class="py-2 !mt-0 w-full" type="time" fa-icon="clock"
+        <div>
+          <label class="font-semibold">Jam Selesai (SPK)<span class="text-red-500 space-x-0 pl-0">*</span></label>
+          <FieldX :bind="{ readonly: isReadOnly }" class="w-full py-2 !mt-0" type="time" fa-icon="clock"
             :value="values.jam_selesai" :errorText="formErrors.jam_selesai ? 'failed' : ''"
             @input="v => { values.jam_selesai = v; hitungDurasi(); }" :hints="formErrors.jam_selesai" :check="false" />
         </div>
 
-        <div class="col-span-1 md:col-span-1">
+        <div>
           <label class="font-semibold">Jam Mulai (Realisasi)</label>
-          <FieldX :bind="{ readonly: isReadOnly }" class="py-2 !mt-0 w-full" type="time" fa-icon="clock"
+          <FieldX :bind="{ readonly: isReadOnly }" class="w-full py-2 !mt-0" type="time" fa-icon="clock"
             :value="values.jam_mulai_realisasi" :errorText="formErrors.jam_mulai_realisasi ? 'failed' : ''"
             @input="v => { values.jam_mulai_realisasi = v; hitungDurasi(); }" :hints="formErrors.jam_mulai_realisasi" :check="false" />
         </div>
-        <div class="col-span-1 md:col-span-1">
+        <div>
           <label class="font-semibold">Jam Selesai (Realisasi)</label>
-          <FieldX :bind="{ readonly: isReadOnly }" class="py-2 !mt-0 w-full" type="time" fa-icon="clock"
+          <FieldX :bind="{ readonly: isReadOnly }" class="w-full py-2 !mt-0" type="time" fa-icon="clock"
             :value="values.jam_selesai_realisasi" :errorText="formErrors.jam_selesai_realisasi ? 'failed' : ''"
             @input="v => { values.jam_selesai_realisasi = v; hitungDurasi(); }" :hints="formErrors.jam_selesai_realisasi" :check="false" />
         </div>
@@ -216,6 +212,7 @@
             :value="values.realisasi_min ? values.realisasi_min + ' menit (' + (values.realisasi_min/60).toFixed(1) + ' jam)' : '-'"
             :check="false" label="" placeholder="-" />
         </div>
+
         <div>
           <label class="font-semibold">Durasi Diakui</label>
           <FieldX :bind="{ readonly: true }" class="w-full py-2 !mt-0"
@@ -228,12 +225,13 @@
             :value="values.total_lembur ? 'Rp ' + Number(values.total_lembur).toLocaleString('id-ID') : '-'"
             :check="false" label="" placeholder="-" />
         </div>
+
         <div>
           <label class="font-semibold">Tipe Lembur<span class="text-red-500 space-x-0 pl-0">*</span></label>
-          <FieldSelect :bind="{ disabled: isReadOnly, clearable:false }" class="col-span-12 !mt-0 w-full"
+          <FieldSelect :bind="{ disabled: isReadOnly, clearable:false }" class="w-full py-2 !mt-0"
             :value="values.tipe_lembur_id" @input="v=>values.tipe_lembur_id=v"
             :errorText="formErrors.tipe_lembur_id?'failed':''" :hints="formErrors.tipe_lembur_id" label=""
-            placeholder="Alasan" valueField="id" displayField="value" :api="{
+            placeholder="Pilih Tipe Lembur" valueField="id" displayField="value" :api="{
             url: `${store.server.url_backend}/operation/m_general`,
             headers: {
             'Content-Type': 'Application/json',
@@ -250,9 +248,9 @@
         </div>
         <div>
           <label class="font-semibold">Alasan<span class="text-red-500 space-x-0 pl-0">*</span></label>
-          <FieldSelect :bind="{ disabled: isReadOnly, clearable:false }" class="col-span-12 !mt-0 w-full"
+          <FieldSelect :bind="{ disabled: isReadOnly, clearable:false }" class="w-full py-2 !mt-0"
             :value="values.alasan_id" @input="v=>values.alasan_id=v" :errorText="formErrors.alasan_id?'failed':''"
-            :hints="formErrors.alasan_id" label="" placeholder="Alasan" valueField="id" displayField="value" :api="{
+            :hints="formErrors.alasan_id" label="" placeholder="Pilih Alasan" valueField="id" displayField="value" :api="{
               url: `${store.server.url_backend}/operation/m_general`,
               headers: {
               'Content-Type': 'Application/json',
@@ -267,14 +265,15 @@
               }
               }" :check="false" />
         </div>
+
         <div>
-          <label class="font-semibold">No.Dokumen<label class="text-red-500 space-x-0 pl-0"></label></label>
+          <label class="font-semibold">No.Dokumen</label>
           <FieldX :bind="{ readonly: isReadOnly }" class="w-full py-2 !mt-0" :value="values.no_doc"
             :errorText="formErrors.no_doc?'failed':''" @input="v=>values.no_doc=v" :hints="formErrors.no_doc"
-            :check="false" label="" />
+            :check="false" label="" placeholder="No. Dokumen" />
         </div>
         <div>
-          <label class="font-semibold">Upload dokumen<span class="text-red-500 space-x-0 pl-0"></span></label>
+          <label class="font-semibold">Upload dokumen</label>
           <FieldUpload class="w-full py-2 !mt-0" :bind="{ readonly: isReadOnly }" :value="values.doc"
             @input="(v)=>values.doc=v" :maxSize="10"
             :reducerDisplay="val=>!val?null:val.split(':::')[val.split(':::').length-1]" :api="{
@@ -288,18 +287,16 @@
         </div>
 
         <div>
-          <label class="col-span-12">Keterangan<label class="text-red-500 space-x-0 pl-0"></label></label>
+          <label class="font-semibold">Status</label>
+          <FieldX :bind="{ readonly: true }" class="w-full py-2 !mt-0" :value="values.status"
+            :errorText="formErrors.status?'failed':''" @input="v=>values.status=v" :hints="formErrors.status"
+            :check="false" label="" placeholder="Status" />
+        </div>
+        <div>
+          <label class="font-semibold">Keterangan</label>
           <FieldX :bind="{ readonly: isReadOnly }" type='textarea' class="w-full py-2 !mt-0" :value="values.keterangan"
             :errorText="formErrors.keterangan?'failed':''" @input="v=>values.keterangan=v"
             :hints="formErrors.keterangan" :check="false" label="" placeholder="Tuliskan keterangan" />
-        </div>
-
-
-        <div>
-          <label class="col-span-12">Status<label class="text-red-500 space-x-0 pl-0"></label></label>
-          <FieldX :bind="{ readonly: true }" class="w-full py-2 !mt-0" :value="values.status"
-            :errorText="formErrors.status?'failed':''" @input="v=>values.status=v" :hints="formErrors.status"
-            :check="false" label="" placeholder="" />
         </div>
 
         <div v-show="values.status === 'IN APPROVAL' || route.query.is_approval">
