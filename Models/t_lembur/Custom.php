@@ -261,6 +261,7 @@ class t_lembur extends \App\Models\BasicModels\t_lembur
             "trx_nomor" => $trx->nomor,
             "trx_date" => Date("Y-m-d"),
             "trx_creator_id" => $trx->creator_id,
+            "m_kary_id" => $trx->m_kary_id,
         ];
 
         $app = $this->helper->approvalCreateTicket($conf);
@@ -301,10 +302,45 @@ class t_lembur extends \App\Models\BasicModels\t_lembur
         \DB::beginTransaction();
 
         try {
+            $appId = $req->id;
+            $generateApproval = \DB::table('generate_approval')->where('id', $appId)->first();
+            if (!$generateApproval) {
+                // Jika ID yang dikirimkan adalah trx_id
+                $generateApproval = \DB::table('generate_approval')
+                    ->where('trx_table', $this->getTable())
+                    ->where('trx_id', $appId)
+                    ->where('status', 'PROGRESS')
+                    ->orderBy('id', 'desc')
+                    ->first();
+                if ($generateApproval) {
+                    $appId = $generateApproval->id;
+                }
+            }
+
+            if (!$generateApproval) {
+                return $this->helper->customResponse("Data approval tidak ditemukan", 404);
+            }
+
+            $userAuth = auth()->user();
+            $isSuperadmin = (bool) ($userAuth->is_superadmin ?? false);
+
+            $trx = $this->find($generateApproval->trx_id);
+            if (!$trx) {
+                return $this->helper->customResponse("Data transaksi lembur tidak ditemukan", 404);
+            }
+
+            // Validasi apakah user berhak approve: Superadmin atau Atasan dari karyawan di lembur
+            $atasanKaryId = \DB::table('m_kary')->where('id', $trx->m_kary_id)->value('atasan_id');
+            $isAtasan = ($atasanKaryId && $userAuth->m_kary_id && $atasanKaryId == $userAuth->m_kary_id);
+
+            if (!$isSuperadmin && !$isAtasan) {
+                return $this->helper->customResponse("Anda tidak memiliki akses untuk melakukan approval ini. Hanya atasan dari karyawan bersangkutan atau Superadmin yang dapat menyetujui/menolak/merevisi.", 403);
+            }
+
             $conf = [
-                "app_id" => $req->id,
+                "app_id" => $appId,
                 "app_type" => $req->type, // APPROVED, REVISED, REJECTED,
-                "app_note" => $req->note, // alasan approve
+                "app_note" => $req->note ?? '-', // alasan approve
             ];
 
             $app = $this->helper->approvalProgress($conf);
@@ -314,13 +350,16 @@ class t_lembur extends \App\Models\BasicModels\t_lembur
                     $data->update([
                         "status" => $req->type,
                     ]);
-
-                    // Additional logic for updating related records or performing other actions
                 } else {
-                    $data->update([
-                        "status" => "IN APPROVAL",
-                    ]);
-                    // Additional logic for updating related records or performing other actions
+                    if ($req->type != 'APPROVED') {
+                        $data->update([
+                            "status" => $req->type,
+                        ]);
+                    } else {
+                        $data->update([
+                            "status" => "IN APPROVAL",
+                        ]);
+                    }
                 }
             }
 
@@ -330,22 +369,74 @@ class t_lembur extends \App\Models\BasicModels\t_lembur
         } catch (\Exception $e) {
             \DB::rollback();
 
-            // Log or handle the exception as needed
             return $this->helper->responseCatch($e);
-
         }
     }
 
     public function custom_detail($req)
     {
-        $id = $req->id ?? 66;
+        $id = $req->id ?? 0;
+        $trxId = $req->trx_id ?? null;
+
+        $app = null;
+        if ($trxId) {
+            $app = \DB::table('generate_approval')
+                ->where('trx_table', $this->getTable())
+                ->where('trx_id', $trxId)
+                ->where('status', 'PROGRESS')
+                ->orderBy('id', 'desc')
+                ->first();
+            if ($app) {
+                $id = $app->id;
+            }
+        } else {
+            $app = \DB::table('generate_approval')->where('id', $id)->first();
+            if (!$app) {
+                $app = \DB::table('generate_approval')
+                    ->where('trx_table', $this->getTable())
+                    ->where('trx_id', $id)
+                    ->where('status', 'PROGRESS')
+                    ->orderBy('id', 'desc')
+                    ->first();
+                if ($app) {
+                    $id = $app->id;
+                }
+            }
+        }
+
+        if (!$app) {
+            return $this->helper->customResponse("Approval tidak ditemukan", 404);
+        }
+
         $data = $this->helper->approvalDetail($id);
+
+        $userAuth = auth()->user();
+        $isSuperadmin = (bool) ($userAuth->is_superadmin ?? false);
+
+        $trx = \DB::table('t_lembur')->where('id', $app->trx_id)->first();
+        $isAtasan = false;
+        if ($trx && $trx->m_kary_id) {
+            $atasanKaryId = \DB::table('m_kary')->where('id', $trx->m_kary_id)->value('atasan_id');
+            if ($atasanKaryId && $userAuth->m_kary_id && $atasanKaryId == $userAuth->m_kary_id) {
+                $isAtasan = true;
+            }
+        }
+
+        $data->can_approve = ($isSuperadmin || $isAtasan);
+        $data->is_atasan = $isAtasan;
+        $data->is_superadmin = $isSuperadmin;
+
         return $this->helper->customResponse("OK", 200, $data);
     }
     public function custom_log($req)
     {
+        $id = $req->id ?? 0;
+        // Cek jika ID yang dikirim adalah generate_approval.id, dapatkan trx_id
+        $app = \DB::table('generate_approval')->where('id', $id)->first();
+        $trxId = $app ? $app->trx_id : $id;
+
         $conf = [
-            "trx_id" => $req->id ?? 0,
+            "trx_id" => $trxId,
             "trx_table" => $this->getTable(),
         ];
         $data = $this->helper->approvalLog($conf);

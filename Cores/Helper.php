@@ -313,20 +313,22 @@ class Helper
             $kode = "0000001";
         }
 
-        $check = generate_approval::whereRaw("generate_approval.status = 'PROGRESS' 
-                and generate_approval.id = $approval_det->generate_approval_id
-                and case when generate_approval.last_approve_id is not null then
-                    generate_approval.last_approve_id = $userAuth->id
-                else
-                    generate_approval.id in(select d.generate_approval_id from generate_approval_det d where 
-                        d.m_role_id in(select r.m_role_id from m_role_access r where r.user_id = $userAuth->id)
-                    )
-                end
-            ")->exists();
-            
-        if(!$check){
-            $next = false;
-            $kode = "0000002, $text";
+        if (!($userAuth->is_superadmin ?? false)) {
+            $check = generate_approval::whereRaw("generate_approval.status = 'PROGRESS' 
+                    and generate_approval.id = $approval_det->generate_approval_id
+                    and case when generate_approval.last_approve_id is not null then
+                        generate_approval.last_approve_id = $userAuth->id
+                    else
+                        generate_approval.id in(select d.generate_approval_id from generate_approval_det d where 
+                            d.m_role_id in(select r.m_role_id from m_role_access r where r.user_id = $userAuth->id)
+                        )
+                    end
+                ")->exists();
+                
+            if(!$check){
+                $next = false;
+                $kode = "0000002, $text";
+            }
         }
 
         $check_log = generate_approval_log::where('generate_approval_det_id', $approval_det->id)->exists();
@@ -396,7 +398,11 @@ class Helper
 
         
         if(strtolower(@$check_approve_atasan->name) == 'atasan'){
-            $atasan_id = m_kary::join('default_users as u','u.m_kary_id','m_kary.id')->where('u.id',auth()->user()->id)->pluck('atasan_id')->first() ?? 0;
+            if (!empty($config['m_kary_id'])) {
+                $atasan_id = m_kary::where('id', $config['m_kary_id'])->value('atasan_id') ?? 0;
+            } else {
+                $atasan_id = m_kary::join('default_users as u','u.m_kary_id','m_kary.id')->where('u.id',auth()->user()->id)->pluck('atasan_id')->first() ?? 0;
+            }
             $user_atasan_id = default_users::whereRaw("default_users.m_kary_id = $atasan_id")->orderBy('id','asc')->pluck('id')->first();
         }
 
@@ -605,23 +611,32 @@ class Helper
     public function approvalOustanding()
     {
         $userAuth = auth()->user();
+        $isSuperadmin = (bool) ($userAuth->is_superadmin ?? false);
         $model = new generate_approval;
 
-        $data = generate_approval::selectRaw("generate_approval.*,(select u.name from default_users u where u.id = generate_approval.creator_id) creator")
-            ->leftJoin('default_users', 'default_users.id', 'generate_approval.creator_id')
-            ->whereRaw("generate_approval.status = 'PROGRESS' 
-                and case when generate_approval.last_approve_id is not null then
-                    generate_approval.last_approve_id = $userAuth->id
-                else
-                    generate_approval.id in(select d.generate_approval_id from generate_approval_det d where 
-                        d.m_role_id in(select r.m_role_id from m_role_access r where r.user_id = $userAuth->id)
-                           and d.is_done = false and d.id = generate_approval.last_approve_det_id
-                    )
-                end
-            ")
-            ->orderBy('generate_approval.id', 'desc')
-            ->search(['trx_name', 'nomor', 'trx_date', 'trx_nomor', 'default_users.name'])
-            ->paginate(app()->request->paginate ?? 50);
+        $query = generate_approval::selectRaw("generate_approval.*,(select u.name from default_users u where u.id = generate_approval.creator_id) creator")
+            ->leftJoin('default_users', 'default_users.id', 'generate_approval.creator_id');
+
+        if ($isSuperadmin) {
+            $data = $query->where('generate_approval.status', 'PROGRESS')
+                ->orderBy('generate_approval.id', 'desc')
+                ->search(['trx_name', 'nomor', 'trx_date', 'trx_nomor', 'default_users.name'])
+                ->paginate(app()->request->paginate ?? 50);
+        } else {
+            $data = $query->whereRaw("generate_approval.status = 'PROGRESS' 
+                    and case when generate_approval.last_approve_id is not null then
+                        generate_approval.last_approve_id = $userAuth->id
+                    else
+                        generate_approval.id in(select d.generate_approval_id from generate_approval_det d where 
+                            d.m_role_id in(select r.m_role_id from m_role_access r where r.user_id = $userAuth->id)
+                               and d.is_done = false and d.id = generate_approval.last_approve_det_id
+                        )
+                    end
+                ")
+                ->orderBy('generate_approval.id', 'desc')
+                ->search(['trx_name', 'nomor', 'trx_date', 'trx_nomor', 'default_users.name'])
+                ->paginate(app()->request->paginate ?? 50);
+        }
 
         return $data;
     }

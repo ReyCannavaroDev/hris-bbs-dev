@@ -1,7 +1,7 @@
 //   javascript
 
 import { useRouter, useRoute, RouterLink } from 'vue-router'
-import { ref, readonly, reactive, inject, onMounted, onBeforeMount, watchEffect, onActivated } from 'vue'
+import { ref, readonly, reactive, inject, onMounted, onBeforeMount, watchEffect, onActivated, computed } from 'vue'
 
 const router = useRouter()
 const route = useRoute()
@@ -28,6 +28,22 @@ let isFinish = ref(false)
 let isApproved = ref(false)
 
 const is_superadmin = ref(false);
+
+const isReadOnly = computed(() => {
+  if (['Create', 'Copy', 'Tambah'].includes(actionText.value)) return false
+  if (values.status === 'IN APPROVAL' || is_approval) return true
+  return !actionText.value
+})
+
+const canApprove = computed(() => {
+  if (values.status !== 'IN APPROVAL' && !is_approval) return false
+  if (store.user.data?.is_superadmin) return true
+  if (values.can_approve) return true
+  const userKaryId = store.user.data?.m_kary_id
+  const atasanKaryId = values['m_kary.atasan_id'] || values.m_kary?.atasan_id || values.atasan_id
+  if (userKaryId && atasanKaryId && userKaryId == atasanKaryId) return true
+  return false
+})
 
 // ------------------------------ PERSIAPAN
 const endpointApi = '/t_lembur'
@@ -116,9 +132,33 @@ onBeforeMount(async () => {
         const resultJson = await res.json()
         initialValues = resultJson.data
         // logic Approved data
-        isApproved.value = resultJson?.data?.cuti_status == 'APPROVED' ? true : false
-        console.log(resultJson?.data)
-        console.log(isApproved.value)
+        isApproved.value = resultJson?.data?.status == 'APPROVED' ? true : false
+
+        for (const key in initialValues) {
+          values[key] = initialValues[key]
+        }
+
+        // Jika status transaksi IN APPROVAL, load juga info approval & cek akses approval
+        if (values.status === 'IN APPROVAL') {
+          try {
+            const apiApp = await fetch(`${store.server.url_backend}/operation/t_lembur/detail?trx_id=${editedId}`, {
+              headers: {
+                'Content-Type': 'Application/json',
+                Authorization: `${store.user.token_type} ${store.user.token}`
+              },
+            })
+            if (apiApp.ok) {
+              const resAppJson = await apiApp.json()
+              values.approval = resAppJson.data?.approval
+              values.trx = resAppJson.data?.trx
+              values.datalog = resAppJson.data?.approval_log
+              values.can_approve = resAppJson.data?.can_approve
+              values.is_atasan = resAppJson.data?.is_atasan
+            }
+          } catch (e) {
+            console.error('Failed to load approval detail for IN APPROVAL status', e)
+          }
+        }
       }
     } catch (err) {
       isBadForm.value = true
@@ -221,7 +261,8 @@ function onReset() {
 
 let dataLog = reactive({ items: [] })
 async function loadLog(id) {
-  const url = `${store.server.url_backend}/operation/t_lembur/log?id=${id}`
+  const targetId = id || values.trx?.id || values.id || route.params.id
+  const url = `${store.server.url_backend}/operation/t_lembur/log?id=${targetId}`
   const res = await fetch(url, {
     headers: {
       'Content-Type': 'Application/json',
@@ -310,18 +351,10 @@ function onSave() {
 
 function onProcess(typePar) {
   const payload = {
-    id: route.params.id,
+    id: values.approval?.id || route.params.id,
     type: typePar === 'revise' ? 'REVISED' : (typePar === 'reject' ? 'REJECTED' : 'APPROVED'),
-    note: values.catatan,
+    note: values.catatan || (typePar === 'approve' ? 'Approved' : (typePar === 'revise' ? 'Revised' : 'Rejected')),
   };
-  // if(!payload.note) {
-  //   swal.fire({
-  //     icon: 'warning',
-  //     text: "Catatan wajib diisi",
-  //   });
-  //   return  
-  // }
-
 
   swal.fire({
     icon: 'warning',
@@ -341,9 +374,6 @@ function onProcess(typePar) {
           body: JSON.stringify(payload),
         });
 
-
-
-
         if (!res.ok) {
           const responseJson = await res.json();
           if ([400, 422, 500].includes(res.status)) {
@@ -361,13 +391,17 @@ function onProcess(typePar) {
             icon: 'success',
             text: 'Proses berhasil',
           });
-          router.replace('/notifikasi');
+          if (route.query.is_approval) {
+            router.replace('/notifikasi');
+          } else {
+            router.replace('/' + modulPath + '?reload=' + (Date.parse(new Date())));
+          }
         }
       } catch (err) {
         isBadForm.value = true;
         swal.fire({
           icon: 'error',
-          text: err || 'Failed when trying to post data',
+          text: err?.message || err || 'Failed when trying to post data',
         });
       } finally {
         isRequesting.value = false;

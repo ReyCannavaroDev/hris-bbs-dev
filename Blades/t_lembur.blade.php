@@ -32,6 +32,12 @@
           <h2 v-if="!is_approval" class="mx-4 font-sans text-xl flex justify-left font-bold">
             {{actionText==='Edit'?'Ubah':actionText}} Lembur
           </h2>
+          <h2 v-else-if="values.status === 'IN APPROVAL' && canApprove" class="mx-4 font-sans text-xl flex justify-left font-bold text-blue-700">
+            Approval Pengajuan Lembur
+          </h2>
+          <h2 v-else-if="values.status === 'IN APPROVAL'" class="mx-4 font-sans text-xl flex justify-left font-bold text-gray-700">
+            Detail Lembur (In Approval - Read Only)
+          </h2>
           <h2 v-else class="mx-4 font-sans text-xl flex justify-left font-bold">
             Notifikasi Approval Lembur
           </h2>
@@ -47,7 +53,7 @@
         <div>
           <label class="font-semibold">Company</label>
           <FieldSelect
-            :bind="{ disabled: !actionText, clearable: true }"
+            :bind="{ disabled: isReadOnly, clearable: !isReadOnly }"
             class="w-full py-2 !mt-0"
             :value="values.m_dir_id"
             @input="v=>values.m_dir_id=v"
@@ -80,7 +86,7 @@
         </div>
         <div>
           <label class="font-semibold">Karyawan<span class="text-red-500 space-x-0 pl-0">*</span></label>
-          <FieldPopup :bind="{ readonly: !actionText || !store.user.data?.is_superadmin }" class="w-full py-2 !mt-0" :value="values.m_kary_id"
+          <FieldPopup :bind="{ readonly: isReadOnly || !store.user.data?.is_superadmin }" class="w-full py-2 !mt-0" :value="values.m_kary_id"
             @input="(v)=>values.m_kary_id=v" :errorText="formErrors.m_kary_id?'failed':''" :hints="formErrors.m_kary_id"
             @update:valueFull="(objVal) => {
               if (objVal['m_comp.id']) values.m_comp_id = objVal['m_comp.id']
@@ -163,7 +169,7 @@
         </div>
         <div>
           <label class="font-semibold">Tanggal Lembur<label class="text-red-500 space-x-0 pl-0">*</label></label>
-          <FieldX :bind="{ readonly: !actionText }" type="date" class="w-full py-2 !mt-0" :value="values.tanggal"
+          <FieldX :bind="{ readonly: isReadOnly }" type="date" class="w-full py-2 !mt-0" :value="values.tanggal"
             label="" placeholder="Pilih Tanggal" :errorText="formErrors.tanggal?'failed':''"
             @input="v=>values.tanggal=v" :hints="formErrors.tanggal" :check="false" />
         </div>
@@ -174,26 +180,26 @@
 
         <div class="col-span-1 md:col-span-1">
           <label class="font-semibold">Jam Mulai (SPK)<label class="text-red-500 space-x-0 pl-0">*</label></label>
-          <FieldX :bind="{ readonly: !actionText   }" class="py-2 !mt-0 w-full" type="time" fa-icon="clock"
+          <FieldX :bind="{ readonly: isReadOnly }" class="py-2 !mt-0 w-full" type="time" fa-icon="clock"
             :value="values.jam_mulai" :errorText="formErrors.jam_mulai ? 'failed' : ''"
             @input="v => { values.jam_mulai = v; hitungDurasi(); }" :hints="formErrors.jam_mulai" :check="false" />
         </div>
         <div class="col-span-1 md:col-span-1">
           <label class="font-semibold">Jam Selesai (SPK)<label class="text-red-500 space-x-0 pl-0">*</label></label>
-          <FieldX :bind="{ readonly: !actionText }" class="py-2 !mt-0 w-full" type="time" fa-icon="clock"
+          <FieldX :bind="{ readonly: isReadOnly }" class="py-2 !mt-0 w-full" type="time" fa-icon="clock"
             :value="values.jam_selesai" :errorText="formErrors.jam_selesai ? 'failed' : ''"
             @input="v => { values.jam_selesai = v; hitungDurasi(); }" :hints="formErrors.jam_selesai" :check="false" />
         </div>
 
         <div class="col-span-1 md:col-span-1">
           <label class="font-semibold">Jam Mulai (Realisasi)</label>
-          <FieldX :bind="{ readonly: !actionText }" class="py-2 !mt-0 w-full" type="time" fa-icon="clock"
+          <FieldX :bind="{ readonly: isReadOnly }" class="py-2 !mt-0 w-full" type="time" fa-icon="clock"
             :value="values.jam_mulai_realisasi" :errorText="formErrors.jam_mulai_realisasi ? 'failed' : ''"
             @input="v => { values.jam_mulai_realisasi = v; hitungDurasi(); }" :hints="formErrors.jam_mulai_realisasi" :check="false" />
         </div>
         <div class="col-span-1 md:col-span-1">
           <label class="font-semibold">Jam Selesai (Realisasi)</label>
-          <FieldX :bind="{ readonly: !actionText }" class="py-2 !mt-0 w-full" type="time" fa-icon="clock"
+          <FieldX :bind="{ readonly: isReadOnly }" class="py-2 !mt-0 w-full" type="time" fa-icon="clock"
             :value="values.jam_selesai_realisasi" :errorText="formErrors.jam_selesai_realisasi ? 'failed' : ''"
             @input="v => { values.jam_selesai_realisasi = v; hitungDurasi(); }" :hints="formErrors.jam_selesai_realisasi" :check="false" />
         </div>
@@ -224,7 +230,7 @@
         </div>
         <div>
           <label class="font-semibold">Tipe Lembur<span class="text-red-500 space-x-0 pl-0">*</span></label>
-          <FieldSelect :bind="{ disabled: !actionText, clearable:false }" class="col-span-12 !mt-0 w-full"
+          <FieldSelect :bind="{ disabled: isReadOnly, clearable:false }" class="col-span-12 !mt-0 w-full"
             :value="values.tipe_lembur_id" @input="v=>values.tipe_lembur_id=v"
             :errorText="formErrors.tipe_lembur_id?'failed':''" :hints="formErrors.tipe_lembur_id" label=""
             placeholder="Alasan" valueField="id" displayField="value" :api="{
@@ -244,7 +250,7 @@
         </div>
         <div>
           <label class="font-semibold">Alasan<span class="text-red-500 space-x-0 pl-0">*</span></label>
-          <FieldSelect :bind="{ disabled: !actionText, clearable:false }" class="col-span-12 !mt-0 w-full"
+          <FieldSelect :bind="{ disabled: isReadOnly, clearable:false }" class="col-span-12 !mt-0 w-full"
             :value="values.alasan_id" @input="v=>values.alasan_id=v" :errorText="formErrors.alasan_id?'failed':''"
             :hints="formErrors.alasan_id" label="" placeholder="Alasan" valueField="id" displayField="value" :api="{
               url: `${store.server.url_backend}/operation/m_general`,
@@ -263,13 +269,13 @@
         </div>
         <div>
           <label class="font-semibold">No.Dokumen<label class="text-red-500 space-x-0 pl-0"></label></label>
-          <FieldX :bind="{ readonly: !actionText }" class="w-full py-2 !mt-0" :value="values.no_doc"
+          <FieldX :bind="{ readonly: isReadOnly }" class="w-full py-2 !mt-0" :value="values.no_doc"
             :errorText="formErrors.no_doc?'failed':''" @input="v=>values.no_doc=v" :hints="formErrors.no_doc"
             :check="false" label="" />
         </div>
         <div>
           <label class="font-semibold">Upload dokumen<span class="text-red-500 space-x-0 pl-0"></span></label>
-          <FieldUpload class="w-full py-2 !mt-0" :bind="{ readonly: !actionText }" :value="values.doc"
+          <FieldUpload class="w-full py-2 !mt-0" :bind="{ readonly: isReadOnly }" :value="values.doc"
             @input="(v)=>values.doc=v" :maxSize="10"
             :reducerDisplay="val=>!val?null:val.split(':::')[val.split(':::').length-1]" :api="{
                   url: `${store.server.url_backend}/operation/t_lembur/upload`,
@@ -283,7 +289,7 @@
 
         <div>
           <label class="col-span-12">Keterangan<label class="text-red-500 space-x-0 pl-0"></label></label>
-          <FieldX :bind="{ readonly: !actionText }" type='textarea' class="w-full py-2 !mt-0" :value="values.keterangan"
+          <FieldX :bind="{ readonly: isReadOnly }" type='textarea' class="w-full py-2 !mt-0" :value="values.keterangan"
             :errorText="formErrors.keterangan?'failed':''" @input="v=>values.keterangan=v"
             :hints="formErrors.keterangan" :check="false" label="" placeholder="Tuliskan keterangan" />
         </div>
@@ -296,7 +302,7 @@
             :check="false" label="" placeholder="" />
         </div>
 
-        <div v-show="route.query.is_approval">
+        <div v-show="values.status === 'IN APPROVAL' || route.query.is_approval">
           <table class=" w-[100%] my-3 border">
             <tr class="border">
               <td class="border px-2 py-1 font-semibold">Nomor</td>
@@ -317,13 +323,13 @@
           </table>
         </div>
 
-        <div class="">
+        <div v-show="values.status === 'IN APPROVAL' || route.query.is_approval" class="">
           <table class=" w-[100%] my-3 ">
             <tr>
               <td class=" px-2 py-1">
                 <button
-                    v-show="route.query.is_approval"
-                    @click="openModal(values?.trx?.id ?? 0)"
+                    v-show="values.status === 'IN APPROVAL' || route.query.is_approval"
+                    @click="openModal(values?.trx?.id ?? values?.id ?? 0)"
                     class="hover:text-blue-500">
                     <icon fa="table" size="sm"/>
                     Log Approval
@@ -390,7 +396,7 @@
           </div>
         </div>
       </div>
-      <div v-show="route.query.is_approval" class="w-1/2 mt-6">
+      <div v-show="canApprove" class="w-1/2 mt-6">
         <label class="col-span-12 font-semibold">Catatan Approval<label class="text-red-500 space-x-0 pl-0"></label></label>
         <FieldX :bind="{ readonly: false }" class="w-full py-2 !mt-0" :value="values.catatan"
           :errorText="formErrors.catatan?'failed':''" @input="v=>values.catatan=v" :hints="formErrors.catatan"
@@ -402,19 +408,22 @@
 
       <!-- ACTION BUTTON START -->
       <div class="flex flex-row justify-end space-x-[20px] mt-[1em]">
-        <button v-show="route.query.is_approval" class="mx-1 bg-green-500 text-white hover:bg-green-600 rounded-[4px] px-[36.5px] py-[5px]" @click="onProcess('approve')">
+        <button v-show="canApprove" class="mx-1 bg-green-500 text-white hover:bg-green-600 rounded-[4px] px-[36.5px] py-[5px]" @click="onProcess('approve')">
               Approve
             </button>
-        <button v-show="route.query.is_approval" class="mx-1 bg-rose-500 text-white hover:bg-rose-600 rounded-[4px] px-[36.5px] py-[5px]" @click="onProcess('reject')">
+        <button v-show="canApprove" class="mx-1 bg-rose-500 text-white hover:bg-rose-600 rounded-[4px] px-[36.5px] py-[5px]" @click="onProcess('reject')">
               Reject
             </button>
-        <button v-show="route.query.is_approval" class="mx-1 bg-amber-500 text-white hover:bg-amber-600 rounded-[4px] px-[36.5px] py-[5px]" @click="onProcess('revise')">
+        <button v-show="canApprove" class="mx-1 bg-amber-500 text-white hover:bg-amber-600 rounded-[4px] px-[36.5px] py-[5px]" @click="onProcess('revise')">
               Revise
             </button>
         <button v-show="route.query.action?.toLowerCase() === 'verifikasi'" @click="posted" class="bg-orange-500 hover:bg-orange-600 text-white px-[36.5px] py-[5px] font-semibold rounded-[4px] ">
             Posted
           </button>
-        <button v-show="actionText" @click="onSave" class="bg-[#10B981] hover:bg-[#0ea774] text-white px-[36.5px] py-[5px] font-semibold rounded-[4px]">
+        <button v-show="!actionText || values.status === 'IN APPROVAL'" @click="onBack" class="bg-gray-500 hover:bg-gray-600 text-white px-[36.5px] py-[5px] font-semibold rounded-[4px]">
+            Kembali
+          </button>
+        <button v-show="actionText && values.status !== 'IN APPROVAL'" @click="onSave" class="bg-[#10B981] hover:bg-[#0ea774] text-white px-[36.5px] py-[5px] font-semibold rounded-[4px]">
             Simpan
           </button>
       </div>
