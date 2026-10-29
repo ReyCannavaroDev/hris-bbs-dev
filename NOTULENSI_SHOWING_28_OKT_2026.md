@@ -10,7 +10,7 @@
 ## 📌 Ringkasan Eksekutif
 Berdasarkan sesi demonstrasi sistem (*showing*) di hadapan manajemen PT Berkah Bersaudara Sentosa (BBS) pada tanggal 28 Oktober 2026, secara garis besar alur inti HRIS (struktur organisasi, presensi mobile, dan alur finalisasi payroll) telah diapresiasi dan diterima dengan baik. 
 
-Terdapat beberapa penyesuaian aturan bisnis (*business logic*) dan permintaan fitur tambahan yang perlu diakomodasi sebelum sesi presentasi final via Zoom pada **Jumat, 6 November 2026**. Dokumen ini merangkum seluruh poin notulensi dan memetakan rencana kerja teknisnya.
+Terdapat beberapa penyesuaian aturan bisnis (*business logic*) dan permintaan fitur tambahan yang perlu diakomodasi sebelum sesi presentasi final via Zoom pada **Jumat, 6 November 2026**. Dokumen ini merangkum seluruh poin notulensi, memetakan progres yang telah diselesaikan, dan menyusun rencana kerja teknisnya.
 
 ---
 
@@ -99,17 +99,42 @@ Terdapat beberapa penyesuaian aturan bisnis (*business logic*) dan permintaan fi
 
 ---
 
-### 9. Transaksi Lembur & Approval (`t_lembur`)
-- **Penyelesaian Alur Approval:**  
-  Memastikan target approver pada workflow persetujuan lembur terkonfigurasi dengan benar ke **Atasan Langsung** dan **Superadmin**.
-- **Perbaikan UI Tombol:**  
-  Memastikan tombol aksi **Send Approval** (`location-arrow`) tampil di tabel utama pada baris data berstatus `DRAFT` agar pengajuan lembur dapat diproses hingga berstatus `APPROVED` dan masuk ke Laporan SPK Lembur (`l_spl`).
+### 9. Transaksi Lembur & Approval (`t_lembur`) — ✅ Selesai Dikerjakan (Duta - 29 Okt 2026)
+- **Penyelesaian Alur Approval (Commit `11b923f`):**  
+  - Target approver pada workflow persetujuan lembur sudah divalidasi ketat di `Models/t_lembur/Custom.php`: hanya **Superadmin** dan **Atasan Langsung** (`m_kary.atasan_id == auth()->user()->m_kary_id`) yang berhak menyetujui, menolak, atau merevisi (`canApprove`).
+  - Handling form saat status `IN APPROVAL` otomatis terkunci menjadi *Read-Only* (`isReadOnly`) di `Blades/t_lembur.blade.php` dan `Javascript/t_lembur.js`, dan tombol aksi `Approve`/`Reject`/`Revise` hanya muncul jika user memiliki hak akses.
+- **Perbaikan UI Tombol & Format Tanggal (Commit `2dd2e97` & `ec9cf12`):**  
+  - Tombol aksi **Send Approval** (`location-arrow`) sudah aktif untuk status `DRAFT`.
+  - Format tanggal transaksi di menu **Notifikasi** dan tabel landing **Lembur** sudah rapi menggunakan helper `formatDate()` (`DD/MM/YYYY`).
+
+---
+
+## 📊 Matriks Status Pengerjaan (Update 29 Oktober 2026)
+
+| No | Modul / Fitur | PIC | Status | Keterangan & Commit |
+|---|---|---|:---:|---|
+| 1 | **Alur Approval Lembur (`t_lembur`)** | Mas Duta | ✅ Selesai | Validasi approver atasan/superadmin & read-only in approval (`11b923f`) |
+| 2 | **Format Tanggal Notifikasi & Lembur** | Mas Duta | ✅ Selesai | Formatter tanggal DD/MM/YYYY rapi (`2dd2e97`, `ec9cf12`) |
+| 3 | **Denda Keterlambatan Pembulatan ke Atas** | Rey | ⏳ To Do | Pembulatan `ceil($menit/30) * 25000` di Cores |
+| 4 | **Gaji Pokok Per-Personal & Field `gaji_acuan` (UMK BPJS)** | Rey / Tim | ⏳ To Do | Master gaji karyawan & dasar pengali BPJS |
+| 5 | **Sinkronisasi Resign & Inactive Karyawan** | Rey / Tim | ⏳ To Do | Two-way trigger `tanggal_berhenti_kerja` $\leftrightarrow$ `is_active` |
+| 6 | **Preset Cut-Off Payroll Tanggal 25** | Rey | ⏳ To Do | Rentang tanggal otomatis 26 s/d 25 di form gaji |
+| 7 | **PPh 21 Disubsidi Perusahaan (Gross-up)** | Rey | ⏳ To Do | Tunjangan pajak agar take home pay utuh |
+| 8 | **Mutasi Karyawan Prorata (Opsi 2)** | Rey | ⏳ To Do | Split perhitungan hari kerja divisi lama vs divisi baru |
+| 9 | **Aturan Cuti 12 Hari & Split Izin Khusus** | Rey / Tim | ⏳ To Do | Batas 3 hari berturut-turut & izin khusus terpisah |
+| 10 | **Kolom Sisa Angsuran & Pelunasan Manual Kasbon** | Rey / Tim | ⏳ To Do | Kolom nominal sisa & tombol pelunasan karyawan resign |
 
 ---
 
 ## 🎯 Rencana Kerja & Action Items (Sprint 29 Okt – 5 Nov 2026)
 
 Berikut daftar tugas pengerjaan yang akan diselesaikan secara bertahap menuju presentasi final tanggal 6 November 2026:
+
+### Track 0: Transaksi Lembur & Notifikasi (Dikerjakan Mas Duta)
+- [x] **Task 0.1:** Perbaiki visibilitas tombol aksi Send Approval pada data lembur status DRAFT (`Javascript/t_lembur.js`).
+- [x] **Task 0.2:** Kunci form lembur menjadi *Read-Only* saat berstatus `IN APPROVAL` (`isReadOnly = true`).
+- [x] **Task 0.3:** Validasi wewenang approval lembur hanya untuk Superadmin dan Atasan Langsung dari karyawan terkait (`Models/t_lembur/Custom.php`).
+- [x] **Task 0.4:** Rapikan format tanggal pada tabel Notifikasi dan tabel landing Lembur (`formatDate`).
 
 ### Track 1: Modul Presensi & Keterlambatan
 - [ ] **Task 1.1:** Update logika denda keterlambatan di `Cores/PerhitunganGaji.php`: ubah formula denda menjadi pembulatan ke atas per kelipatan 30 menit (`ceil($menit / 30) * 25000`).
@@ -134,10 +159,9 @@ Berikut daftar tugas pengerjaan yang akan diselesaikan secara bertahap menuju pr
 - [ ] **Task 5.2:** Buat endpoint dan tombol aksi `Pelunasan Manual` untuk pelunasan kasbon di luar pemotongan payroll rutin.
 
 ### Track 6: Quality Assurance & Simulasi End-to-End
-- [ ] **Task 6.1:** Uji coba alur approval lembur bersama Mas Duta (`t_lembur` $\rightarrow$ `IN APPROVAL` $\rightarrow$ `APPROVED` $\rightarrow$ `l_spl`).
+- [x] **Task 6.1:** Uji coba alur approval lembur bersama Mas Duta (`t_lembur` $\rightarrow$ `IN APPROVAL` $\rightarrow$ `APPROVED` $\rightarrow$ `l_spl`).
 - [ ] **Task 6.2:** Simulasi payroll lengkap dengan cut-off 25, denda baru, PPh 21 subsidi, dan mutasi divisi.
 - [ ] **Task 6.3:** Persiapan slide & skenario live demo Zoom Jumat, 6 November 2026.
 
 ---
 *Dokumen ini disusun sebagai panduan resmi pengembangan dan tindak lanjut tim HRIS BBS Dev.*
-
