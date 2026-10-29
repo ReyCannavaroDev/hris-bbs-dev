@@ -284,6 +284,13 @@ const landing = reactive({
       simplest: true
     },
     onsuccess(response) {
+      if (response && response.data) {
+        response.data = response.data.map((item) => {
+          item.superadmin = (item.is_superadmin === true || item.is_superadmin === 1 || item.is_superadmin === '1' || item.is_superadmin === 'true' || item.is_superadmin === 't') ? 'Yes' : 'No'
+          item.status = (item.is_active === true || item.is_active === 1 || item.is_active === '1' || item.is_active === 'true' || item.is_active === 't') ? 'Active' : 'Inactive'
+          return item
+        })
+      }
       response.page = response.current_page
       response.hasNext = response.has_next
       return response
@@ -320,30 +327,50 @@ const landing = reactive({
   },
   {
     headerName: 'Super Admin',
-    field: 'is_superadmin',
-    filter: true,
-    // resizable: true,
-    // valueGetter: (p) => p.node.data['status'].toLowerCase()==='active'? 'Aktif':'Tidak Aktif',
+    field: 'superadmin',
+    filter: 'ColFilter',
+    filterParams: {
+      options: ['Yes', 'No']
+    },
+    filterValueGetter: (params) => {
+      const val = params.data ? (params.data.superadmin !== undefined ? params.data.superadmin : params.data.is_superadmin) : params.value
+      return (val === 'Yes' || val === true || val === 1 || val === '1' || val === 'true') ? 'Yes' : 'No'
+    },
+    valueGetter: (params) => {
+      const val = params.data ? (params.data.superadmin !== undefined ? params.data.superadmin : params.data.is_superadmin) : params.value
+      return (val === 'Yes' || val === true || val === 1 || val === '1' || val === 'true') ? 'Yes' : 'No'
+    },
     sortable: true,
-    flex:1,
+    resizable: true,
+    flex: 1,
     cellClass: [ 'border-r', '!border-gray-200', 'justify-center'],
     cellRenderer: ({ value }) => {
-      return value === true
+      return value === 'Yes' || value === true
         ? `<span class="text-green-500 rounded-md text-xs font-medium px-4 py-1 inline-block capitalize">Yes</span>`
         : `<span class="text-gray-500 rounded-md text-xs font-medium px-4 py-1 inline-block capitalize">No</span>`
     }
   },
   {
     headerName: 'Status',
-    field: 'is_active',
-    filter: true,
-    // resizable: true,
-    // valueGetter: (p) => p.node.data['status'].toLowerCase()==='active'? 'Aktif':'Tidak Aktif',
+    field: 'status',
+    filter: 'ColFilter',
+    filterParams: {
+      options: ['Active', 'Inactive']
+    },
+    filterValueGetter: (params) => {
+      const val = params.data ? (params.data.status !== undefined ? params.data.status : params.data.is_active) : params.value
+      return (val === 'Active' || val === true || val === 1 || val === '1' || val === 'true' || val === 't') ? 'Active' : 'Inactive'
+    },
+    valueGetter: (params) => {
+      const val = params.data ? (params.data.status !== undefined ? params.data.status : params.data.is_active) : params.value
+      return (val === 'Active' || val === true || val === 1 || val === '1' || val === 'true' || val === 't') ? 'Active' : 'Inactive'
+    },
     sortable: true,
-    flex:1,
+    resizable: true,
+    flex: 1,
     cellClass: [ 'border-r', '!border-gray-200', 'justify-center'],
     cellRenderer: ({ value }) => {
-      return value === true
+      return value === 'Active' || value === true
         ? `<span class="text-green-500 rounded-md text-xs font-medium px-4 py-1 inline-block capitalize">Active</span>`
         : `<span class="text-gray-500 rounded-md text-xs font-medium px-4 py-1 inline-block capitalize">Inactive</span>`
     }

@@ -338,9 +338,15 @@ const landing = reactive({
     },
     params: {
       simplest: true,
-      searchfield:'this.id, this.kode, m_general.value, m_zona.nama, m_posisi.desc_kerja',
+      searchfield:'this.id, this.kode, m_general.value, m_zona.nama, m_posisi.desc_kerja, this.is_active',
     },
     onsuccess(response) {
+      if (response && response.data) {
+        response.data = response.data.map((item) => {
+          item.status = (item.is_active === true || item.is_active === 1 || item.is_active === '1' || item.is_active === 'true' || item.is_active === 't') ? 'Active' : 'Inactive'
+          return item
+        })
+      }
       response.page = response.current_page
       response.hasNext = response.has_next
       return response
@@ -420,13 +426,28 @@ const landing = reactive({
     cellClass: [ 'border-r', '!border-gray-200', 'justify-center']
   },
   {
-    headerName:"Status",
-    field: 'is_active',
-    filter: true,
+    headerName: "Status",
+    field: 'status',
+    filter: 'ColFilter',
+    filterParams: {
+      options: ['Active', 'Inactive']
+    },
+    filterValueGetter: (params) => {
+      const val = params.data ? (params.data.status !== undefined ? params.data.status : params.data.is_active) : params.value
+      return (val === 'Active' || val === true || val === 1 || val === '1' || val === 'true' || val === 't') ? 'Active' : 'Inactive'
+    },
     sortable: true,
+    resizable: true,
     width: 100,
-    valueGetter: (p) => p.data.is_active ? 'Active' : 'InActive',
-    cellClass: (p) => [ 'border-r', '!border-gray-200', 'justify-center', 'font-semibold', p.data.is_active ? '!text-green-600' : '!text-red-500']
+    valueGetter: (p) => {
+      const val = p.data ? (p.data.status !== undefined ? p.data.status : p.data.is_active) : p.value
+      return (val === 'Active' || val === true || val === 1 || val === '1' || val === 'true' || val === 't') ? 'Active' : 'Inactive'
+    },
+    cellClass: (p) => {
+      const val = p.data ? (p.data.status !== undefined ? p.data.status : p.data.is_active) : p.value
+      const isActive = val === 'Active' || val === true || val === 1 || val === '1' || val === 'true'
+      return [ 'border-r', '!border-gray-200', 'justify-center', 'font-semibold', isActive ? '!text-green-600' : '!text-red-500']
+    }
   },
   ]
 })

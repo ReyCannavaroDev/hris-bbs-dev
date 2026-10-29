@@ -282,7 +282,7 @@ const landing = reactive({
     onsuccess(response) {
       if (response && response.data) {
         response.data = response.data.map((item) => {
-          item.status = (item.is_active === true || item.is_active === 1 || item.is_active === '1' || item.is_active === 'true') ? 'Active' : 'Inactive'
+          item.status = (item.is_active === true || item.is_active === 1 || item.is_active === '1' || item.is_active === 'true' || item.is_active === 't') ? 'Active' : 'Inactive'
           return item
         })
       }
@@ -350,25 +350,29 @@ const landing = reactive({
     field: 'desc',
     filter: true,
     sortable: true,
+    flex:1,
     filter: 'ColFilter',
     resizable: true,
-    flex:1,
     cellClass: [ 'border-r', '!border-gray-200', 'justify-start']
   },
   {
     headerName: 'Status',
-    field: 'is_active',
+    field: 'status',
     filter: 'ColFilter',
     filterParams: {
       options: ['Active', 'Inactive']
+    },
+    filterValueGetter: (params) => {
+      const val = params.data ? (params.data.status !== undefined ? params.data.status : params.data.is_active) : params.value
+      return (val === 'Active' || val === true || val === 1 || val === '1' || val === 'true' || val === 't') ? 'Active' : 'Inactive'
     },
     sortable: true,
     resizable: true,
     flex: 1,
     cellClass: ['border-r', '!border-gray-200', 'justify-center'],
     valueGetter: (params) => {
-      const val = params.data?.is_active
-      return (val === true || val === 1 || val === '1' || val === 'true') ? 'Active' : 'Inactive'
+      const val = params.data ? (params.data.status !== undefined ? params.data.status : params.data.is_active) : params.value
+      return (val === 'Active' || val === true || val === 1 || val === '1' || val === 'true' || val === 't') ? 'Active' : 'Inactive'
     },
     cellRenderer: ({ value }) => {
       return value === 'Active' || value === true

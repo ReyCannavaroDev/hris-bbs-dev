@@ -852,7 +852,7 @@ function loadFaceRegCache() {
     faceRegStatus.value.is_registered = !!obj.is_registered
     faceRegStatus.value.registered_count = Number(obj.registered_count || 0)
     faceRegStatus.value.last_registered_at = obj.last_registered_at || null
-  } catch (e) {}
+  } catch (e) { }
 }
 
 function saveFaceRegCache() {
@@ -883,10 +883,10 @@ const submitFaceRegistration = async () => {
   const employeeId = getEmployeeIdForFace()
   const name = getEmployeeNameForFace()
 
- if (!employeeId) {
-  swal.fire({ icon: 'error', text: 'Employee ID kosong. Pastikan Username atau NIK terisi.' })
-  return
-}
+  if (!employeeId) {
+    swal.fire({ icon: 'error', text: 'Employee ID kosong. Pastikan Username atau NIK terisi.' })
+    return
+  }
   if (!name) {
     swal.fire({ icon: 'error', text: 'Nama kosong. Pastikan nama karyawan terisi.' })
     return
@@ -1132,9 +1132,15 @@ const landing = reactive({
     },
     params: {
       simplest: true,
-      searchfield: 'this.id, this.nik, this.kode, atasan.nama_lengkap, this.nama_lengkap, m_dir.nama, m_divisi.nama, m_dept.nama, this.alamat_domisili, this.no_tlp, this.tgl_masuk, this.tgl_berhenti',
+      searchfield: 'this.id, this.nik, this.kode, atasan.nama_lengkap, this.nama_lengkap, m_dir.nama, m_divisi.nama, m_dept.nama, this.alamat_domisili, this.no_tlp, this.tgl_masuk, this.tgl_berhenti, this.is_active',
     },
     onsuccess(response) {
+      if (response && response.data) {
+        response.data = response.data.map((item) => {
+          item.status = (item.is_active === true || item.is_active === 1 || item.is_active === '1' || item.is_active === 'true' || item.is_active === 't') ? 'Active' : 'Inactive'
+          return item
+        })
+      }
       response.page = response.current_page
       response.hasNext = response.has_next
       return response
@@ -1242,13 +1248,25 @@ const landing = reactive({
   },
   {
     headerName: 'Status',
-    field: 'is_active',
-    filter: true,
+    field: 'status',
+    filter: 'ColFilter',
+    filterParams: {
+      options: ['Active', 'Inactive']
+    },
+    filterValueGetter: (params) => {
+      const val = params.data ? (params.data.status !== undefined ? params.data.status : params.data.is_active) : params.value
+      return (val === 'Active' || val === true || val === 1 || val === '1' || val === 'true' || val === 't') ? 'Active' : 'Inactive'
+    },
     sortable: true,
+    resizable: true,
     flex: 1,
     cellClass: ['border-r', '!border-gray-200', 'justify-center'],
+    valueGetter: (params) => {
+      const val = params.data ? (params.data.status !== undefined ? params.data.status : params.data.is_active) : params.value
+      return (val === 'Active' || val === true || val === 1 || val === '1' || val === 'true' || val === 't') ? 'Active' : 'Inactive'
+    },
     cellRenderer: ({ value }) => {
-      return value === true
+      return value === 'Active' || value === true
         ? `<span class="text-green-500 rounded-md text-xs font-medium px-4 py-1 inline-block capitalize">Active</span>`
         : `<span class="text-gray-500 rounded-md text-xs font-medium px-4 py-1 inline-block capitalize">Inactive</span>`
     }
