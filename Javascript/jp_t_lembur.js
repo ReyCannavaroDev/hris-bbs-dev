@@ -561,7 +561,11 @@ const landing = reactive({
     flex: 1,
     filter: 'ColFilter',
     resizable: true,
-    cellClass: ['border-r', '!border-gray-200', 'justify-left']
+    cellClass: ['border-r', '!border-gray-200', 'justify-left'],
+    valueGetter: (params) => {
+      const val = params.data?.jam_mulai;
+      return val ? val.slice(0, 5) : '-';
+    }
   },
   {
     field: 'jam_selesai',
@@ -571,7 +575,11 @@ const landing = reactive({
     flex: 1,
     filter: 'ColFilter',
     resizable: true,
-    cellClass: ['border-r', '!border-gray-200', 'justify-left']
+    cellClass: ['border-r', '!border-gray-200', 'justify-left'],
+    valueGetter: (params) => {
+      const val = params.data?.jam_selesai;
+      return val ? val.slice(0, 5) : '-';
+    }
   },
   {
     field: 'tipe_lembur.value',
