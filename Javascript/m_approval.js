@@ -15,11 +15,11 @@ const currentMenu = store.currentMenu
 const currentUser = store.user.data
 const apiTable = ref(null)
 const formErrors = ref({})
-const tsId = `ts=`+(Date.parse(new Date()))
+const tsId = `ts=` + (Date.parse(new Date()))
 // ------------------------------ PERSIAPAN
 
 const endpointApi = '/m_approval'
-onBeforeMount(()=>{
+onBeforeMount(() => {
   document.title = 'Master Approval'
 })
 
@@ -39,8 +39,8 @@ function clearDetailArr() {
     showDenyButton: true
   }).then((res) => {
     if (res.isConfirmed) {
-      detailArr.value=[]
-      detailArr.value.push({tipe: 'MENGAJUKAN',level: 1})
+      detailArr.value = []
+      detailArr.value.push({ tipe: 'MENGAJUKAN', level: 1 })
     }
   })
 }
@@ -49,18 +49,18 @@ function clearDetailArr() {
 function onDetailAdd() {
   const data = [...detailArr.value]
   const row = {
-    level: data.length+1,
+    level: data.length + 1,
     is_full_approve: false,
-    is_skippable:false
+    is_skippable: false
   }
   data.push(row)
   detailArr.value = data
 }
 
 onBeforeMount(async () => {
-  if(route.params.id === 'create'){
+  if (route.params.id === 'create') {
     // index pertama tambahkan data default dengan tipe MENGAJUKAN
-    detailArr.value.push({tipe: 'MENGAJUKAN',level: 1})
+    detailArr.value.push({ tipe: 'MENGAJUKAN', level: 1 })
   }
   if (isRead) {
     //  READ DATA KE SERVER
@@ -69,7 +69,7 @@ onBeforeMount(async () => {
       const dataURL = `${store.server.url_backend}/operation${endpointApi}/${editedId}`
       isRequesting.value = true
 
-      const params = {  }
+      const params = {}
       const fixedParams = new URLSearchParams(params)
       const res = await fetch(dataURL + '?' + fixedParams, {
         headers: {
@@ -80,7 +80,7 @@ onBeforeMount(async () => {
       if (!res.ok) throw new Error("Failed when trying to read data")
       const resultJson = await res.json()
       resultJson.data.m_approval_det = resultJson.data?.m_approval_det.sort((a, b) => a.level - b.level);
-     
+
       initialValues = resultJson.data
     } catch (err) {
       isBadForm.value = true
@@ -96,36 +96,34 @@ onBeforeMount(async () => {
     // const details = [...detailArr.value]
     // details.forEach( (dt,idx)=>{
     //   dt.default_user_id = parseInt(dt.default_user_id);
-      
     // })
-    
 
     isRequesting.value = false
   }
-  
-//  PENGISIAN DATA KE FORM DAN DETAILS
+
+  //  PENGISIAN DATA KE FORM DAN DETAILS
   const initialData = JSON.parse(JSON.stringify(initialValues))
   for (const key in initialData) {
-    if(['Create', 'Copy'].includes(actionText.value) ) continue;
-    if(key === 'm_approval_det'){
+    if (['Create', 'Copy'].includes(actionText.value)) continue;
+    if (key === 'm_approval_det') {
       detailArr.value = [...initialData[key]]
       continue;
     }
     values[key] = initialData[key]
   }
-  if(!detailArr.value.length) {
-    detailArr.value=[]
-    detailArr.value.push({tipe: 'MENGAJUKAN',level: 1})
+  if (!detailArr.value.length) {
+    detailArr.value = []
+    detailArr.value.push({ tipe: 'MENGAJUKAN', level: 1 })
   }
-  if(values.is_active===true){
-      values.is_active="1";
-    }else{
-      values.is_active="0";
-    }
+  if (values.is_active === true) {
+    values.is_active = "1";
+  } else {
+    values.is_active = "0";
+  }
 })
 
 function onBack() {
-  if( !route.query.action ){
+  if (!route.query.action) {
     router.replace('/' + modulPath)
     return
   }
@@ -162,7 +160,7 @@ function onReset() {
     if (res.isConfirmed) {
       const initialData = JSON.parse(JSON.stringify(initialValues))
       for (const key in initialData) {
-        if(key === 'm_approval_d'){
+        if (key === 'm_approval_d') {
           detailArr.value = [...initialData[key]]
           continue;
         }
@@ -173,23 +171,23 @@ function onReset() {
 }
 
 function onSave() {
-
   //    validasi
   const details = [...detailArr.value]
   const uniqueNess = []
   let invalid = false;
-  details.forEach( (dt,idx)=>{
+  details.forEach((dt, idx) => {
     //dt.default_user_id = dt.default_user_id.toString();
-    if( !dt.level || dt.level<0 ){
-      swal.fire({ title: 'Invalid Detail', icon: 'warning',
-        text: `Data baris ke ${idx-(-1)} : Level harus benar!`
+    if (!dt.level || dt.level < 0) {
+      swal.fire({
+        title: 'Invalid Detail', icon: 'warning',
+        text: `Data baris ke ${idx - (-1)} : Level harus benar!`
       })
-      invalid=true; return false
+      invalid = true; return false
     }
-    dt.level = idx+1
+    dt.level = idx + 1
   })
   values.is_active = values.is_active ? 1 : 0
-  if(invalid) return;
+  if (invalid) return;
 
   swal.fire({
     icon: 'warning',
@@ -207,8 +205,8 @@ function onSave() {
             'Content-Type': 'Application/json',
             Authorization: `${store.user.token_type} ${store.user.token}`
           },
-          body: JSON.stringify( Object.assign(values, {
-            'm_approval_det' : detailArr.value
+          body: JSON.stringify(Object.assign(values, {
+            'm_approval_det': detailArr.value
           }))
         })
         if (!res.ok) {
@@ -234,10 +232,25 @@ function onSave() {
 }
 
 //  @else----------------------- LANDING
+const activeBtn = ref(null)
+
+function filterShowData(params, noBtn) {
+  if (activeBtn.value === noBtn) {
+    activeBtn.value = null
+    landing.api.params.where = null
+  } else {
+    activeBtn.value = noBtn
+    landing.api.params.where = `this.is_active=${params ? 'true' : 'false'}`
+  }
+
+  if (apiTable.value) {
+    apiTable.value.reload()
+  }
+}
 
 const landing = reactive({
   //  ACTIONS sesuai priviledge user dan data
-   actions: [
+  actions: [
     {
       icon: 'trash',
       class: 'bg-red-600 text-light-100',
@@ -290,7 +303,7 @@ const landing = reactive({
       class: 'bg-green-600 text-light-100',
       // show: (row) => (currentMenu?.can_read)||store.user.data.username==='developer',
       click(row) {
-        router.push(`${route.path}/${row.id}?`+tsId)
+        router.push(`${route.path}/${row.id}?` + tsId)
       }
     },
     {
@@ -299,7 +312,7 @@ const landing = reactive({
       class: 'bg-blue-600 text-light-100',
       // show: (row) => (currentMenu?.can_update)||store.user.data.username==='developer',
       click(row) {
-        router.push(`${route.path}/${row.id}?action=Edit&`+tsId)
+        router.push(`${route.path}/${row.id}?action=Edit&` + tsId)
       }
     },
     {
@@ -307,7 +320,7 @@ const landing = reactive({
       title: "Copy",
       class: 'bg-gray-600 text-light-100',
       click(row) {
-        router.push(`${route.path}/${row.id}?action=Copy&`+tsId)
+        router.push(`${route.path}/${row.id}?action=Copy&` + tsId)
       }
     }
   ],
@@ -321,6 +334,12 @@ const landing = reactive({
       simplest: true
     },
     onsuccess(response) {
+      if (response && response.data) {
+        response.data = response.data.map((item) => {
+          item.status = (item.is_active === true || item.is_active === 1 || item.is_active === '1' || item.is_active === 'true' || item.is_active === 't') ? 'Active' : 'Inactive'
+          return item
+        })
+      }
       response.page = response.current_page
       response.hasNext = response.has_next
       return response
@@ -341,7 +360,7 @@ const landing = reactive({
     filter: true,
     sortable: true,
     filter: 'ColFilter',
-    cellClass: [ 'border-r', '!border-gray-200']
+    cellClass: ['border-r', '!border-gray-200']
   },
   {
     headerName: "Menu",
@@ -350,30 +369,35 @@ const landing = reactive({
     filter: true,
     sortable: true,
     filter: 'ColFilter',
-    cellClass: [ 'border-r', '!border-gray-200']
+    cellClass: ['border-r', '!border-gray-200']
   },
   {
     headerName: 'Keterangan',
     field: 'desc',
-    cellClass: [ 'border-r', '!border-gray-200', 'justify-center'],
+    cellClass: ['border-r', '!border-gray-200', 'justify-center'],
     sortable: true,
     filter: true,
     filter: 'ColFilter',
   },
   {
     headerName: 'Status',
-    field: 'is_active',
-    filter: true,
+    field: 'status',
     sortable: true,
-    filter: 'ColFilter',
     resizable: true,
-    flex:1,
-    cellClass: [ 'border-r', '!border-gray-200', 'justify-center'],
-    cellRenderer: ({ value }) => {
-    return value === true
-      ? `<span class="text-green-500 rounded-md text-xs font-medium px-4 py-1 inline-block capitalize">Active</span>`
-      : `<span class="text-gray-500 rounded-md text-xs font-medium px-4 py-1 inline-block capitalize">Inactive</span>`
-  }}]
+    flex: 1,
+    cellClass: ['border-r', '!border-gray-200', 'justify-center'],
+    valueGetter: (params) => {
+      const val = params?.data ? (params.data.status !== undefined ? params.data.status : params.data.is_active) : params?.value
+      return (val === 'Active' || val === true || val === 1 || val === '1' || val === 'true' || val === 't') ? 'Active' : 'Inactive'
+    },
+    cellRenderer: (params) => {
+      const val = params?.value !== undefined ? params.value : (params?.data?.status ?? params?.data?.is_active ?? params)
+      const isActive = val === 'Active' || val === true || val === 1 || val === '1' || val === 'true'
+      return isActive
+        ? `<span class="text-green-500 rounded-md text-xs font-medium px-4 py-1 inline-block capitalize">Active</span>`
+        : `<span class="text-gray-500 rounded-md text-xs font-medium px-4 py-1 inline-block capitalize">Inactive</span>`
+    }
+  }]
 })
 
 onActivated(() => {
@@ -387,4 +411,4 @@ onActivated(() => {
 
 
 //  @endif -------------------------------------------------END
-watchEffect(()=>store.commit('set', ['isRequesting', isRequesting.value]))
+watchEffect(() => store.commit('set', ['isRequesting', isRequesting.value]))

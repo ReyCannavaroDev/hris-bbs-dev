@@ -204,6 +204,22 @@ function onSave() {
 }
 
 //  @else----------------------- LANDING
+const activeBtn = ref(null)
+
+function filterShowData(params, noBtn) {
+  if (activeBtn.value === noBtn) {
+    activeBtn.value = null
+    landing.api.params.where = null
+  } else {
+    activeBtn.value = noBtn
+    landing.api.params.where = `this.is_active=${params ? 'true' : 'false'}`
+  }
+
+  if (apiTable.value) {
+    apiTable.value.reload()
+  }
+}
+
 const landing = reactive({
   actions: [
     {
@@ -353,14 +369,6 @@ const landing = reactive({
   {
     headerName: 'Status',
     field: 'status',
-    filter: 'ColFilter',
-    filterParams: {
-      options: ['Active', 'Inactive']
-    },
-    filterValueGetter: (params) => {
-      const val = params.data ? (params.data.status !== undefined ? params.data.status : params.data.is_active) : params.value
-      return (val === 'Active' || val === true || val === 1 || val === '1' || val === 'true' || val === 't') ? 'Active' : 'Inactive'
-    },
     valueGetter: (params) => {
       const val = params.data ? (params.data.status !== undefined ? params.data.status : params.data.is_active) : params.value
       return (val === 'Active' || val === true || val === 1 || val === '1' || val === 'true' || val === 't') ? 'Active' : 'Inactive'

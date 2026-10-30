@@ -315,14 +315,6 @@ const landing = reactive({
   {
     headerName: 'Status',
     field: 'status',
-    filter: 'ColFilter',
-    filterParams: {
-      options: ['Active', 'Inactive']
-    },
-    filterValueGetter: (params) => {
-      const val = params.data ? (params.data.status !== undefined ? params.data.status : params.data.is_active) : params.value
-      return (val === 'Active' || val === true || val === 1 || val === '1' || val === 'true' || val === 't') ? 'Active' : 'Inactive'
-    },
     resizable: true,
     sortable: true,
     flex: 1,

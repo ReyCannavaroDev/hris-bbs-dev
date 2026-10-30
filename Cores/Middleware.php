@@ -15,6 +15,22 @@ class Middleware
         $user = auth()->user();
         $requestData = $request->all();
 
+        // Normalisasi filter is_active dan status agar support 'Active' dan 'Inactive' via query where
+        if (!empty($requestData['where']) && $modelInstance && in_array('is_active', $modelInstance->columns ?? [])) {
+            $requestData['where'] = preg_replace_callback(
+                '/(?:this\.)?(?:status|is_active)\s*(?:=|ilike|like)\s*[\'"]%?(active|inactive)%?[\'"]?/i',
+                function ($m) {
+                    $bool = strtolower($m[1]) === 'active' ? 'true' : 'false';
+                    return "this.is_active=$bool";
+                },
+                $requestData['where']
+            );
+            if ($request->query) {
+                $request->query->set('where', $requestData['where']);
+            }
+            $_GET['where'] = $requestData['where'];
+        }
+
         // Normalisasi filter is_active agar support 'Active' dan 'Inactive' via query where
         if (isset($requestData['filter_is_active'])) {
             $val = strtolower(trim((string)$requestData['filter_is_active']));

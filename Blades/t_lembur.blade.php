@@ -300,14 +300,23 @@
         </div>
 
         <div v-show="values.status === 'IN APPROVAL' || route.query.is_approval">
-          <table class=" w-[100%] my-3 border">
+          <div class="flex items-center mb-2 mt-3">
+            <button
+                type="button"
+                @click="openModal(values?.trx?.id ?? values?.id ?? 0)"
+                class="flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-blue-700 bg-blue-50 border border-blue-200 rounded hover:bg-blue-100 transition duration-150">
+                <icon fa="table" size="sm"/>
+                Log Approval
+            </button>
+          </div>
+          <table class=" w-[100%] mb-3 border">
             <tr class="border">
               <td class="border px-2 py-1 font-semibold">Nomor</td>
               <td class="border px-2 py-1">{{ values.approval?.nomor ?? '-' }}</td>
             </tr>
             <tr class="border">
               <td class="border px-2 py-1 font-semibold">Tanggal</td>
-              <td class="border px-2 py-1">{{ values.approval?.created_at ?? '-' }}</td>
+              <td class="border px-2 py-1">{{ formatDateTime(values.approval?.created_at) }}</td>
             </tr>
             <tr class="border">
               <td class="border px-2 py-1 font-semibold">Pemohon</td>
@@ -317,32 +326,6 @@
               <td class="border px-2 py-1 font-semibold">Status</td>
               <td class="border px-2 py-1">{{ values.approval?.status ?? '-' }}</td>
             </tr>
-          </table>
-        </div>
-
-        <div v-show="values.status === 'IN APPROVAL' || route.query.is_approval" class="">
-          <table class=" w-[100%] my-3 ">
-            <tr>
-              <td class=" px-2 py-1">
-                <button
-                    v-show="values.status === 'IN APPROVAL' || route.query.is_approval"
-                    @click="openModal(values?.trx?.id ?? values?.id ?? 0)"
-                    class="hover:text-blue-500">
-                    <icon fa="table" size="sm"/>
-                    Log Approval
-                  </button>
-              </td>
-            </tr>
-            <!-- <tr v-show="isFinish || isApproved">
-                <td class=" px-2 py-1">
-                  <button
-                    @click="downloadDoc()" 
-                    class="hover:text-blue-500">
-                    <icon fa="download" size="sm"/>
-                    Download .docx
-                  </button>
-                </td>
-              </tr> -->
           </table>
         </div>
         <!-- END COLUMN -->
@@ -378,7 +361,7 @@
                   <td class="border px-2 py-1">{{ i+1 }}</td>
                   <td class="border px-2 py-1">{{ d.trx_nomor ?? '-' }}</td>
                   <td class="border px-2 py-1">{{ d.action_type ?? '-' }}</td>
-                  <td class="border px-2 py-1">{{ d.action_at ?? '-' }}</td>
+                  <td class="border px-2 py-1">{{ formatDateTime(d.action_at) }}</td>
                   <td class="border px-2 py-1">{{ d.action_user ?? '-' }}</td>
                   <td class="border px-2 py-1">{{ d.action_note ?? '-' }}</td>
                 </tr>

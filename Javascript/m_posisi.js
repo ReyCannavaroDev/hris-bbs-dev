@@ -14,35 +14,35 @@ const modulPath = route.params.modul
 const currentMenu = store.currentMenu
 const apiTable = ref(null)
 const formErrors = ref({})
-const tsId = `ts=`+(Date.parse(new Date()))
+const tsId = `ts=` + (Date.parse(new Date()))
 
 // ------------------------------ PERSIAPAN
 const endpointApi = '/m_posisi'
-onBeforeMount(()=>{
+onBeforeMount(() => {
   document.title = 'Master Posisi'
 })
 const formatCurrency = (text) => {
   if (!text) text = 0
 
-    const formatter = new Intl.NumberFormat('id', {
-      style: 'currency',
-      currency: 'IDR',
-      maximumFractionDigits: 0,
-    })
+  const formatter = new Intl.NumberFormat('id', {
+    style: 'currency',
+    currency: 'IDR',
+    maximumFractionDigits: 0,
+  })
 
-    if (typeof text === 'string') {
-      if (isNaN(parseFloat(text)) || isNaN(parseInt(text))) {
-        return formatter.format(0)
-      }
-
-      if (text.includes(',') || text.includes('.')) {
-        return formatter.format(parseFloat(text))
-      }
-
-      return formatter.format(parseInt(text))
+  if (typeof text === 'string') {
+    if (isNaN(parseFloat(text)) || isNaN(parseInt(text))) {
+      return formatter.format(0)
     }
 
-    return formatter.format(text)
+    if (text.includes(',') || text.includes('.')) {
+      return formatter.format(parseFloat(text))
+    }
+
+    return formatter.format(parseInt(text))
+  }
+
+  return formatter.format(text)
 }
 //  @if( $id )------------------- VALUES FORM ! PENTING JANGAN DIHAPUS
 let initialValues = {}
@@ -105,13 +105,13 @@ let _id = 0
 const detailArr = ref([])
 const addDetail = () => {
   const tempItem = {
-    __id : ++_id,
+    __id: ++_id,
     komponen: values.komponen,
     biaya: values.biayaKomp,
     catatan_kom: values.catatanKomp
   }
   detailArr.value = [...detailArr.value, tempItem]
-  values.komponen= null
+  values.komponen = null
   values.biayaKomp = null
   values.catatanKomp = null
 }
@@ -132,7 +132,7 @@ function onBack() {
     return
   }
 
-      router.replace('/' + modulPath)
+  router.replace('/' + modulPath)
 }
 
 function onReset() {
@@ -214,7 +214,7 @@ async function onSave() {
 
     formErrors.value = {}
     values.is_active = (values.is_active === true || values.is_active == 1 || values.is_active === '1' || values.is_active === 'true') ? 1 : 0
-    const isCreating = ['Create','Copy','Tambah'].includes(actionText.value)
+    const isCreating = ['Create', 'Copy', 'Tambah'].includes(actionText.value)
     const dataURL = `${store.server.url_backend}/operation${endpointApi}${isCreating ? '' : ('/' + route.params.id)}`
     isRequesting.value = true
     const res = await fetch(dataURL, {
@@ -243,7 +243,7 @@ async function onSave() {
       icon: 'success',
       text: 'Data posisi berhasil disimpan!',
     }).then(() => {
-      router.replace('/' + modulPath + '?reload='+(Date.parse(new Date())))
+      router.replace('/' + modulPath + '?reload=' + (Date.parse(new Date())))
     })
   } catch (err) {
     isBadForm.value = true
@@ -262,16 +262,10 @@ const activeBtn = ref(null)
 function filterShowData(params, noBtn) {
   if (activeBtn.value === noBtn) {
     activeBtn.value = null
+    landing.api.params.where = null
   } else {
     activeBtn.value = noBtn
-  }
-
-  if (activeBtn.value === null) {
-    landing.api.params.where = null
-  } else if (params) {
-    landing.api.params.where = `this.is_active=true`
-  } else {
-    landing.api.params.where = `this.is_active=false`
+    landing.api.params.where = `this.is_active=${params ? 'true' : 'false'}`
   }
 
   if (apiTable.value) {
@@ -328,7 +322,7 @@ const landing = reactive({
       class: 'bg-green-600 text-light-100',
       // show: (row) => (currentMenu?.can_read)||store.user.data.username==='developer',
       click(row) {
-        router.push(`${route.path}/${row.id}?`+tsId)
+        router.push(`${route.path}/${row.id}?` + tsId)
       }
     },
     {
@@ -337,7 +331,7 @@ const landing = reactive({
       class: 'bg-blue-600 text-light-100',
       // show: (row) => (currentMenu?.can_update)||store.user.data.username==='developer',
       click(row) {
-        router.push(`${route.path}/${row.id}?action=Edit&`+tsId)
+        router.push(`${route.path}/${row.id}?action=Edit&` + tsId)
       }
     },
     {
@@ -345,7 +339,7 @@ const landing = reactive({
       title: "Copy",
       class: 'bg-gray-600 text-light-100',
       click(row) {
-        router.push(`${route.path}/${row.id}?action=Copy&`+tsId)
+        router.push(`${route.path}/${row.id}?action=Copy&` + tsId)
       }
     }
   ],
@@ -357,7 +351,7 @@ const landing = reactive({
     },
     params: {
       simplest: true,
-      searchfield:'this.id, this.kode, this.desc_kerja, this.min_gaji_pokok, this.max_gaji_pokok, this.desc, this.is_active',
+      searchfield: 'this.id, this.kode, this.desc_kerja, this.min_gaji_pokok, this.max_gaji_pokok, this.desc, this.is_active',
     },
     onsuccess(response) {
       if (response && response.data) {
@@ -384,20 +378,20 @@ const landing = reactive({
     field: 'kode',
     filter: true,
     sortable: true,
-    flex:1,
+    flex: 1,
     filter: 'ColFilter',
     resizable: true,
-    cellClass: [ 'border-r', '!border-gray-200', 'justify-start']
+    cellClass: ['border-r', '!border-gray-200', 'justify-start']
   },
   {
     headerName: 'Deskripsi',
     field: 'desc_kerja',
     filter: true,
     sortable: true,
-    flex:1,
+    flex: 1,
     filter: 'ColFilter',
     resizable: true,
-    cellClass: [ 'border-r', '!border-gray-200', 'justify-start']
+    cellClass: ['border-r', '!border-gray-200', 'justify-start']
   },
   {
     headerName: 'Gaji Rata-Rata',
@@ -410,31 +404,25 @@ const landing = reactive({
     flex: 1,
     valueGetter: (params) => formatCurrency(params.data?.min_gaji_pokok) + ' - ' + formatCurrency(params.data?.max_gaji_pokok),
     cellRenderer: (params) => formatCurrency(params.data?.min_gaji_pokok) + ' - ' + formatCurrency(params.data?.max_gaji_pokok),
-    cellClass: [ 'border-r', '!border-gray-200', 'justify-end']
+    cellClass: ['border-r', '!border-gray-200', 'justify-end']
   },
   {
     headerName: 'Status',
     field: 'status',
-    filter: 'ColFilter',
-    filterParams: {
-      options: ['Active', 'Inactive']
-    },
-    filterValueGetter: (params) => {
-      const val = params.data ? (params.data.status !== undefined ? params.data.status : params.data.is_active) : params.value
-      return (val === 'Active' || val === true || val === 1 || val === '1' || val === 'true' || val === 't') ? 'Active' : 'Inactive'
-    },
     sortable: true,
     resizable: true,
     flex: 1,
-    cellClass: [ 'border-r', '!border-gray-200', 'justify-center'],
+    cellClass: ['border-r', '!border-gray-200', 'justify-center'],
     valueGetter: (params) => {
       const val = params.data ? (params.data.status !== undefined ? params.data.status : params.data.is_active) : params.value
       return (val === 'Active' || val === true || val === 1 || val === '1' || val === 'true' || val === 't') ? 'Active' : 'Inactive'
     },
-    cellRenderer: ({ value }) => {
-      return value === 'Active' || value === true
+    cellRenderer: (params) => {
+      const val = params?.value !== undefined ? params.value : (params?.data ? (params.data.status ?? params.data.is_active) : params)
+      const isActive = val === 'Active' || val === true || val === 1 || val === '1' || val === 'true' || val === 't'
+      return isActive
         ? `<span class="text-green-500 rounded-md text-xs font-medium px-4 py-1 inline-block capitalize">Active</span>`
-        : `<span class="text-gray-500 rounded-md text-xs font-medium px-4 py-1 inline-block capitalize">Inactive</span>`
+        : `<span class="text-red-500 rounded-md text-xs font-medium px-4 py-1 inline-block capitalize">Inactive</span>`
     },
   },
   {
@@ -444,8 +432,8 @@ const landing = reactive({
     sortable: true,
     filter: 'ColFilter',
     resizable: true,
-    flex:1,
-    cellClass: [ 'border-r', '!border-gray-200', 'justify-start']
+    flex: 1,
+    cellClass: ['border-r', '!border-gray-200', 'justify-start']
   },
   ]
 })
@@ -460,4 +448,4 @@ onActivated(() => {
 })
 
 //  @endif -------------------------------------------------END
-watchEffect(()=>store.commit('set', ['isRequesting', isRequesting.value]))
+watchEffect(() => store.commit('set', ['isRequesting', isRequesting.value]))

@@ -222,6 +222,29 @@ function hitungDurasi() {
   }
 }
 
+function formatDateTime(val) {
+  if (!val) return '-'
+  try {
+    const s = String(val).trim()
+    const [datePart, timePart] = s.includes('T') ? s.split('T') : s.split(' ')
+    if (datePart && datePart.includes('-')) {
+      const [y, m, d] = datePart.split('-')
+      if (y && m && d) {
+        const timeClean = timePart ? timePart.split('.')[0] : ''
+        return timeClean ? `${d}/${m}/${y} ${timeClean}` : `${d}/${m}/${y}`
+      }
+    }
+    const dt = new Date(val)
+    if (!isNaN(dt.getTime())) {
+      const pad = (n) => String(n).padStart(2, '0')
+      return `${pad(dt.getDate())}/${pad(dt.getMonth() + 1)}/${dt.getFullYear()} ${pad(dt.getHours())}:${pad(dt.getMinutes())}:${pad(dt.getSeconds())}`
+    }
+  } catch (e) {
+    console.error('formatDateTime error', e)
+  }
+  return val
+}
+
 function openModal(id) {
   dataLog.items = []
   modalOpen.value = true

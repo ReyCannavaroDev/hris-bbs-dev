@@ -130,6 +130,22 @@ async function onSave() {
     }
 
 //  @else----------------------- LANDING
+const activeBtn = ref(null)
+
+function filterShowData(params, noBtn) {
+  if (activeBtn.value === noBtn) {
+    activeBtn.value = null
+    landing.api.params.where = null
+  } else {
+    activeBtn.value = noBtn
+    landing.api.params.where = `this.is_active=${params ? 'true' : 'false'}`
+  }
+
+  if (apiTable.value) {
+    apiTable.value.reload()
+  }
+}
+
 const landing = reactive({
   actions: [
     {
@@ -211,14 +227,16 @@ const landing = reactive({
       searchfield: 'this.id, this.modul, this.submodul, this.menu, this.path, this.icon, this.sequence, this.is_active'
     },
     onsuccess(response) {
-      if (response && response.data) {
+      if (response && Array.isArray(response.data)) {
         response.data = response.data.map((item) => {
           item.status = (item.is_active === true || item.is_active === 1 || item.is_active === '1' || item.is_active === 'true' || item.is_active === 't') ? 'Active' : 'Inactive'
           return item
         })
       }
-      response.page = response.current_page
-      response.hasNext = response.has_next
+      if (response) {
+        response.page = response.current_page
+        response.hasNext = response.has_next
+      }
       return response
     }
   },
@@ -290,14 +308,6 @@ const landing = reactive({
   {
     headerName: 'Status',
     field: 'status',
-    filter: 'ColFilter',
-    filterParams: {
-      options: ['Active', 'Inactive']
-    },
-    filterValueGetter: (params) => {
-      const val = params.data ? (params.data.status !== undefined ? params.data.status : params.data.is_active) : params.value;
-      return (val === 'Active' || val === true || val === 1 || val === '1' || val === 'true' || val === 't') ? 'Active' : 'Inactive';
-    },
     sortable: true,
     resizable: true,
     flex: 1,
@@ -306,10 +316,12 @@ const landing = reactive({
       const val = params.data ? (params.data.status !== undefined ? params.data.status : params.data.is_active) : params.value;
       return (val === 'Active' || val === true || val === 1 || val === '1' || val === 'true' || val === 't') ? 'Active' : 'Inactive';
     },
-    cellRenderer: ({ value }) => {
-      return value === 'Active' || value === true
+    cellRenderer: (params) => {
+      const val = params?.value !== undefined ? params.value : (params?.data?.status ?? params?.data?.is_active ?? params)
+      const isActive = val === 'Active' || val === true || val === 1 || val === '1' || val === 'true'
+      return isActive
         ? `<span class="text-green-500 rounded-md text-xs font-medium px-4 py-1 inline-block capitalize">Active</span>`
-        : `<span class="text-gray-500 rounded-md text-xs font-medium px-4 py-1 inline-block capitalize">Inactive</span>`;
+        : `<span class="text-gray-500 rounded-md text-xs font-medium px-4 py-1 inline-block capitalize">Inactive</span>`
     }
   },
   ]

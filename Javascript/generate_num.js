@@ -285,6 +285,22 @@ async function onSave() {
 }
 
 //  @else----------------------- LANDING
+const activeBtn = ref(null)
+
+function filterShowData(params, noBtn) {
+  if (activeBtn.value === noBtn) {
+    activeBtn.value = null
+    landing.api.params.where = null
+  } else {
+    activeBtn.value = noBtn
+    landing.api.params.where = `this.is_active=${params ? 'true' : 'false'}`
+  }
+
+  if (apiTable.value) {
+    apiTable.value.reload()
+  }
+}
+
 const landing = reactive({
   actions: [
     {
@@ -403,24 +419,18 @@ const landing = reactive({
   {
     headerName: 'Status',
     field: 'status',
-    filter: 'ColFilter',
-    filterParams: {
-      options: ['Active', 'Inactive']
-    },
-    filterValueGetter: (params) => {
-      const val = params.data ? (params.data.status !== undefined ? params.data.status : params.data.is_active) : params.value
-      return (val === 'Active' || val === true || val === 1 || val === '1' || val === 'true' || val === 't') ? 'Active' : 'Inactive'
-    },
     sortable: true,
     resizable: true,
     flex: 1,
     cellClass: [ 'border-r', '!border-gray-200', 'justify-center'],
     valueGetter: (params) => {
-      const val = params.data ? (params.data.status !== undefined ? params.data.status : params.data.is_active) : params.value
+      const val = params?.data ? (params.data.status !== undefined ? params.data.status : params.data.is_active) : params?.value
       return (val === 'Active' || val === true || val === 1 || val === '1' || val === 'true' || val === 't') ? 'Active' : 'Inactive'
     },
-    cellRenderer: ({ value }) => {
-      return value === 'Active' || value === true
+    cellRenderer: (params) => {
+      const val = params?.value !== undefined ? params.value : (params?.data?.status ?? params?.data?.is_active ?? params)
+      const isActive = val === 'Active' || val === true || val === 1 || val === '1' || val === 'true'
+      return isActive
         ? `<span class="text-green-500 rounded-md text-xs font-medium px-4 py-1 inline-block capitalize">Active</span>`
         : `<span class="text-gray-500 rounded-md text-xs font-medium px-4 py-1 inline-block capitalize">Inactive</span>`
     }
