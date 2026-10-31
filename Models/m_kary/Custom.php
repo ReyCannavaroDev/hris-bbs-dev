@@ -25,6 +25,8 @@ class m_kary extends \App\Models\BasicModels\m_kary
         $newArrayData = array_merge($arrayData, [
             "kode" => @$arrayData['kode'] ?? $this->helper->generateNomor("KODE KARYAWAN"),
             "m_comp_id" => $m_comp_id,
+            "cuti_jatah_reguler" => $arrayData['cuti_jatah_reguler'] ?? ((!empty($arrayData['tgl_masuk']) && Carbon::parse($arrayData['tgl_masuk'])->diffInYears(Carbon::now()) >= 1) ? 12 : 0),
+            "cuti_sisa_reguler" => $arrayData['cuti_sisa_reguler'] ?? ((!empty($arrayData['tgl_masuk']) && Carbon::parse($arrayData['tgl_masuk'])->diffInYears(Carbon::now()) >= 1) ? 12 : 0),
         ]);
         return [
             "model" => $model,
@@ -45,8 +47,86 @@ class m_kary extends \App\Models\BasicModels\m_kary
     {
         $object = [];
         if(app()->request->detail){
-            $data = \DB::select("select public.employee_attendance(?,?)",[Date('Y-m-d'),$row['id'] ??0]);
-            $data = json_decode($data[0]->employee_attendance);
+            if (!empty($row['tgl_masuk']) && (empty($row['cuti_jatah_reguler']) || $row['cuti_jatah_reguler'] <= 0)) {
+                $yearsOfWork = Carbon::parse($row['tgl_masuk'])->diffInYears(Carbon::now());
+                if ($yearsOfWork >= 1) {
+                    \DB::table('m_kary')->where('id', $row['id'])->update([
+                        'cuti_jatah_reguler' => 12,
+                        'cuti_sisa_reguler' => 12,
+                        'exp_date_cuti' => Carbon::now()->endOfYear()->format('Y-m-d')
+                    ]);
+                    $row['cuti_jatah_reguler'] = 12;
+                    $row['cuti_sisa_reguler'] = 12;
+                    $row['exp_date_cuti'] = Carbon::now()->endOfYear()->format('Y-m-d');
+                }
+            }
+            $karyId = $row['id'] ?? 0;
+            $currentYear = Date('Y');
+            $yearsOfWork = !empty($row['tgl_masuk']) ? Carbon::parse($row['tgl_masuk'])->diffInYears(Carbon::now()) : 0;
+            $jatahCuti = ($yearsOfWork >= 1) ? (!empty($row['cuti_jatah_reguler']) && $row['cuti_jatah_reguler'] > 0 ? (int)$row['cuti_jatah_reguler'] : 12) : (!empty($row['cuti_jatah_reguler']) ? (int)$row['cuti_jatah_reguler'] : 0);
+
+            $tipeRegulerIds = \DB::table('m_general')->where('group', 'TIPE CUTI')->where(function($q) {
+                $q->where('key', '02')->orWhere('value', 'ilike', '%reguler%')->orWhere('value', 'ilike', '%tahunan%');
+            })->pluck('id')->toArray();
+
+            $cutiTerpakai = 0;
+            $adjReguler = 0;
+            if (!empty($tipeRegulerIds)) {
+                $cutiTerpakai = \DB::table('t_cuti')->where('m_kary_id', $karyId)->whereIn('tipe_cuti_id', $tipeRegulerIds)->whereIn('status', ['APPROVED', 'POSTED'])->whereYear('date_from', $currentYear)->sum('interval') ?? 0;
+                $adjReguler = \DB::table('t_cuti_adjustment')->where('m_kary_id', $karyId)->whereIn('tipe_cuti_id', $tipeRegulerIds)->whereYear('date', $currentYear)->sum('value') ?? 0;
+            }
+            $sisaCuti = max(0, ($jatahCuti + $adjReguler) - $cutiTerpakai);
+
+            $tipeP24Ids = \DB::table('m_general')->where('group', 'TIPE CUTI')->where(function($q) {
+                $q->where('key', '03')->orWhere('value', 'ilike', '%p24%');
+            })->pluck('id')->toArray();
+
+            $totalMenitP24 = 0;
+            if (!empty($tipeP24Ids)) {
+                $p24Rows = \DB::table('t_cuti')->where('m_kary_id', $karyId)->whereIn('tipe_cuti_id', $tipeP24Ids)->whereIn('status', ['APPROVED', 'POSTED'])->whereYear('date_from', $currentYear)->get(['interval_min', 'time_from', 'time_to']);
+                foreach ($p24Rows as $p24) {
+                    if (!empty($p24->interval_min) && $p24->interval_min > 0) {
+                        $totalMenitP24 += $p24->interval_min;
+                    } elseif (!empty($p24->time_from) && !empty($p24->time_to)) {
+                        $tFrom = Carbon::parse($p24->time_from);
+                        $tTo = Carbon::parse($p24->time_to);
+                        $totalMenitP24 += abs($tFrom->diffInMinutes($tTo));
+                    }
+                }
+            }
+            $totalJamP24 = round($totalMenitP24 / 60, 2);
+            $konversiHariP24 = round($totalJamP24 / 8, 2);
+
+            try {
+                $rawAttendance = \DB::select("select public.employee_attendance(?,?)",[Date('Y-m-d'),$row['id'] ??0]);
+                $data = !empty($rawAttendance) ? json_decode($rawAttendance[0]->employee_attendance) : new \stdClass();
+            } catch (\Exception $e) {
+                $data = new \stdClass();
+            }
+            if (!$data) {
+                $data = new \stdClass();
+            }
+            $data->cuti_reguler = (int)$jatahCuti;
+            $data->cuti_reguler_terpakai = (int)$cutiTerpakai;
+            $data->sisa_cuti_reguler = (int)$sisaCuti;
+            $data->p24_total_jam = $totalJamP24;
+            $data->p24_konversi_hari = $konversiHariP24;
+            $data->cuti_1_hari = (int)$jatahCuti;
+            $data->cuti_satu_hari = (int)$jatahCuti;
+            $data->cuti_satu_hari_terpakai = (int)$cutiTerpakai;
+            $data->sisa_cuti_1_hari = (int)$sisaCuti;
+            $data->sisa_cuti_satu_hari = (int)$sisaCuti;
+            $object['cuti_reguler'] = (int)$jatahCuti;
+            $object['cuti_reguler_terpakai'] = (int)$cutiTerpakai;
+            $object['sisa_cuti_reguler'] = (int)$sisaCuti;
+            $object['p24_total_jam'] = $totalJamP24;
+            $object['p24_konversi_hari'] = $konversiHariP24;
+            $object['cuti_1_hari'] = (int)$jatahCuti;
+            $object['cuti_satu_hari'] = (int)$jatahCuti;
+            $object['cuti_satu_hari_terpakai'] = (int)$cutiTerpakai;
+            $object['sisa_cuti_1_hari'] = (int)$sisaCuti;
+            $object['sisa_cuti_satu_hari'] = (int)$sisaCuti;
+
             $object['info_cuti'] = $data;
 
             $jadwal_kerja = \DB::table('t_jadwal_kerja as t')->selectRaw("t.*")->join('m_general as g','g.id','t.tipe_jam_kerja_id')->where('t.tipe_jam_kerja_id', $row['tipe_jam_kerja_id'])
@@ -103,14 +183,16 @@ class m_kary extends \App\Models\BasicModels\m_kary
                 $yearsOfWork = $employmentStartDate->diffInYears(Carbon::now());
 
                 $baseLeaveDays = 12;
-                $additionalLeaveDays = [3, 5, 0, 3, 0, 0, 3, 0, 5];
+                if ($yearsOfWork >= 1) {
+                    $employee->cuti_jatah_reguler = $baseLeaveDays;
 
-                $employee->cuti_sisa_reguler = ($yearsOfWork >= 1) ? $baseLeaveDays + $additionalLeaveDays[($yearsOfWork - 1) % count($additionalLeaveDays)] : -4;
+                    $employee->cuti_sisa_reguler = $baseLeaveDays;
 
-                $employee->cuti_sisa_panjang = 16;
-                $employee->exp_date_cuti = Carbon::now()->addYear()->format('Y-m-d');
+                    $employee->cuti_sisa_panjang = 16;
+                    $employee->exp_date_cuti = Carbon::now()->endOfYear()->format('Y-m-d');
 
-                $employee->save();
+                    $employee->save();
+                }
             }
 
             \DB::commit();

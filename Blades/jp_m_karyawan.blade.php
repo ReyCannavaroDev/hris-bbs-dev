@@ -36,6 +36,7 @@
 					<div class="flex items-center">
 						<Icon fa="arrow-left" class="cursor-pointer mr-2 font-bold hover:text-yellow-500" title="Kembali"
 						@click="onBack" />
+
 						<div>
 							<h1 class="text-20px font-bold">Form Karyawan</h1>
 							<p class="text-gray-100">Master Karyawan</p>
@@ -681,47 +682,46 @@
 				<div class="p-4 grid <md:grid-cols-1 grid-cols-3 gap-2" v-if="activeTabIndex === 0">
 
 					<div>
+
 						<div>
-							<label >Cuti Reguler<label class="text-red-500 space-x-0 pl-0">*</label></label>
+							<label >Jatah Cuti Tahunan (Hari)<label class="text-red-500 space-x-0 pl-0">*</label></label>
 							<FieldX :bind="{ readonly: true }" type="number" class="w-full mt-3" :value="values.cuti_reguler" label=""
-							placeholder="Tuliskan Jatah Cuti Reguler" :errorText="formErrors.cuti_reguler?'failed':''"
+							placeholder="Jatah Cuti Tahunan" :errorText="formErrors.cuti_reguler?'failed':''"
 							@input="v=>values.cuti_reguler=v" :hints="formErrors.cuti_reguler" :check="false" />
 						</div>
+
 						<div>
-							<label >Sisa Regular<label class="text-red-500 space-x-0 pl-0">*</label></label>
-							<FieldX :bind="{ readonly: true }" type="number" class="w-full mt-3" :value="values.sisa_cuti_reguler"
-							label="" placeholder="Tuliskan Sisa Jatah Cuti Reguler"
-							:errorText="formErrors.sisa_cuti_reguler?'failed':''" @input="v=>values.sisa_cuti_reguler=v"
-							:hints="formErrors.sisa_cuti_reguler" :check="false" />
+							<label >Cuti Tahunan Terpakai (Hari)<label class="text-red-500 space-x-0 pl-0">*</label></label>
+							<FieldX :bind="{ readonly: true }" type="number" class="w-full mt-3" :value="values.cuti_reguler_terpakai"
+							label="" placeholder="Cuti Tahunan Terpakai"
+							:errorText="formErrors.cuti_reguler_terpakai?'failed':''" @input="v=>values.cuti_reguler_terpakai=v"
+							:hints="formErrors.cuti_reguler_terpakai" :check="false" />
 						</div>
 					</div>
 
 					<div>
+
 						<div>
-							<label >Cuti Masa Kerja<label class="text-red-500 space-x-0 pl-0">*</label></label>
-							<FieldX :bind="{ readonly: true }" type="number" class="w-full mt-3" :value="values.cuti_masa_kerja"
-							label="" :errorText="formErrors.cuti_masa_kerja?'failed':''" @input="v=>values.cuti_masa_kerja=v"
-							:hints="formErrors.cuti_masa_kerja" :check="false" />
+							<label >Sisa Cuti Tahunan (Hari)<label class="text-red-500 space-x-0 pl-0">*</label></label>
+							<FieldX :bind="{ readonly: true }" type="number" class="w-full mt-3" :value="values.sisa_cuti_reguler"
+							label="" placeholder="Sisa Cuti Tahunan" :errorText="formErrors.sisa_cuti_reguler?'failed':''" @input="v=>values.sisa_cuti_reguler=v"
+							:hints="formErrors.sisa_cuti_reguler" :check="false" />
 						</div>
+
 						<div>
-							<label >Sisa Masa Kerja<label class="text-red-500 space-x-0 pl-0">*</label></label>
-							<FieldX :bind="{ readonly: true }" type="number" class="w-full mt-3" :value="values.sisa_cuti_masa_kerja"
-							label="" :errorText="formErrors.sisa_cuti_masa_kerja?'failed':''"
-							@input="v=>values.sisa_cuti_masa_kerja=v" :hints="formErrors.sisa_cuti_masa_kerja" :check="false" />
+							<label >Akumulasi Cuti P24 (Jam)<label class="text-red-500 space-x-0 pl-0">*</label></label>
+							<FieldX :bind="{ readonly: true }" type="number" class="w-full mt-3" :value="values.p24_total_jam"
+							label="" placeholder="Total Jam P24" :errorText="formErrors.p24_total_jam?'failed':''"
+							@input="v=>values.p24_total_jam=v" :hints="formErrors.p24_total_jam" :check="false" />
 						</div>
 					</div>
 					<div>
+
 						<div>
-							<label >Cuti P24<label class="text-red-500 space-x-0 pl-0">*</label></label>
-							<FieldX :bind="{ readonly: true }" type="number" class="w-full mt-3" :value="values.cuti_p24" label=""
-							:errorText="formErrors.cuti_p24?'failed':''" @input="v=>values.cuti_p24=v" :hints="formErrors.cuti_p24"
+							<label >Konversi P24 (1 Hari = 8 Jam)<label class="text-red-500 space-x-0 pl-0">*</label></label>
+							<FieldX :bind="{ readonly: true }" type="number" class="w-full mt-3" :value="values.p24_konversi_hari" label=""
+							placeholder="Konversi Hari" :errorText="formErrors.p24_konversi_hari?'failed':''" @input="v=>values.p24_konversi_hari=v" :hints="formErrors.p24_konversi_hari"
 							:check="false" />
-						</div>
-						<div>
-							<label >Sisa P24<label class="text-red-500 space-x-0 pl-0">*</label></label>
-							<FieldX :bind="{ readonly: true }" type="number" class="w-full mt-3" :value="values.cuti_p24_terpakai"
-							label="" :errorText="formErrors.cuti_p24_terpakai?'failed':''" @input="v=>values.cuti_p24_terpakai=v"
-							:hints="formErrors.cuti_p24_terpakai" :check="false" />
 						</div>
 					</div>
 
@@ -1022,6 +1022,7 @@
 				<!-- Form Pendidikan -->
 				<div class="p-4 " v-if="activeTabIndex === 1">
 					<div class="grid <md:grid-cols-1 grid-cols-3 gap-2" >
+
 						<div>
 							<label>Tingkat Pendidikan <label class="text-red-500 space-x-0 pl-0">*</label></label>
 							<FieldSelect :bind="{ disabled: !actionText, clearable:false }" class="w-full"
@@ -1044,6 +1045,7 @@
 							}
 							}" :check="false" />
 						</div>
+
 						<div>
 							<label>Tahun Masuk <label class="text-red-500 space-x-0 pl-0">*</label></label>
 							<FieldSelect :bind="{ disabled: !actionText, clearable:false }" class="w-full" label=""
@@ -1052,6 +1054,7 @@
 							:errorText="formErrorsPend.thn_masuk?'failed':''" :hints="formErrorsPend.thn_masuk" valueField="key"
 							displayField="key" :check="false" />
 						</div>
+
 						<div>
 							<label>Nama Sekolah <label class="text-red-500 space-x-0 pl-0">*</label></label>
 							<FieldX :bind="{ readonly: !actionText }" class="w-full"
@@ -1059,6 +1062,7 @@
 							@input="v=>valuesPendidikan.nama_sekolah=v" :check="false"
 							:errorText="formErrorsPend.nama_sekolah?'failed':''" :hints="formErrorsPend.nama_sekolah" />
 						</div>
+
 						<div>
 							<label>Tahun Lulus <label class="text-red-500 space-x-0 pl-0">*</label></label>
 							<FieldSelect :bind="{ disabled: !actionText, clearable:false }" class="w-full"
@@ -1067,6 +1071,7 @@
 							:errorText="formErrorsPend.thn_lulus?'failed':''" :hints="formErrorsPend.thn_lulus" valueField="key"
 							displayField="key" :check="false" />
 						</div>
+
 						<div>
 							<label> Kota <label class="text-red-500 space-x-0 pl-0">*</label></label>
 							<FieldSelect :bind="{ disabled: !actionText, clearable:false }" class="w-full"
@@ -1087,12 +1092,14 @@
 							}
 							}" :check="false" />
 						</div>
+
 						<div>
 							<label> Nilai<label class="text-red-500 space-x-0 pl-0">*</label></label>
 							<FieldX :bind="{ readonly: !actionText }" type="number" class="w-full"
 							:value="valuesPendidikan.nilai" label="" placeholder="Tuliskan Nilai" @input="v=>valuesPendidikan.nilai=v"
 							:check="false" :errorText="formErrorsPend.nilai?'failed':''" :hints="formErrorsPend.nilai" />
 						</div>
+
 						<div>
 							<label> Jurusan <label class="text-red-500 space-x-0 pl-0">*</label></label>
 							<FieldX :bind="{ readonly: !actionText }" label="" placeholder="Tuliskan Jurusan"
@@ -1100,6 +1107,7 @@
 							:errorText="formErrorsPend.jurusan?'failed':''" :hints="formErrorsPend.jurusan"
 							@input="v=>valuesPendidikan.jurusan=v" :check="false" />
 						</div>
+
 						<div>
 							<label>Ijasah Terakhir <label class="text-red-500 space-x-0 pl-0">*</label></label>
 							<div class="w-full flex items-center">
@@ -1107,6 +1115,7 @@
 								:class="{'border-red-500': formErrorsPend.ijazah_foto}" @change="fileIjazah" @input="(v)=>valuesPendidikan.ijazah_foto=v" >
 							</div>
 						</div>
+
 						<div>
 							<label>Catatan <label class="text-red-500 space-x-0 pl-0">*</label></label>
 							<FieldX :bind="{ readonly: !actionText }" label="" placeholder="Tuliskan Catatan" type="textarea"
@@ -1114,6 +1123,7 @@
 							:errorText="formErrorsPend.desc?'failed':''" @input="v=>valuesPendidikan.desc=v"
 							:hints="formErrorsPend.desc" :check="false" />
 						</div>
+
 						<div>
 							<label>Pendidikan Akhir <label class="text-red-500 space-x-0 pl-0">*</label></label>
 							<div class="flex items-center space-x-5 ">

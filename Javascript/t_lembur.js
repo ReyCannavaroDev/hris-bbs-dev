@@ -109,6 +109,9 @@ onBeforeMount(async () => {
         if (!apiTrx.ok || !apiApp.ok) throw new Error("Failed when trying to read data")
         const resultTrxJson = await apiTrx.json()
         values.approval = resultJson?.data.approval
+        if (values.approval?.created_at) {
+          values.approval.created_at = formatDateTime(values.approval.created_at)
+        }
         values.trx = resultJson?.data.trx
         values.datalog = resultJson?.data.approval_log
         initialValues = resultTrxJson.data
@@ -150,6 +153,9 @@ onBeforeMount(async () => {
             if (apiApp.ok) {
               const resAppJson = await apiApp.json()
               values.approval = resAppJson.data?.approval
+              if (values.approval?.created_at) {
+                values.approval.created_at = formatDateTime(values.approval.created_at)
+              }
               values.trx = resAppJson.data?.trx
               values.datalog = resAppJson.data?.approval_log
               values.can_approve = resAppJson.data?.can_approve

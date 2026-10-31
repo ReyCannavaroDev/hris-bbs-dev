@@ -14,11 +14,11 @@ const modulPath = route.params.modul
 const currentMenu = store.currentMenu
 const apiTable = ref(null)
 const formErrors = ref({})
-const tsId = `ts=`+(Date.parse(new Date()))
+const tsId = `ts=` + (Date.parse(new Date()))
 
 // ------------------------------ PERSIAPAN
 const endpointApi = '/m_menu'
-onBeforeMount(()=>{
+onBeforeMount(() => {
   document.title = 'Master Menu'
 })
 
@@ -27,7 +27,7 @@ let initialValues = {}
 const changedValues = []
 
 const values = reactive({
-   is_active: true
+  is_active: true
 })
 
 onBeforeMount(async () => {
@@ -72,9 +72,9 @@ onBeforeMount(async () => {
 function onBack() {
   if (route.query.view_gaji) {
     router.replace('/t_info_gaji')
-  } else if(route.query.view_gaji_final){
+  } else if (route.query.view_gaji_final) {
     router.replace('/t_info_gaji')
-  }else{
+  } else {
     router.replace('/' + modulPath)
   }
   return
@@ -96,38 +96,38 @@ function onReset() {
 
 async function onSave() {
   //values.tags = JSON.stringify(values.tags)
-    try {
-      const isCreating = ['Create','Copy','Tambah'].includes(actionText.value);
-      const dataURL = `${store.server.url_backend}/operation${endpointApi}${isCreating ? '' : ('/' + route.params.id)}`;
-      isRequesting.value = true;
-      values.is_active = values.is_active ? 1 : 0
-      const res = await fetch(dataURL, {
-        method: isCreating ? 'POST' : 'PUT',
-        headers: {
-          'Content-Type': 'Application/json',
-          Authorization: `${store.user.token_type} ${store.user.token}`
-        },
-        body: JSON.stringify(values)
-      });
-      if (!res.ok) {
-        if ([400, 422].includes(res.status)) {
-          const responseJson = await res.json();
-          formErrors.value = responseJson.errors || {};
-          throw (responseJson.errors.length ? responseJson.errors[0] : responseJson.message || "Failed when trying to post data");
-        } else {
-          throw ("Failed when trying to post data");
-        }
+  try {
+    const isCreating = ['Create', 'Copy', 'Tambah'].includes(actionText.value);
+    const dataURL = `${store.server.url_backend}/operation${endpointApi}${isCreating ? '' : ('/' + route.params.id)}`;
+    isRequesting.value = true;
+    values.is_active = values.is_active ? 1 : 0
+    const res = await fetch(dataURL, {
+      method: isCreating ? 'POST' : 'PUT',
+      headers: {
+        'Content-Type': 'Application/json',
+        Authorization: `${store.user.token_type} ${store.user.token}`
+      },
+      body: JSON.stringify(values)
+    });
+    if (!res.ok) {
+      if ([400, 422].includes(res.status)) {
+        const responseJson = await res.json();
+        formErrors.value = responseJson.errors || {};
+        throw (responseJson.errors.length ? responseJson.errors[0] : responseJson.message || "Failed when trying to post data");
+      } else {
+        throw ("Failed when trying to post data");
       }
-      router.replace('/' + modulPath + '?reload='+(Date.parse(new Date())));
-    } catch (err) {
-      isBadForm.value = true;
-      swal.fire({
-        icon: 'error',
-        text: err
-      });
     }
-    isRequesting.value = false;
-    }
+    router.replace('/' + modulPath + '?reload=' + (Date.parse(new Date())));
+  } catch (err) {
+    isBadForm.value = true;
+    swal.fire({
+      icon: 'error',
+      text: err
+    });
+  }
+  isRequesting.value = false;
+}
 
 //  @else----------------------- LANDING
 const activeBtn = ref(null)
@@ -195,7 +195,7 @@ const landing = reactive({
       class: 'bg-green-600 text-light-100',
       // show: (row) => (currentMenu?.can_read)||store.user.data.username==='developer',
       click(row) {
-        router.push(`${route.path}/${row.id}?`+tsId)
+        router.push(`${route.path}/${row.id}?` + tsId)
       }
     },
     {
@@ -204,7 +204,7 @@ const landing = reactive({
       class: 'bg-blue-600 text-light-100',
       // show: (row) => (currentMenu?.can_update)||store.user.data.username==='developer',
       click(row) {
-        router.push(`${route.path}/${row.id}?action=Edit&`+tsId)
+        router.push(`${route.path}/${row.id}?action=Edit&` + tsId)
       }
     },
     {
@@ -212,7 +212,7 @@ const landing = reactive({
       title: "Copy",
       class: 'bg-gray-600 text-light-100',
       click(row) {
-        router.push(`${route.path}/${row.id}?action=Copy&`+tsId)
+        router.push(`${route.path}/${row.id}?action=Copy&` + tsId)
       }
     }
   ],
@@ -253,57 +253,57 @@ const landing = reactive({
     field: 'modul',
     filter: true,
     sortable: true,
-    flex:1,
+    flex: 1,
     filter: 'ColFilter',
     resizable: true,
-    wrapText:true,
-    cellClass: [ 'border-r', '!border-gray-200', 'justify-start']
+    wrapText: true,
+    cellClass: ['border-r', '!border-gray-200', 'justify-start']
   },
   {
     field: 'submodul',
     filter: true,
     sortable: true,
-    flex:1,
+    flex: 1,
     filter: 'ColFilter',
     resizable: true,
-    wrapText:true,
-    cellClass: [ 'border-r', '!border-gray-200', 'justify-start']
+    wrapText: true,
+    cellClass: ['border-r', '!border-gray-200', 'justify-start']
   },
   {
     field: 'menu',
     filter: true,
     sortable: true,
     filter: 'ColFilter',
-    resizable: true,wrapText:true,
-    flex:1,
-    cellClass: [ 'border-r', '!border-gray-200', 'justify-start']
+    resizable: true, wrapText: true,
+    flex: 1,
+    cellClass: ['border-r', '!border-gray-200', 'justify-start']
   },
   {
     field: 'path',
     filter: true,
     sortable: true,
     filter: 'ColFilter',
-    resizable: true, wrapText:true,
-    flex:1,
-    cellClass: [ 'border-r', '!border-gray-200', 'justify-start']
+    resizable: true, wrapText: true,
+    flex: 1,
+    cellClass: ['border-r', '!border-gray-200', 'justify-start']
   },
   {
     field: 'icon',
     filter: true,
     sortable: true,
     filter: 'ColFilter',
-    resizable: true, wrapText:true,
-    flex:1,
-    cellClass: [ 'border-r', '!border-gray-200', 'justify-start']
+    resizable: true, wrapText: true,
+    flex: 1,
+    cellClass: ['border-r', '!border-gray-200', 'justify-start']
   },
   {
     field: 'sequence',
     filter: true,
     sortable: true,
     filter: 'ColFilter',
-    resizable: true, wrapText:true,
-    flex:1,
-    cellClass: [ 'border-r', '!border-gray-200', 'justify-end']
+    resizable: true, wrapText: true,
+    flex: 1,
+    cellClass: ['border-r', '!border-gray-200', 'justify-end']
   },
   {
     headerName: 'Status',
@@ -337,4 +337,4 @@ onActivated(() => {
 })
 
 //  @endif -------------------------------------------------END
-watchEffect(()=>store.commit('set', ['isRequesting', isRequesting.value]))
+watchEffect(() => store.commit('set', ['isRequesting', isRequesting.value]))

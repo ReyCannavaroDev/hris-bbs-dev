@@ -251,77 +251,35 @@
             />
         </div>
 
-        <div v-show="route.query.is_approval">
-          <table class=" w-[100%] my-3 border">
+        <div v-show="route.query.is_approval || values.status === 'IN APPROVAL'">
+          <div class="flex items-center mb-2 mt-3">
+            <button
+                type="button"
+                @click="openModal(values?.trx?.id ?? 0)"
+                class="flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-blue-700 bg-blue-50 border border-blue-200 rounded hover:bg-blue-100 transition duration-150">
+                <icon fa="table" size="sm"/>
+                Log Approval
+            </button>
+          </div>
+          <table class="w-[100%] mb-3 border">
             <tr class="border">
-              <td class="border px-2 py-1 font-semibold">Nomor</td>
+              <td class="border px-2 py-1 font-semibold w-1/3">Nomor</td>
               <td class="border px-2 py-1">{{ values.approval?.nomor ?? '-' }}</td>
             </tr>
             <tr class="border">
-              <td class="border px-2 py-1 font-semibold">Tanggal</td>
+              <td class="border px-2 py-1 font-semibold w-1/3">Tanggal</td>
               <td class="border px-2 py-1">{{ values.approval?.created_at ?? '-' }}</td>
             </tr>
             <tr class="border">
-              <td class="border px-2 py-1 font-semibold">Pemohon</td>
+              <td class="border px-2 py-1 font-semibold w-1/3">Pemohon</td>
               <td class="border px-2 py-1">{{ values.approval?.creator ?? '-' }}</td>
             </tr>
             <tr class="border">
-              <td class="border px-2 py-1 font-semibold">Status</td>
+              <td class="border px-2 py-1 font-semibold w-1/3">Status</td>
               <td class="border px-2 py-1">{{ values.approval?.status ?? '-' }}</td>
             </tr>
           </table>
         </div>
-        <div class="">
-          <table class=" w-[100%] my-3 ">
-            <tr>
-              <td class=" px-2 py-1">
-                <button
-                    v-show="route.query.is_approval"
-                    @click="openModal(values?.trx?.id ?? 0)"
-                    class="hover:text-blue-500">
-                    <icon fa="table" size="sm"/>
-                    Log Approval
-                  </button>
-              </td>
-            </tr>
-            <!-- <tr v-show="isFinish || isApproved">
-                <td class=" px-2 py-1">
-                  <button
-                    @click="downloadDoc()" 
-                    class="hover:text-blue-500">
-                    <icon fa="download" size="sm"/>
-                    Download .docx
-                  </button>
-                </td>
-              </tr> -->
-          </table>
-        </div>
-        <!-- <div class=""> 
-            <table class=" w-[100%] my-3 ">
-               <tr>
-                <td class=" px-2 py-1">
-                  <button
-                    v-show="route.query.is_approval"
-                    @click="openModal(values?.trx?.id ?? 0)" 
-                    class="hover:text-blue-500">
-                    <icon fa="table" size="sm"/>
-                    Log Approval
-                  </button>
-                </td>
-              </tr>
-              <tr v-show="isFinish || isApproved">
-                <td class=" px-2 py-1">
-                  <button
-                    @click="downloadDoc()" 
-                    class="hover:text-blue-500">
-                    <icon fa="download" size="sm"/>
-                    Download .docx
-                  </button>
-                </td>
-              </tr>
-            </table>
-          </div> -->
-
 
         <!-- END COLUMN -->
       </div>
@@ -358,7 +316,7 @@
                   <td class="border px-2 py-1">{{ i+1 }}</td>
                   <td class="border px-2 py-1">{{ d.trx_nomor ?? '-' }}</td>
                   <td class="border px-2 py-1">{{ d.action_type ?? '-' }}</td>
-                  <td class="border px-2 py-1">{{ d.action_at ?? '-' }}</td>
+                  <td class="border px-2 py-1">{{ formatDateTime(d.action_at) }}</td>
                   <td class="border px-2 py-1">{{ d.action_user ?? '-' }}</td>
                   <td class="border px-2 py-1">{{ d.action_note ?? '-' }}</td>
                 </tr>
@@ -379,7 +337,7 @@
           :errorText="formErrors.catatan?'failed':''" @input="v=>values.catatan=v" :hints="formErrors.catatan"
           :check="false" label="" placeholder="Tuliskan catatan" />
       </div>
-       <div class="flex flex-row justify-end space-x-[20px] mt-[1em]">
+      <div class="flex flex-row justify-end items-center space-x-[20px] mt-6 w-full ml-auto">
         <button v-show="route.query.is_approval" class="mx-1 bg-green-500 text-white hover:bg-green-600 rounded-[4px] px-[36.5px] py-[5px]" @click="onProcess('approve')">
               Approve
             </button>

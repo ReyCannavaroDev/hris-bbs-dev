@@ -76,6 +76,12 @@ const values = reactive({
   cuti_p24_terpakai: 0,
   sisa_cuti_reguler: 0,
   sisa_cuti_masa_kerja: 0,
+  cuti_1_hari: 0,
+  cuti_satu_hari_terpakai: 0,
+  sisa_cuti_1_hari: 0,
+  cuti_reguler_terpakai: 0,
+  p24_total_jam: 0,
+  p24_konversi_hari: 0,
 })
 
 const valuesPendidikan = reactive({
@@ -168,11 +174,11 @@ onBeforeMount(async () => {
         detailArr_i_cuti.value.push(initialValues.info_cuti)
         console.log('detailCuti', detailArr_i_cuti.value)
 
-        values.cuti_1_hari = initialValues.info_cuti.cuti_satu_hari
-        values.sisa_cuti_1_hari = initialValues.info_cuti.sisa_cuti_satu_hari
-        values.cuti_setengah_hari = initialValues.info_cuti.cuti_setengah_hari
-        values.sisa_cuti_setengah_hari = initialValues.info_cuti.sisa_cuti_setengah_hari
-        values.cuti_setengah_terpakai = initialValues.info_cuti.cuti_terpakai
+        values.cuti_1_hari = initialValues.info_cuti.cuti_reguler ?? initialValues.cuti_reguler ?? initialValues.info_cuti.cuti_satu_hari ?? initialValues.info_cuti.cuti_1_hari ?? 0
+        values.cuti_satu_hari_terpakai = initialValues.info_cuti.cuti_reguler_terpakai ?? initialValues.cuti_reguler_terpakai ?? initialValues.info_cuti.cuti_satu_hari_terpakai ?? 0
+        values.sisa_cuti_1_hari = initialValues.info_cuti.sisa_cuti_reguler ?? initialValues.sisa_cuti_reguler ?? initialValues.info_cuti.sisa_cuti_satu_hari ?? initialValues.info_cuti.sisa_cuti_1_hari ?? 0
+        values.p24_total_jam = initialValues.info_cuti.p24_total_jam ?? initialValues.p24_total_jam ?? 0
+        values.p24_konversi_hari = initialValues.info_cuti.p24_konversi_hari ?? initialValues.p24_konversi_hari ?? 0
         values.masa_kerja = initialValues.info_cuti.masa_kerja
         values.remaining_days = initialValues.info_cuti.remaining_days
       }

@@ -766,55 +766,51 @@
         <div class="col-span-8 md:col-span-6">
           <div class="grid grid-cols-12 items-center gap-1 ">
             <div class="grid grid-cols-12 col-span-6">
-              <label class="col-span-12">Jatah Cuti Tahunan<label class="text-red-500 space-x-0 pl-0"></label></label>
+              <label class="col-span-12">Jatah Cuti Tahunan (Hari)<label class="text-red-500 space-x-0 pl-0"></label></label>
               <FieldX :bind="{ readonly: true }" type="number" class="col-span-12 !mt-0 w-full"
-                :value="values.cuti_1_hari" label="" placeholder="Tuliskan Jatah Cuti Reguler"
+                :value="values.cuti_1_hari" label="" placeholder="Jatah Cuti Tahunan"
                 :errorText="formErrors.cuti_1_hari?'failed':''" @input="v=>values.cuti_1_hari=v"
                 :hints="formErrors.cuti_1_hari" :check="false" />
             </div>
             <div class="grid grid-cols-12 col-span-6">
-              <label class="col-span-12">Sisa Cuti Tahunan<label class="text-red-500 space-x-0 pl-0"></label></label>
+              <label class="col-span-12">Cuti Tahunan Terpakai (Hari)<label class="text-red-500 space-x-0 pl-0"></label></label>
               <FieldX :bind="{ readonly: true }" type="number" class="col-span-12 !mt-0 w-full"
-                :value="values.sisa_cuti_1_hari" label="" placeholder="Tuliskan Sisa Jatah Cuti Reguler"
-                :errorText="formErrors.sisa_cuti_1_hari?'failed':''" @input="v=>values.sisa_cuti_1_hari=v"
-                :hints="formErrors.sisa_cuti_1_hari" :check="false" />
-            </div>
-          </div>
-        </div>
-
-        <div class="col-span-8 md:col-span-6">
-          <div class="grid grid-cols-12 items-center gap-1 ">
-            <div class="grid grid-cols-12 col-span-6">
-              <label class="col-span-12">Jatah Cuti Setengah Hari<label class="text-red-500 space-x-0 pl-0"></label></label>
-              <FieldX :bind="{ readonly: true }" type="number" class="col-span-12 !mt-0 w-full"
-                :value="values.cuti_setengah_hari" label="" :errorText="formErrors.cuti_setengah_hari?'failed':''"
-                @input="v=>values.cuti_setengah_hari=v" :hints="formErrors.cuti_setengah_hari" :check="false" />
-            </div>
-            <div class="grid grid-cols-12 col-span-6">
-              <label class="col-span-12">Sisa Cuti Setengah Hari<label class="text-red-500 space-x-0 pl-0"></label></label>
-              <FieldX :bind="{ readonly: true }" type="number" class="col-span-12 !mt-0 w-full"
-                :value="values.sisa_cuti_setengah_hari" label=""
-                :errorText="formErrors.sisa_cuti_setengah_hari?'failed':''" @input="v=>values.sisa_cuti_setengah_hari=v"
-                :hints="formErrors.sisa_cuti_setengah_hari" :check="false" />
-            </div>
-          </div>
-        </div>
-
-        <div class="col-span-8 md:col-span-6">
-          <div class="grid grid-cols-12 items-center gap-1 ">
-            <div class="grid grid-cols-12 col-span-6">
-              <label class="col-span-12">Cutih Tahunan Terpakai<label class="text-red-500 space-x-0 pl-0"></label></label>
-              <FieldX :bind="{ readonly: true }" type="number" class="col-span-12 !mt-0 w-full"
-                :value="values.cuti_satu_hari_terpakai" label=""
+                :value="values.cuti_satu_hari_terpakai" label="" placeholder="Cuti Tahunan Terpakai"
                 :errorText="formErrors.cuti_satu_hari_terpakai?'failed':''" @input="v=>values.cuti_satu_hari_terpakai=v"
                 :hints="formErrors.cuti_satu_hari_terpakai" :check="false" />
             </div>
+          </div>
+        </div>
+
+        <div class="col-span-8 md:col-span-6">
+          <div class="grid grid-cols-12 items-center gap-1 ">
             <div class="grid grid-cols-12 col-span-6">
-              <label class="col-span-12">Cuti 1/2 Hari Terpakai<label class="text-red-500 space-x-0 pl-0"></label></label>
+              <label class="col-span-12">Sisa Cuti Tahunan (Hari)<label class="text-red-500 space-x-0 pl-0"></label></label>
               <FieldX :bind="{ readonly: true }" type="number" class="col-span-12 !mt-0 w-full"
-                :value="values.cuti_setengah_terpakai" label=""
-                :errorText="formErrors.cuti_setengah_terpakai?'failed':''" @input="v=>values.cuti_setengah_terpakai=v"
-                :hints="formErrors.cuti_setengah_terpakai" :check="false" />
+                :value="values.sisa_cuti_1_hari" label="" placeholder="Sisa Cuti Tahunan"
+                :errorText="formErrors.sisa_cuti_1_hari?'failed':''" @input="v=>values.sisa_cuti_1_hari=v"
+                :hints="formErrors.sisa_cuti_1_hari" :check="false" />
+            </div>
+            <div class="grid grid-cols-12 col-span-6">
+              <label class="col-span-12">Akumulasi Cuti P24 (Jam)<label class="text-red-500 space-x-0 pl-0"></label></label>
+              <FieldX :bind="{ readonly: true }" type="number" class="col-span-12 !mt-0 w-full"
+                :value="values.p24_total_jam" label="" placeholder="Total Jam P24"
+                :errorText="formErrors.p24_total_jam?'failed':''" @input="v=>values.p24_total_jam=v"
+                :hints="formErrors.p24_total_jam" :check="false" />
+            </div>
+          </div>
+        </div>
+
+        <div class="col-span-8 md:col-span-6">
+          <div class="grid grid-cols-12 items-center gap-1 ">
+            <div class="grid grid-cols-12 col-span-6">
+              <label class="col-span-12">Konversi P24 (1 Hari = 8 Jam)<label class="text-red-500 space-x-0 pl-0"></label></label>
+              <FieldX :bind="{ readonly: true }" type="number" class="col-span-12 !mt-0 w-full"
+                :value="values.p24_konversi_hari" label="" placeholder="Konversi Hari"
+                :errorText="formErrors.p24_konversi_hari?'failed':''" @input="v=>values.p24_konversi_hari=v"
+                :hints="formErrors.p24_konversi_hari" :check="false" />
+            </div>
+            <div class="grid grid-cols-12 col-span-6">
             </div>
           </div>
         </div>

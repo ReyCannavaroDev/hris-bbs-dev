@@ -55,44 +55,10 @@
               :value="values.sisa_cuti_reguler" label="" placeholder="Tuliskan Sisa Jatah Cuti Reguler" :errorText="formErrors.sisa_cuti_reguler?'failed':''"
               @input="v=>values.sisa_cuti_reguler=v" :hints="formErrors.sisa_cuti_reguler" :check="false"
             />
-            <h5 v-show="values.tipe_key == '02'" class="text-red-600 !mt-[-0.5rem] text-right">Hasil Sisa Cuti Tahunan : {{informasiCuti.sisa_cuti_reguler}}</h5>
+            <h5 v-show="values.tipe_key == '02' || !values.tipe_key" class="text-red-600 !mt-[-0.5rem] text-right">Hasil Sisa Cuti Tahunan : {{informasiCuti.sisa_cuti_reguler}}</h5>
           </div>
         </div>
-        <div v-show="adjKary" class="grid grid-cols-2 gap-2">
-          <div>
-            <label class="col-span-12">Jatah Cuti Masa Kerja<label class="text-red-500 space-x-0 pl-0"></label></label>
-            <FieldX :bind="{ readonly: true }" type="number" class="col-span-12 py-2 !mt-0 w-full"
-              :value="values.cuti_masa_kerja" label="" :errorText="formErrors.cuti_masa_kerja?'failed':''"
-              @input="v=>values.cuti_masa_kerja=v" :hints="formErrors.cuti_masa_kerja" :check="false"
-            />
-          </div>
-          <div>
-            <label class="col-span-12">Sisa Cuti Masa Kerja<label class="text-red-500 space-x-0 pl-0"></label></label>
-            <FieldX :bind="{ readonly: true }" type="number" class="col-span-12 py-2 !mt-0 w-full"
-              :value="values.sisa_cuti_masa_kerja" label="" :errorText="formErrors.sisa_cuti_masa_kerja?'failed':''"
-              @input="v=>values.sisa_cuti_masa_kerja=v" :hints="formErrors.sisa_cuti_masa_kerja" :check="false"
-            />
-            <h5 v-show="values.tipe_key == '01'" class="text-red-600 !mt-[-0.5rem] text-right">Hasil Sisa Cuti Masa Kerja : {{informasiCuti.sisa_cuti_masa_kerja}}</h5>
-          </div>
-        </div>
-        <div v-show="adjKary" class="grid grid-cols-2 gap-2">
-          <div>
-            <label class="col-span-12">Jatah Cuti P24<label class="text-red-500 space-x-0 pl-0"></label></label>
-            <FieldX :bind="{ readonly: true }" type="number" class="col-span-12 py-2 !mt-0 w-full"
-              :value="values.cuti_p24" label="" :errorText="formErrors.cuti_p24?'failed':''"
-              @input="v=>values.cuti_p24=v" :hints="formErrors.cuti_p24" :check="false"
-            />
-          </div>
-          <div>
-            <label class="col-span-12">Sisa Cuti P24<label class="text-red-500 space-x-0 pl-0"></label></label>
-            <FieldX :bind="{ readonly: true }" type="number" class="col-span-12 py-2 !mt-0 w-full"
-              :value="values.sisa_cuti_p24" label="" :errorText="formErrors.sisa_cuti_p24?'failed':''"
-              @input="v=>values.sisa_cuti_p24=v" :hints="formErrors.sisa_cuti_p24" :check="false"
-            />
-            
-            <h5 v-show="values.tipe_key == '03'" class="text-red-600 !mt-[-0.5rem] text-right">Hasil Sisa Cuti P24 : {{informasiCuti.sisa_cuti_p24}}</h5>
-          </div>
-        </div>
+        <!-- Field Cuti Masa Kerja dan Cuti P24 disembunyikan (P24 langsung memotong cuti tahunan dan cuti masa kerja tidak digunakan) -->
         <div>
           <label class="col-span-12">Tanggal<label class="text-red-500 space-x-0 pl-0">*</label></label>
           <FieldX :bind="{ readonly: true, disabled:true }" type='date' class="w-full py-2 !mt-0" :value="values.date"
@@ -225,7 +191,7 @@
               simplest: true,
               transform: false,
               join: true,
-              where:`this.group='TIPE CUTI' AND this.is_active='true'`,
+              where:`this.group='TIPE CUTI' AND this.is_active='true' AND (this.key='02' OR this.value ILIKE '%Tahunan%' OR this.value ILIKE '%Reguler%')`,
               selectfield: 'this.id, this.code, this.value, this.is_active, this.key'
               }
               }" :check="false" />

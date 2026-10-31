@@ -76,6 +76,9 @@ const values = reactive({
   cuti_p24_terpakai: 0,
   sisa_cuti_reguler: 0,
   sisa_cuti_masa_kerja: 0,
+  cuti_reguler_terpakai: 0,
+  p24_total_jam: 0,
+  p24_konversi_hari: 0,
 
 })
 

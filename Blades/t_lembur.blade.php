@@ -316,7 +316,7 @@
             </tr>
             <tr class="border">
               <td class="border px-2 py-1 font-semibold">Tanggal</td>
-              <td class="border px-2 py-1">{{ formatDateTime(values.approval?.created_at) }}</td>
+              <td class="border px-2 py-1">{{ values.approval?.created_at ?? '-' }}</td>
             </tr>
             <tr class="border">
               <td class="border px-2 py-1 font-semibold">Pemohon</td>
@@ -387,7 +387,7 @@
 
 
       <!-- ACTION BUTTON START -->
-      <div class="flex flex-row justify-end space-x-[20px] mt-[1em]">
+      <div class="flex flex-row justify-end space-x-[20px] mt-[1em] w-full ml-auto">
         <button v-show="canApprove" class="mx-1 bg-green-500 text-white hover:bg-green-600 rounded-[4px] px-[36.5px] py-[5px]" @click="onProcess('approve')">
               Approve
             </button>
