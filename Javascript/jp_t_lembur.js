@@ -82,24 +82,36 @@ onBeforeMount(async () => {
             Authorization: `${store.user.token_type} ${store.user.token}`
           },
         })
+        if (!apiApp.ok) {
+          const errRes = await apiApp.json().catch(() => ({}));
+          throw new Error(errRes.message || "Approval data tidak ditemukan");
+        }
         const resultJson = await apiApp.json()
-        console.log(resultJson.data)
-        const apiTrx = await fetch(`${store.server.url_backend}/operation${endpointApi}/${resultJson.data.approval.trx_id}`, {
+        const appPayload = resultJson?.data || resultJson
+        const trxId = appPayload?.approval?.trx_id || appPayload?.trx?.id || route.params.id
+
+        const apiTrx = await fetch(`${store.server.url_backend}/operation${endpointApi}/${trxId}`, {
           headers: {
             'Content-Type': 'Application/json',
             Authorization: `${store.user.token_type} ${store.user.token}`
           },
         })
-        if (!apiTrx.ok || !apiApp.ok) throw new Error("Failed when trying to read data")
+        if (!apiTrx.ok) throw new Error("Failed when trying to read transaction data")
         const resultTrxJson = await apiTrx.json()
-        values.approval = resultJson?.data.approval
-        values.trx = resultJson?.data.trx
-        values.datalog = resultJson?.data.approval_log
-        initialValues = resultTrxJson.data
+        values.approval = appPayload?.approval || {}
+        if (values.approval?.created_at) {
+          values.approval.created_at = formatDateTime(values.approval.created_at)
+        }
+        values.trx = appPayload?.trx || {}
+        values.datalog = appPayload?.approval_log || []
+        initialValues = resultTrxJson?.data || {}
+        for (const key in initialValues) {
+          values[key] = initialValues[key]
+        }
 
         // logic finish & Approved data
         isApproved.value = resultTrxJson?.data?.lembur_status == 'APPROVED' ? true : false
-        isFinish.value = resultJson?.data?.approval?.tahap_saat_ini == resultJson?.data?.approval?.tahap_total ? true : false
+        isFinish.value = appPayload?.approval?.tahap_saat_ini == appPayload?.approval?.tahap_total ? true : false
       } else {
         const editedId = route.params.id
         dataURL = `${store.server.url_backend}/operation${endpointApi}/${editedId}`
@@ -152,7 +164,8 @@ onMounted(()=>{
 function openModal(id) {
   dataLog.items = []
   modalOpen.value = true
-  loadLog(id)
+  const targetId = (id && id !== 0) ? id : (values.trx?.id || values.approval?.trx_id || values.id || route.params.id)
+  loadLog(targetId)
 }
 
 function closeModal(i) {

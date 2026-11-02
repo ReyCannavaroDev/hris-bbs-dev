@@ -276,10 +276,100 @@ async function generatePerhitungan() {
              (item.periode.includes(expLabelAwal) && item.periode.includes(expLabelAkhir))
     })
 
+    // Integrasi: Tarik data perhitungan lembur untuk periode ini jika tersedia
+    try {
+      const lemburURL = `${store.server.url_backend}/operation/t_perhitungan_lembur`
+      const lemburParams = {
+        scopes: 'GenerateForFinal',
+        periode_awal: tglAwalFormatted,
+        periode_akhir: tglAkhirFormatted,
+        paginate: 9999
+      }
+      if (values.m_dir_id) lemburParams.m_dir_id = values.m_dir_id
+      if (values.m_divisi_id) lemburParams.m_divisi_id = values.m_divisi_id
+      if (values.m_dept_id) lemburParams.m_dept_id = values.m_dept_id
+
+      const resLembur = await fetch(lemburURL + '?' + new URLSearchParams(lemburParams), {
+        headers: {
+          'Content-Type': 'Application/json',
+          Authorization: `${store.user.token_type} ${store.user.token}`,
+        }
+      })
+      if (resLembur.ok) {
+        const jsonLembur = await resLembur.json()
+        const dataLembur = jsonLembur.data || []
+        if (dataLembur.length) {
+          const lemburMap = {}
+          dataLembur.forEach((l) => {
+            const kId = l.m_kary_id
+            lemburMap[kId] = (lemburMap[kId] || 0) + Number(l.total_lembur || 0)
+          })
+
+          filteredData.forEach((item) => {
+            const nominalLembur = lemburMap[item.m_kary_id] || 0
+            if (nominalLembur > 0) {
+              if (typeof item.detail_gaji === 'string') {
+                try { item.detail_gaji = JSON.parse(item.detail_gaji) } catch (e) { item.detail_gaji = [] }
+              }
+              if (!Array.isArray(item.detail_gaji)) item.detail_gaji = []
+
+              const existingIdx = item.detail_gaji.findIndex((c) => c.label === 'Upah Lembur')
+              if (existingIdx >= 0) {
+                item.detail_gaji[existingIdx].value = nominalLembur
+              } else {
+                item.detail_gaji.push({
+                  label: 'Upah Lembur',
+                  factor: '+',
+                  value: nominalLembur,
+                  type: 'Lembur',
+                  can_adjust: 1
+                })
+              }
+              item.total_gaji = Number(item.total_gaji || 0) + nominalLembur
+              item.netto = Number(item.netto || 0) + nominalLembur
+            }
+          })
+
+          dataLembur.forEach((l) => {
+            const exists = filteredData.some((item) => item.m_kary_id === l.m_kary_id)
+            if (!exists && Number(l.total_lembur || 0) > 0) {
+              filteredData.push({
+                _id: ++_id,
+                t_perhitungan_gaji_id: null,
+                m_kary_id: l.m_kary_id,
+                'm_kary.nik': l['m_kary.nik'] || l.nik || '-',
+                'm_kary.nama_lengkap': l['m_kary.nama_lengkap'] || l.nama_lengkap || '-',
+                karyawan: l['m_kary.nama_lengkap'] || l.nama_lengkap || '-',
+                'm_kary_dir.nama': l['m_kary_dir.nama'] || '-',
+                'm_kary_divisi.nama': l['m_kary_divisi.nama'] || '-',
+                'm_kary_dept.nama': l['m_kary_dept.nama'] || '-',
+                periode: l.periode || expPeriode,
+                total_gaji: Number(l.total_lembur || 0),
+                total_tax: 0,
+                netto: Number(l.total_lembur || 0),
+                detail_gaji: [
+                  {
+                    label: 'Upah Lembur',
+                    factor: '+',
+                    value: Number(l.total_lembur || 0),
+                    type: 'Lembur',
+                    can_adjust: 1
+                  }
+                ],
+                deskripsi: l.deskripsi || ''
+              })
+            }
+          })
+        }
+      }
+    } catch (e) {
+      console.warn('Perhitungan lembur tidak ditemukan atau gagal dimuat:', e)
+    }
+
     if (!filteredData.length) {
       return swal.fire({
         icon: 'warning',
-        text: 'Tidak ditemukan data Perhitungan Gaji untuk periode ini. Pastikan Perhitungan Gaji sudah dilakukan terlebih dahulu.'
+        text: 'Tidak ditemukan data Perhitungan Gaji maupun Perhitungan Lembur untuk periode ini. Pastikan proses perhitungan sudah dilakukan terlebih dahulu.'
       })
     }
 

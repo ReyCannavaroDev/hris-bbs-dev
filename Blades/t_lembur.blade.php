@@ -32,11 +32,11 @@
           <h2 v-if="!is_approval" class="mx-4 font-sans text-xl flex justify-left font-bold">
             {{actionText==='Edit'?'Ubah':actionText}} Lembur
           </h2>
-          <h2 v-else-if="values.status === 'IN APPROVAL' && canApprove" class="mx-4 font-sans text-xl flex justify-left font-bold text-blue-700">
-            Approval Pengajuan Lembur
+          <h2 v-else-if="['IN APPROVAL', 'HALF APPROVED'].includes(values.status) && canApprove" class="mx-4 font-sans text-xl flex justify-left font-bold text-blue-700">
+            Approval Pengajuan Lembur ({{ values.status === 'HALF APPROVED' ? 'Tahap 2' : 'Tahap 1' }})
           </h2>
-          <h2 v-else-if="values.status === 'IN APPROVAL'" class="mx-4 font-sans text-xl flex justify-left font-bold text-gray-700">
-            Detail Lembur (In Approval - Read Only)
+          <h2 v-else-if="['IN APPROVAL', 'HALF APPROVED'].includes(values.status)" class="mx-4 font-sans text-xl flex justify-left font-bold text-gray-700">
+            Detail Lembur ({{ values.status === 'HALF APPROVED' ? 'Half Approved' : 'In Approval' }} - Read Only)
           </h2>
           <h2 v-else class="mx-4 font-sans text-xl flex justify-left font-bold">
             Notifikasi Approval Lembur
@@ -299,7 +299,7 @@
             :hints="formErrors.keterangan" :check="false" label="" placeholder="Tuliskan keterangan" />
         </div>
 
-        <div v-show="values.status === 'IN APPROVAL' || route.query.is_approval">
+        <div v-show="['IN APPROVAL', 'HALF APPROVED'].includes(values.status) || route.query.is_approval">
           <div class="flex items-center mb-2 mt-3">
             <button
                 type="button"
@@ -400,10 +400,10 @@
         <button v-show="route.query.action?.toLowerCase() === 'verifikasi'" @click="posted" class="bg-orange-500 hover:bg-orange-600 text-white px-[36.5px] py-[5px] font-semibold rounded-[4px] ">
             Posted
           </button>
-        <button v-show="!actionText || values.status === 'IN APPROVAL'" @click="onBack" class="bg-gray-500 hover:bg-gray-600 text-white px-[36.5px] py-[5px] font-semibold rounded-[4px]">
+        <button v-show="!actionText || ['IN APPROVAL', 'HALF APPROVED'].includes(values.status)" @click="onBack" class="bg-gray-500 hover:bg-gray-600 text-white px-[36.5px] py-[5px] font-semibold rounded-[4px]">
             Kembali
           </button>
-        <button v-show="actionText && values.status !== 'IN APPROVAL'" @click="onSave" class="bg-[#10B981] hover:bg-[#0ea774] text-white px-[36.5px] py-[5px] font-semibold rounded-[4px]">
+        <button v-show="actionText && !['IN APPROVAL', 'HALF APPROVED'].includes(values.status)" @click="onSave" class="bg-[#10B981] hover:bg-[#0ea774] text-white px-[36.5px] py-[5px] font-semibold rounded-[4px]">
             Simpan
           </button>
       </div>

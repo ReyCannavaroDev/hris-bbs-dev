@@ -44,10 +44,10 @@
           />
         </div>
         <div>
-          <label class="font-semibold">Divisi<span class="text-red-500 space-x-0 pl-0">*</span></label>
+          <label class="font-semibold">Divisi <span class="text-xs text-gray-500 font-normal">(Kosongkan jika berlaku umum)</span></label>
           <FieldSelect
             class="w-full py-2 !mt-0"
-            :bind="{ disabled: !actionText, clearable:false }"
+            :bind="{ disabled: !actionText, clearable:true }"
             :value="values.m_divisi_id" 
             :check="false"
             @input="(v)=>{
@@ -61,7 +61,6 @@
             :api="{
                 url: `${store.server.url_backend}/operation/m_divisi`,
                 headers: {
-                  //'Content-Type': 'Application/json',
                   Authorization: `${store.user.token_type} ${store.user.token}`
                 },
                 params: {
@@ -74,10 +73,10 @@
             fa-icon="search" :check="true" />
         </div>
         <div>
-          <label class="font-semibold">Departemen<span class="text-red-500 space-x-0 pl-0">*</span></label>
+          <label class="font-semibold">Departemen <span class="text-xs text-gray-500 font-normal">(Kosongkan jika berlaku umum)</span></label>
           <FieldSelect
             class="w-full py-2 !mt-0"
-            :bind="{ disabled: !actionText, clearable:false }"
+            :bind="{ disabled: !actionText, clearable:true }"
             :value="values.m_dept_id" 
             :check="false"
             @input="(v)=>{
@@ -90,7 +89,6 @@
             :api="{
                 url: `${store.server.url_backend}/operation/m_dept`,
                 headers: {
-                  //'Content-Type': 'Application/json',
                   Authorization: `${store.user.token_type} ${store.user.token}`
                 },
                 params: {
@@ -104,16 +102,14 @@
             fa-icon="search" :check="true" />
         </div>
         <div>
-          <label class="font-semibold">Grading<span class="text-red-500 space-x-0 pl-0">*</span></label>
+          <label class="font-semibold">Grading <span class="text-xs text-gray-500 font-normal">(Kosongkan jika berlaku umum)</span></label>
           <FieldSelect
             class="w-full py-2 !mt-0"
-            :bind="{ disabled: !actionText, clearable:false }"
+            :bind="{ disabled: !actionText, clearable:true }"
             :value="values.grading_id" 
             :check="false"
             @input="(v)=>{
-              //$log(v)
               values.grading_id=v
-              //$log(values.grading_id)
             }"
             :errorText="formErrors.grading_id?'failed':''"
             :hints="formErrors.grading_id"
@@ -122,7 +118,6 @@
             :api="{
                 url: `${store.server.url_backend}/operation/m_general`,
                 headers: {
-                  //'Content-Type': 'Application/json',
                   Authorization: `${store.user.token_type} ${store.user.token}`
                 },
                 params: {
@@ -135,8 +130,8 @@
             fa-icon="search" :check="true" />
         </div>
         <div>
-          <label class="font-semibold">Besaran <span class="text-red-500 space-x-0 pl-0">*</span></label>
-          <FieldX :bind="{ readonly: !actionText }" class="w-full py-2 !mt-0"
+          <label class="font-semibold">Tarif / Jam (Besaran) <span class="text-red-500 space-x-0 pl-0">*</span></label>
+          <FieldNumber :bind="{ readonly: !actionText }" class="w-full py-2 !mt-0"
               :value="values.besaran" :errorText="formErrors.besaran?'failed':''"
               @input="v=>values.besaran=v" :hints="formErrors.besaran" 
               :check="false"

@@ -31,14 +31,14 @@ const is_superadmin = ref(false);
 
 const isReadOnly = computed(() => {
   if (['Create', 'Copy', 'Tambah'].includes(actionText.value)) return false
-  if (values.status === 'IN APPROVAL' || is_approval) return true
+  if (['IN APPROVAL', 'HALF APPROVED'].includes(values.status) || is_approval) return true
   return !actionText.value
 })
 
 const canApprove = computed(() => {
-  if (values.status !== 'IN APPROVAL' && !is_approval) return false
+  if (!['IN APPROVAL', 'HALF APPROVED'].includes(values.status) && !is_approval) return false
+  if (values.can_approve !== undefined) return Boolean(values.can_approve)
   if (store.user.data?.is_superadmin) return true
-  if (values.can_approve) return true
   const userKaryId = store.user.data?.m_kary_id
   const atasanKaryId = values['m_kary.atasan_id'] || values.m_kary?.atasan_id || values.atasan_id
   if (userKaryId && atasanKaryId && userKaryId == atasanKaryId) return true
@@ -98,27 +98,36 @@ onBeforeMount(async () => {
             Authorization: `${store.user.token_type} ${store.user.token}`
           },
         })
+        if (!apiApp.ok) {
+          const errRes = await apiApp.json().catch(() => ({}));
+          throw new Error(errRes.message || "Approval data tidak ditemukan");
+        }
         const resultJson = await apiApp.json()
-        console.log(resultJson.data)
-        const apiTrx = await fetch(`${store.server.url_backend}/operation${endpointApi}/${resultJson.data.approval.trx_id}`, {
+        const appPayload = resultJson?.data || resultJson
+        const trxId = appPayload?.approval?.trx_id || appPayload?.trx?.id || route.params.id
+
+        const apiTrx = await fetch(`${store.server.url_backend}/operation${endpointApi}/${trxId}`, {
           headers: {
             'Content-Type': 'Application/json',
             Authorization: `${store.user.token_type} ${store.user.token}`
           },
         })
-        if (!apiTrx.ok || !apiApp.ok) throw new Error("Failed when trying to read data")
+        if (!apiTrx.ok) throw new Error("Failed when trying to read transaction data")
         const resultTrxJson = await apiTrx.json()
-        values.approval = resultJson?.data.approval
+        values.approval = appPayload?.approval || {}
         if (values.approval?.created_at) {
           values.approval.created_at = formatDateTime(values.approval.created_at)
         }
-        values.trx = resultJson?.data.trx
-        values.datalog = resultJson?.data.approval_log
-        initialValues = resultTrxJson.data
+        values.trx = appPayload?.trx || {}
+        values.datalog = appPayload?.approval_log || []
+        initialValues = resultTrxJson?.data || {}
+        for (const key in initialValues) {
+          values[key] = initialValues[key]
+        }
 
         // logic finish & Approved data
         isApproved.value = resultTrxJson?.data?.lembur_status == 'APPROVED' ? true : false
-        isFinish.value = resultJson?.data?.approval?.tahap_saat_ini == resultJson?.data?.approval?.tahap_total ? true : false
+        isFinish.value = appPayload?.approval?.tahap_saat_ini == appPayload?.approval?.tahap_total ? true : false
       } else {
         const editedId = route.params.id
         dataURL = `${store.server.url_backend}/operation${endpointApi}/${editedId}`
@@ -141,8 +150,8 @@ onBeforeMount(async () => {
           values[key] = initialValues[key]
         }
 
-        // Jika status transaksi IN APPROVAL, load juga info approval & cek akses approval
-        if (values.status === 'IN APPROVAL') {
+        // Jika status transaksi IN APPROVAL atau HALF APPROVED, load juga info approval & cek akses approval
+        if (['IN APPROVAL', 'HALF APPROVED'].includes(values.status)) {
           try {
             const apiApp = await fetch(`${store.server.url_backend}/operation/t_lembur/detail?trx_id=${editedId}`, {
               headers: {
@@ -254,7 +263,8 @@ function formatDateTime(val) {
 function openModal(id) {
   dataLog.items = []
   modalOpen.value = true
-  loadLog(id)
+  const targetId = (id && id !== 0) ? id : (values.trx?.id || values.approval?.trx_id || values.id || route.params.id)
+  loadLog(targetId)
 }
 
 function closeModal(i) {
@@ -290,7 +300,7 @@ function onReset() {
 
 let dataLog = reactive({ items: [] })
 async function loadLog(id) {
-  const targetId = id || values.trx?.id || values.id || route.params.id
+  const targetId = (id && id !== 0) ? id : (values.trx?.id || values.approval?.trx_id || values.id || route.params.id)
   const url = `${store.server.url_backend}/operation/t_lembur/log?id=${targetId}`
   const res = await fetch(url, {
     headers: {
@@ -404,16 +414,15 @@ function onProcess(typePar) {
         });
 
         if (!res.ok) {
-          const responseJson = await res.json();
-          if ([400, 422, 500].includes(res.status)) {
+          let errorMsg = 'Failed when trying to process approval';
+          try {
+            const responseJson = await res.json();
             formErrors.value = responseJson.errors || {};
-            if (res.status === 422) {
-              throw new Error(responseJson.message + " Pastikan anda sudah mengisi semua kolom dengan tanda bintang merah");
-            }
-            throw new Error(responseJson.message || "Failed when trying to post data");
-          } else {
-            throw new Error("Failed when trying to post data");
+            errorMsg = responseJson.message || (responseJson.errors ? Object.values(responseJson.errors).flat().join(', ') : errorMsg);
+          } catch (e) {
+            errorMsg = `Server error HTTP ${res.status}: ${res.statusText}`;
           }
+          throw new Error(errorMsg);
         } else {
           // Success case
           swal.fire({
@@ -735,17 +744,20 @@ const landing = reactive({
     resizable: true,
     flex: 1,
     cellClass: ['border-r', '!border-gray-200', 'justify-center'],
-    cellRenderer: ({ value }) => {
+    cellRenderer: (params) => {
+      const value = params?.value || ''
       let color = 'gray'
       if (value == 'APPROVED')
         color = 'green'
+      else if (value == 'HALF APPROVED')
+        color = 'amber'
       else if (value == 'IN APPROVAL')
         color = 'blue'
       else if (value == 'REVISED')
         color = 'yellow'
       else if (value == 'REJECTED')
         color = 'red'
-      return `<span class="text-${color}-500 rounded-md text-xs font-medium px-4 py-1 inline-block capitalize">${value}</span>`
+      return `<span class="text-${color}-600 bg-${color}-50 border border-${color}-200 rounded-md text-xs font-semibold px-2.5 py-0.5 inline-block">${value}</span>`
     }
   }]
 })

@@ -232,8 +232,8 @@ const landing = reactive({
     cellClass: ['justify-center', 'bg-gray-50', 'border-r', '!border-gray-200']
   },
   {
-    field: 'm_dir.nama',
-    headerName: 'Direktorat',
+    field: 'kode',
+    headerName: 'Kode',
     filter: true,
     sortable: true,
     flex:1,
@@ -242,8 +242,8 @@ const landing = reactive({
     cellClass: [ 'border-r', '!border-gray-200', 'justify-left']
   },
   {
-    field: 'kode',
-    headerName: 'Kode',
+    field: 'm_dir.nama',
+    headerName: 'Company',
     filter: true,
     sortable: true,
     flex:1,
@@ -260,6 +260,7 @@ const landing = reactive({
     resizable: true,
     flex:1,
     cellClass: [ 'border-r', '!border-gray-200', 'justify-left', 'capitalize'],
+    valueGetter: (params) => params.data?.['m_divisi.nama'] || params.data?.m_divisi?.nama || 'Semua Divisi'
   },
   {
     field: 'm_dept.nama',
@@ -269,7 +270,8 @@ const landing = reactive({
     filter: 'ColFilter',
     resizable: true,
     flex:1,
-    cellClass: [ 'border-r', '!border-gray-200', 'justify-left', 'capitalize']
+    cellClass: [ 'border-r', '!border-gray-200', 'justify-left', 'capitalize'],
+    valueGetter: (params) => params.data?.['m_dept.nama'] || params.data?.m_dept?.nama || 'Semua Dept'
   },
   {
     field: 'grading',
@@ -279,17 +281,22 @@ const landing = reactive({
     filter: 'ColFilter',
     resizable: true,
     flex:1,
-    cellClass: [ 'border-r', '!border-gray-200', 'justify-left', 'capitalize']
+    cellClass: [ 'border-r', '!border-gray-200', 'justify-left', 'capitalize'],
+    valueGetter: (params) => params.data?.grading || 'Semua Grading'
   },
   {
     field: 'besaran',
-    headerName: 'Besaran',
+    headerName: 'Tarif / Jam',
     filter: true,
     sortable: true,
     filter: 'ColFilter',
     resizable: true,
     flex:1,
-    cellClass: [ 'border-r', '!border-gray-200', 'justify-end', 'capitalize']
+    cellClass: [ 'border-r', '!border-gray-200', 'justify-end', 'font-semibold'],
+    valueFormatter: (params) => {
+      const val = Number(params.value || 0)
+      return 'Rp ' + val.toLocaleString('id-ID')
+    }
   }]
 })
 onActivated(() => {
