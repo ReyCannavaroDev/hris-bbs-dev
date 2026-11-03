@@ -104,10 +104,15 @@ Terdapat beberapa penyesuaian aturan bisnis (*business logic*) dan permintaan fi
 
 ---
 
-### 8. Sinkronisasi Status Resign & Inactive Karyawan (`m_kary`)
+### 8. Sinkronisasi Status Resign & Inactive Karyawan (`m_kary`) — ✅ Selesai Dikerjakan (Rey Cannavaro - 3 Nov 2026)
 - **Mekanisme Dua Arah (*Two-Way Trigger*):**
-  1. Jika user mengisi field `tanggal_berhenti_kerja` (tanggal keluar) $\rightarrow$ sistem otomatis mengubah status karyawan menjadi **Inactive** (`is_active = false`).
+  1. Jika user mengisi field `tanggal_berhenti_kerja` (tanggal keluar) $\rightarrow$ sistem otomatis mengubah status karyawan menjadi **Inactive** (`is_active = false` / `0`).
   2. Sebaliknya, jika toggle switch status karyawan diubah menjadi **Inactive** $\rightarrow$ field `tanggal_berhenti_kerja` otomatis terisi dengan tanggal hari ini.
+  3. Jika status diaktifkan kembali menjadi **Active** (rehire) $\rightarrow$ field `tanggal_berhenti_kerja` otomatis dibersihkan (`null`).
+- **Detail Implementasi:**
+  - Penambahan helper `onChangeStatusKaryawan` & `onChangeTanggalBerhenti` serta reactive `watch` dua arah di `Javascript/m_karyawan.js` dan `Blades/m_karyawan.blade.php` dengan proteksi flag `isInitialLoaded` agar data historis lama tidak tertimpa saat view/edit.
+  - Penambahan logika backend di `createBefore` dan `updateBefore` pada `Models/m_kary/Custom.php`.
+  - Sinkronisasi otomatis ke akun pengguna di `updateAfter`: jika status karyawan menjadi inaktif, user login (`default_users`) terkait otomatis dinonaktifkan (`is_active = 0`).
 
 ---
 
@@ -133,7 +138,7 @@ Terdapat beberapa penyesuaian aturan bisnis (*business logic*) dan permintaan fi
 | 4 | **Denda Keterlambatan Pembulatan ke Atas** | Mas Duta | ✅ Selesai | Formula `ceil($menit/30) * 25000`, history presensi harian, & dropdown rincian denda (`482ea06`) |
 | 5 | **Kolom Sisa Angsuran & Pelunasan Manual Kasbon (`t_potongan`)** | Mas Duta | ✅ Selesai | Kolom Sisa Angsuran di landing table & tombol/endpoint Pelunasan Manual (`482ea06`) |
 | 6 | **Gaji Pokok Per-Personal & Field `gaji_acuan` (UMK BPJS)** | Rey / Tim | ⏳ To Do | Master gaji karyawan & dasar pengali BPJS |
-| 7 | **Sinkronisasi Resign & Inactive Karyawan** | Rey / Tim | ⏳ To Do | Two-way trigger `tanggal_berhenti_kerja` $\leftrightarrow$ `is_active` |
+| 7 | **Sinkronisasi Resign & Inactive Karyawan** | Rey / Tim | ✅ Selesai | Two-way reactive trigger `tgl_berhenti` $\leftrightarrow$ `is_active` & auto-deactivate `default_users` |
 | 8 | **PPh 21 Disubsidi Perusahaan (Gross-up)** | Rey | ⏳ To Do | Tunjangan pajak agar take home pay utuh |
 | 9 | **Mutasi Karyawan Prorata (Opsi 2)** | Rey | ⏳ To Do | Split perhitungan hari kerja divisi lama vs divisi baru |
 | 10 | **Aturan Cuti 12 Hari & Split Izin Khusus** | Rey / Tim | ⏳ To Do | Batas 3 hari berturut-turut & izin khusus terpisah |
@@ -160,7 +165,7 @@ Berikut daftar tugas pengerjaan yang akan diselesaikan secara bertahap menuju pr
 ### Track 2: Master Karyawan & Master Upah (`m_kary` & `m_standart_gaji`)
 - [ ] **Task 2.1:** Tambahkan field `gaji_acuan` (basis UMK BPJS) pada migrasi dan model master gaji/karyawan.
 - [ ] **Task 2.2:** Sesuaikan input `m_kary` agar gaji pokok per-personal menjadi prioritas utama kalkulasi gaji.
-- [ ] **Task 2.3:** Buat logika sinkronisasi reaktif di `m_kary` antara toggle `is_active` dan field `tanggal_berhenti_kerja`.
+- [x] **Task 2.3:** Buat logika sinkronisasi reaktif di `m_kary` antara toggle `is_active` dan field `tanggal_berhenti_kerja`.
 
 ### Track 3: Engine Perhitungan Gaji & Pajak (`t_perhitungan_gaji` & `Cores`)
 - [x] **Task 3.1:** Ubah default rentang periode penggajian menjadi siklus cut-off tanggal 25 (tgl 26 bulan lalu s/d tgl 25 bulan berjalan) dan mingguan dinamis (`Javascript/t_perhitungan_gaji.js`, `d0ba545`).

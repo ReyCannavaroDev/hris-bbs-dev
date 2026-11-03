@@ -1,5 +1,5 @@
 import { useRouter, useRoute, RouterLink } from 'vue-router'
-import { ref, readonly, reactive, inject, onMounted, onBeforeMount, watchEffect, onActivated, computed } from 'vue'
+import { ref, readonly, reactive, inject, onMounted, onBeforeMount, watchEffect, onActivated, computed, watch, nextTick } from 'vue'
 
 const router = useRouter()
 const route = useRoute()
@@ -82,6 +82,78 @@ const values = reactive({
   cuti_reguler_terpakai: 0,
   p24_total_jam: 0,
   p24_konversi_hari: 0,
+})
+
+// --- SINKRONISASI REAKTIF DUA ARAH (TWO-WAY TRIGGER) RESIGN & INACTIVE ---
+const isInitialLoaded = ref(false)
+let isSyncingStatusResign = false
+
+const getTodayDate = () => {
+  const now = new Date()
+  const year = now.getFullYear()
+  const month = String(now.getMonth() + 1).padStart(2, '0')
+  const day = String(now.getDate()).padStart(2, '0')
+  return `${year}-${month}-${day}`
+}
+
+const onChangeStatusKaryawan = (val) => {
+  values.is_active = val
+  if (!isInitialLoaded.value || isSyncingStatusResign) return
+  isSyncingStatusResign = true
+  const isActive = (val === 1 || val === true || val === '1' || val === 'true')
+  if (!isActive) {
+    if (!values.tgl_berhenti) {
+      values.tgl_berhenti = getTodayDate()
+    }
+  } else {
+    if (values.tgl_berhenti) {
+      values.tgl_berhenti = null
+    }
+  }
+  nextTick(() => { isSyncingStatusResign = false })
+}
+
+const onChangeTanggalBerhenti = (val) => {
+  values.tgl_berhenti = val
+  if (!isInitialLoaded.value || isSyncingStatusResign) return
+  isSyncingStatusResign = true
+  if (val) {
+    values.is_active = 0
+  } else {
+    values.is_active = 1
+  }
+  nextTick(() => { isSyncingStatusResign = false })
+}
+
+watch(() => values.tgl_berhenti, (newVal, oldVal) => {
+  if (!isInitialLoaded.value || isSyncingStatusResign) return
+  isSyncingStatusResign = true
+  if (newVal) {
+    if (values.is_active !== 0) {
+      values.is_active = 0
+    }
+  } else if (oldVal && !newVal) {
+    if (values.is_active === 0) {
+      values.is_active = 1
+    }
+  }
+  nextTick(() => { isSyncingStatusResign = false })
+})
+
+watch(() => values.is_active, (newVal) => {
+  if (!isInitialLoaded.value || isSyncingStatusResign) return
+  isSyncingStatusResign = true
+  const isActive = (newVal === 1 || newVal === true || newVal === '1' || newVal === 'true')
+  if (!isActive) {
+    if (!values.tgl_berhenti) {
+      values.tgl_berhenti = getTodayDate()
+    }
+  } else {
+    if (values.tgl_berhenti) {
+      values.tgl_berhenti = null
+    }
+  }
+  nextTick(() => { isSyncingStatusResign = false })
 })
 
 const valuesPendidikan = reactive({
@@ -353,6 +425,7 @@ onBeforeMount(async () => {
   if (!isRead) {
     values.m_comp_id = store.user.data?.m_comp_id ?? 1
     values.m_dir_id = store.user.data?.m_dir_id ?? null
+    isInitialLoaded.value = true
   } else if (!values.m_comp_id) {
     values.m_comp_id = store.user.data?.m_comp_id ?? 1
   }
@@ -389,6 +462,10 @@ onBeforeMount(async () => {
     tempKTP = values.m_kary_det_kartu[0].ktp_foto
     tempKK = values.m_kary_det_kartu[0].kk_foto
   }
+
+  setTimeout(() => {
+    isInitialLoaded.value = true
+  }, 200)
 })
 
 async function getJadwalKerjaOffice() {

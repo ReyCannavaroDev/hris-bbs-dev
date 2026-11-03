@@ -28,6 +28,19 @@ class m_kary extends \App\Models\BasicModels\m_kary
             "cuti_jatah_reguler" => $arrayData['cuti_jatah_reguler'] ?? ((!empty($arrayData['tgl_masuk']) && Carbon::parse($arrayData['tgl_masuk'])->diffInYears(Carbon::now()) >= 1) ? 12 : 0),
             "cuti_sisa_reguler" => $arrayData['cuti_sisa_reguler'] ?? ((!empty($arrayData['tgl_masuk']) && Carbon::parse($arrayData['tgl_masuk'])->diffInYears(Carbon::now()) >= 1) ? 12 : 0),
         ]);
+
+        // Sinkronisasi status resign & inaktif
+        if (!empty($newArrayData['tgl_berhenti'])) {
+            $newArrayData['is_active'] = false;
+        } elseif (isset($newArrayData['is_active'])) {
+            $isActive = filter_var($newArrayData['is_active'], FILTER_VALIDATE_BOOLEAN, FILTER_NULL_ON_FAILURE);
+            if ($isActive === false || $newArrayData['is_active'] === 0 || $newArrayData['is_active'] === '0') {
+                if (empty($newArrayData['tgl_berhenti'])) {
+                    $newArrayData['tgl_berhenti'] = Carbon::now()->format('Y-m-d');
+                }
+            }
+        }
+
         return [
             "model" => $model,
             "data" => $newArrayData,
@@ -35,10 +48,43 @@ class m_kary extends \App\Models\BasicModels\m_kary
         ];
     }
 
+    public function updateBefore($model, $arrayData, $metaData, $id = null)
+    {
+        $newArrayData = $arrayData;
+
+        // Sinkronisasi Dua Arah (Two-Way Trigger) Status Resign & Inactive Karyawan
+        if (!empty($newArrayData['tgl_berhenti'])) {
+            // 1. Jika tanggal berhenti kerja diisi, otomatis ubah status menjadi Inactive
+            $newArrayData['is_active'] = false;
+        } elseif (array_key_exists('is_active', $newArrayData)) {
+            $isActive = filter_var($newArrayData['is_active'], FILTER_VALIDATE_BOOLEAN, FILTER_NULL_ON_FAILURE);
+            if ($isActive === false || $newArrayData['is_active'] === 0 || $newArrayData['is_active'] === '0') {
+                // 2. Jika switch status diubah menjadi Inactive dan tgl_berhenti belum ada, otomatis set tanggal hari ini
+                if (empty($newArrayData['tgl_berhenti'])) {
+                    $existing = \DB::table('m_kary')->where('id', $id)->first();
+                    $newArrayData['tgl_berhenti'] = !empty($existing->tgl_berhenti) ? $existing->tgl_berhenti : Carbon::now()->format('Y-m-d');
+                }
+            } elseif ($isActive === true || $newArrayData['is_active'] === 1 || $newArrayData['is_active'] === '1') {
+                // 3. Jika status diaktifkan kembali (Active/Rehire), bersihkan tanggal berhenti kerja
+                $newArrayData['tgl_berhenti'] = null;
+            }
+        }
+
+        return [
+            "model" => $model,
+            "data"  => $newArrayData,
+        ];
+    }
+
     public function updateAfter( $model, $arrayData, $metaData, $id=null )
     {
         if(@$arrayData['m_dir_id']){
             default_users::where('m_kary_id', $id)->update(['m_dir_id' => $arrayData['m_dir_id']]);
+        }
+        if(isset($arrayData['is_active'])){
+            $isActive = filter_var($arrayData['is_active'], FILTER_VALIDATE_BOOLEAN, FILTER_NULL_ON_FAILURE);
+            $boolVal = ($isActive === true || $arrayData['is_active'] === 1 || $arrayData['is_active'] === '1' || $arrayData['is_active'] === 'true');
+            default_users::where('m_kary_id', $id)->update(['is_active' => $boolVal ? 1 : 0]);
         }
     }
     

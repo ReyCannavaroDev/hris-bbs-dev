@@ -335,7 +335,7 @@
           <div class="grid grid-cols-12 items-center">
             <label class="col-span-12">Status<label class="text-red-500 space-x-0 pl-0">*</label></label>
             <FieldSelect :bind="{ disabled: !actionText, clearable:false }" class="col-span-12 !mt-0 w-full"
-              :value="values.is_active" @input="v=>values.is_active=v" :errorText="formErrors.is_active?'failed':''"
+              :value="values.is_active" @input="v=>{ values.is_active=v; onChangeStatusKaryawan(v) }" :errorText="formErrors.is_active?'failed':''"
               :hints="formErrors.is_active" label="" placeholder="Pilih Status"
               :options="[{'id' : 1 , 'key' : 'Active'},{'id': 0, 'key' : 'InActive'}]" valueField="id"
               displayField="key" :check="false" />
@@ -845,7 +845,7 @@
               <label class="col-span-12">Tanggal Berhenti Kerja<label class="text-red-500 space-x-0 pl-0"></label></label>
               <FieldX :bind="{ readonly: !actionText && !isProfile, disabled: !actionText && !isProfile }" type="date" class="col-span-12 !mt-0 w-full"
                 :value="values.tgl_berhenti" label="" :errorText="formErrors.tgl_berhenti?'failed':''"
-                @input="v=>values.tgl_berhenti=v" :hints="formErrors.tgl_berhenti" :check="false"
+                @input="v=>{ values.tgl_berhenti=v; onChangeTanggalBerhenti(v) }" :hints="formErrors.tgl_berhenti" :check="false"
               />
             </div>
           </div>
