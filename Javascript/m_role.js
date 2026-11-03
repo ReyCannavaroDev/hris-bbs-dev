@@ -481,7 +481,7 @@ const landing = reactive({
   },
   {
     headerName: 'Super Admin',
-    field: 'is_superadmin',
+    field: 'superadmin',
     filter: 'ColFilter',
     filterParams: {
       options: ['Yes', 'No']
@@ -506,7 +506,7 @@ const landing = reactive({
   },
   {
     headerName: 'Status',
-    field: 'is_active',
+    field: 'status',
     filter: 'ColFilter',
     filterParams: {
       options: ['Active', 'Inactive']

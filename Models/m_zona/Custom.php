@@ -70,9 +70,9 @@ class m_zona extends \App\Models\BasicModels\m_zona
         if ($status !== null) {
             $val = strtolower(trim((string)$status));
             if (in_array($val, ['active', 'true', '1'])) {
-                return $model->where('m_zona.is_active', true);
+                return $model->where('this.is_active', true);
             } elseif (in_array($val, ['inactive', 'false', '0'])) {
-                return $model->where('m_zona.is_active', false);
+                return $model->where('this.is_active', false);
             }
         }
     }

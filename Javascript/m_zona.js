@@ -1,5 +1,5 @@
 import { useRouter, useRoute, RouterLink } from 'vue-router'
-import { ref, readonly, reactive, inject, onMounted, onBeforeMount, watchEffect, onActivated } from 'vue'
+import { ref, readonly, reactive, inject, onMounted, onBeforeMount, watchEffect, onActivated, watch } from 'vue'
 
 const router = useRouter()
 const route = useRoute()
@@ -198,6 +198,99 @@ const res = await fetch(dataURL, {
 }
 
 //  @else----------------------- LANDING
+// Transform zona query to apply action button concept (where=this.is_active=true/false) to table column filters
+function transformZonaUrl(url) {
+  try {
+    if (!url || typeof url !== 'string') return url
+    if (!url.includes('m_zona')) return url
+    if (!url.includes('filter_is_active') && !url.includes('filter_status')) {
+      return url
+    }
+
+    const isRelative = url.startsWith('/')
+    const base = typeof window !== 'undefined' && window.location ? window.location.origin : 'http://localhost'
+    const urlObj = new URL(url, base)
+    const isActive = urlObj.searchParams.get('filter_is_active') ?? urlObj.searchParams.get('filter_status')
+    const currentWhere = urlObj.searchParams.get('where') || ''
+
+    let conds = []
+    if (currentWhere) {
+      conds = currentWhere.split(/\s+and\s+/i).map(c => c.trim()).filter(Boolean)
+    }
+
+    if (isActive !== null) {
+      const val = String(isActive).toLowerCase().trim()
+      const boolVal = (val === 'active' || val === 'true' || val === '1') ? 'true' : ((val === 'inactive' || val === 'false' || val === '0') ? 'false' : null)
+      conds = conds.filter(c => !/\bthis\.is_active\b/i.test(c))
+      if (boolVal !== null) {
+        conds.push('this.is_active=' + boolVal)
+      }
+      urlObj.searchParams.delete('filter_is_active')
+      urlObj.searchParams.delete('filter_status')
+    }
+
+    if (conds.length > 0) {
+      urlObj.searchParams.set('where', conds.join(' and '))
+    } else {
+      urlObj.searchParams.delete('where')
+    }
+
+    const cleanSearch = decodeURIComponent(urlObj.search).replace(/\+/g, ' ')
+    return isRelative ? (urlObj.pathname + cleanSearch) : (urlObj.origin + urlObj.pathname + cleanSearch)
+  } catch (e) {
+    console.error('Error transforming m_zona filter:', e)
+    return url
+  }
+}
+
+// 1. Intercept fetch & XMLHttpRequest
+if (typeof window !== 'undefined' && !window.__m_zona_filter_intercepted__) {
+  window.__m_zona_filter_intercepted__ = true
+
+  if (window.fetch) {
+    const originalFetch = window.fetch
+    window.fetch = async function (input, init) {
+      if (typeof input === 'string') {
+        input = transformZonaUrl(input)
+      } else if (input && input.url) {
+        const newUrl = transformZonaUrl(input.url)
+        if (newUrl !== input.url && typeof Request !== 'undefined') {
+          input = new Request(newUrl, input)
+        }
+      }
+      return originalFetch.call(this, input, init)
+    }
+  }
+
+  if (typeof XMLHttpRequest !== 'undefined' && XMLHttpRequest.prototype && XMLHttpRequest.prototype.open) {
+    const originalXhrOpen = XMLHttpRequest.prototype.open
+    XMLHttpRequest.prototype.open = function (method, url, ...rest) {
+      if (typeof url === 'string') {
+        url = transformZonaUrl(url)
+      }
+      return originalXhrOpen.call(this, method, url, ...rest)
+    }
+  }
+
+  if (window.axios && window.axios.interceptors && window.axios.interceptors.request) {
+    window.axios.interceptors.request.use(function (config) {
+      if (config && config.url) {
+        config.url = transformZonaUrl(config.url)
+      }
+      return config
+    })
+  }
+}
+
+if (store && store.axios && store.axios.interceptors && store.axios.interceptors.request) {
+  store.axios.interceptors.request.use(function (config) {
+    if (config && config.url) {
+      config.url = transformZonaUrl(config.url)
+    }
+    return config
+  })
+}
+
 const activeBtn = ref(null)
 
 function filterShowData(params, noBtn) {
@@ -293,12 +386,14 @@ const landing = reactive({
     params: {
       simplest: true,
       join: true,
-      searchfield:'this.id, this.kode, this.desc, this.nama, m_comp.nama, m_dir.nama, this.is_active',
+      searchfield:'this.id, this.kode, this.desc, this.nama, m_dir.nama, this.is_active',
     },
     onsuccess(response) {
       if (response && response.data) {
         response.data = response.data.map((item) => {
-          item.status = (item.is_active === true || item.is_active === 1 || item.is_active === '1' || item.is_active === 'true' || item.is_active === 't') ? 'Active' : 'Inactive'
+          const isActive = (item.is_active === true || item.is_active === 1 || item.is_active === '1' || item.is_active === 'true' || item.is_active === 't')
+          item.is_active = isActive
+          item.status = isActive ? 'Active' : 'Inactive'
           return item
         })
       }
@@ -317,28 +412,14 @@ const landing = reactive({
     cellClass: ['justify-center', 'bg-gray-50', 'border-r', '!border-gray-200']
   },
   {
-    headerName: 'Holding Company',
-    field: 'm_comp.nama',
-    filter: true,
-    sortable: true,
-    flex: 1,
-    filter: 'ColFilter',
-    resizable: true,
-    valueGetter: (p) => {
-      const d = p.data || {}
-      return d['m_comp.nama'] || d.m_comp?.nama || d['comp.nama'] || d.comp?.nama || d.m_comp_nama || (d['m_dir.nama'] || d.m_dir?.nama || d.m_dir_id ? 'BBS' : '-')
-    },
-    cellClass: [ 'border-r', '!border-gray-200', 'justify-start']
-  },
-  {
-    headerName: 'Company / Cabang',
+    headerName: 'Company',
     field: 'm_dir.nama',
     filter: true,
     sortable: true,
     flex: 1,
     filter: 'ColFilter',
     resizable: true,
-    valueGetter: (p) => p.data?.['m_dir.nama'] || p.data?.m_dir?.nama || p.data?.['dir.nama'] || p.data?.dir?.nama || p.data?.m_dir_nama || '-',
+    valueGetter: (p) => p.data?.['m_dir.nama'] || p.data?.m_dir?.nama || p.data?.['dir.nama'] || p.data?.dir?.nama || p.data?.m_dir_nama || p.data?.['m_comp.nama'] || '-',
     cellClass: [ 'border-r', '!border-gray-200', 'justify-start']
   },
   {
@@ -374,14 +455,22 @@ const landing = reactive({
   {
     headerName: 'Status',
     field: 'status',
-    sortable: true,
-    resizable: true,
-    flex: 1,
-    cellClass: ['border-r', '!border-gray-200', 'justify-center'],
+    filter: 'ColFilter',
+    filterParams: {
+      options: ['Active', 'Inactive']
+    },
+    filterValueGetter: (params) => {
+      const val = params.data ? (params.data.status !== undefined ? params.data.status : params.data.is_active) : params.value
+      return (val === 'Active' || val === true || val === 1 || val === '1' || val === 'true' || val === 't') ? 'Active' : 'Inactive'
+    },
     valueGetter: (params) => {
       const val = params.data ? (params.data.status !== undefined ? params.data.status : params.data.is_active) : params.value
       return (val === 'Active' || val === true || val === 1 || val === '1' || val === 'true' || val === 't') ? 'Active' : 'Inactive'
     },
+    sortable: true,
+    resizable: true,
+    flex: 1,
+    cellClass: ['border-r', '!border-gray-200', 'justify-center'],
     cellRenderer: ({ value }) => {
       return value === 'Active' || value === true
         ? `<span class="text-green-500 rounded-md text-xs font-medium px-4 py-1 inline-block capitalize">Active</span>`
@@ -390,6 +479,30 @@ const landing = reactive({
   },
   ]
 })
+
+watch(() => ({ ...(landing.api && landing.api.params) }), (newParams) => {
+  if (!newParams || !landing.api || !landing.api.params) return
+  let isActive = newParams.filter_is_active ?? newParams.filter_status
+  let modified = false
+  let currentWhere = landing.api.params.where || ''
+  let conds = currentWhere ? currentWhere.split(/\s+and\s+/i).map(c => c.trim()).filter(Boolean) : []
+
+  if (isActive !== undefined) {
+    const val = String(isActive).toLowerCase().trim()
+    const boolVal = (val === 'active' || val === 'true' || val === '1') ? 'true' : ((val === 'inactive' || val === 'false' || val === '0') ? 'false' : null)
+    conds = conds.filter(c => !/\bthis\.is_active\b/i.test(c))
+    if (boolVal !== null) {
+      conds.push('this.is_active=' + boolVal)
+    }
+    delete landing.api.params.filter_is_active
+    delete landing.api.params.filter_status
+    modified = true
+  }
+
+  if (modified) {
+    landing.api.params.where = conds.length > 0 ? conds.join(' and ') : null
+  }
+}, { deep: true })
 
 onActivated(() => {
   //  reload table api landing
