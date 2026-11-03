@@ -64,7 +64,7 @@
             }" valueField="id" displayField="menu" :check="false" />
         </div>
         <div>
-          <label class="text-sm">Keterangan<label class="text-red-500 space-x-0 pl-0"> *</label></label>
+          <label class="text-sm">Keterangan</label>
           <FieldX class="w-full py-2 !mt-0" type="textarea" :bind="{ readonly: !actionText }" label=""
             :value="values.desc" :errorText="formErrors.desc?'failed':''" placeholder="Tuliskan Keterangan"
             @input="v=>values.desc=v" :hints="formErrors.desc" :check="false" />

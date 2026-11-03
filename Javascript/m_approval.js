@@ -79,7 +79,7 @@ onBeforeMount(async () => {
       })
       if (!res.ok) throw new Error("Failed when trying to read data")
       const resultJson = await res.json()
-      resultJson.data.m_approval_det = resultJson.data?.m_approval_det.sort((a, b) => a.level - b.level);
+      resultJson.data.m_approval_det = (resultJson.data?.m_approval_det || []).sort((a, b) => a.level - b.level);
 
       initialValues = resultJson.data
     } catch (err) {
@@ -104,9 +104,19 @@ onBeforeMount(async () => {
   //  PENGISIAN DATA KE FORM DAN DETAILS
   const initialData = JSON.parse(JSON.stringify(initialValues))
   for (const key in initialData) {
-    if (['Create', 'Copy'].includes(actionText.value)) continue;
+    if (actionText.value === 'Create') continue;
+    if (actionText.value === 'Copy' && key === 'id') continue;
     if (key === 'm_approval_det') {
-      detailArr.value = [...initialData[key]]
+      if (actionText.value === 'Copy') {
+        detailArr.value = (initialData[key] || []).map(item => {
+          const copyItem = { ...item }
+          delete copyItem.id
+          delete copyItem.m_approval_id
+          return copyItem
+        })
+      } else {
+        detailArr.value = [...(initialData[key] || [])]
+      }
       continue;
     }
     values[key] = initialData[key]
@@ -115,11 +125,7 @@ onBeforeMount(async () => {
     detailArr.value = []
     detailArr.value.push({ tipe: 'MENGAJUKAN', level: 1 })
   }
-  if (values.is_active === true) {
-    values.is_active = "1";
-  } else {
-    values.is_active = "0";
-  }
+  values.is_active = (values.is_active === true || values.is_active === 1 || values.is_active === '1' || values.is_active === 'true' || values.is_active === 't')
 })
 
 function onBack() {
@@ -160,34 +166,63 @@ function onReset() {
     if (res.isConfirmed) {
       const initialData = JSON.parse(JSON.stringify(initialValues))
       for (const key in initialData) {
-        if (key === 'm_approval_d') {
-          detailArr.value = [...initialData[key]]
+        if (key === 'm_approval_det') {
+          detailArr.value = [...(initialData[key] || [])]
           continue;
         }
         values[key] = initialData[key]
       }
+      values.is_active = (values.is_active === true || values.is_active === 1 || values.is_active === '1' || values.is_active === 'true' || values.is_active === 't')
     }
   })
 }
 
 function onSave() {
-  //    validasi
+  formErrors.value = {}
+  if (!values.nama || String(values.nama).trim() === '') {
+    formErrors.value.nama = ['Kolom Nama wajib diisi']
+  }
+  if (!values.m_menu_id) {
+    formErrors.value.m_menu_id = ['Kolom Menu wajib dipilih']
+  }
+
+  if (Object.keys(formErrors.value).length > 0) {
+    return swal.fire({
+      icon: 'error',
+      text: 'Harap lengkapi semua kolom yang bertanda bintang (*)'
+    })
+  }
+
   const details = [...detailArr.value]
-  const uniqueNess = []
-  let invalid = false;
-  details.forEach((dt, idx) => {
-    //dt.default_user_id = dt.default_user_id.toString();
-    if (!dt.level || dt.level < 0) {
-      swal.fire({
-        title: 'Invalid Detail', icon: 'warning',
-        text: `Data baris ke ${idx - (-1)} : Level harus benar!`
-      })
-      invalid = true; return false
+  const approvers = details.filter((dt, idx) => idx > 0 || ['MENGETAHUI', 'MENYETUJUI'].includes(dt.tipe))
+  if (details.length <= 1 || approvers.length === 0) {
+    return swal.fire({
+      icon: 'error',
+      text: 'Detail Approval wajib diisi minimal 1 level persetujuan (Mengetahui / Menyetujui)'
+    })
+  }
+
+  for (let i = 0; i < details.length; i++) {
+    const dt = details[i]
+    dt.level = i + 1
+
+    if (i === 0) {
+      dt.tipe = dt.tipe || 'MENGAJUKAN'
+    } else {
+      if (!dt.tipe || !['MENGETAHUI', 'MENYETUJUI'].includes(dt.tipe)) {
+        return swal.fire({
+          icon: 'error',
+          text: `Data baris ke ${i + 1}: Tipe approval wajib dipilih (MENGETAHUI / MENYETUJUI)`
+        })
+      }
+      if (!dt.m_role_id && !dt.default_user_id) {
+        return swal.fire({
+          icon: 'error',
+          text: `Data baris ke ${i + 1}: Role atau User Action wajib dipilih`
+        })
+      }
     }
-    dt.level = idx + 1
-  })
-  values.is_active = values.is_active ? 1 : 0
-  if (invalid) return;
+  }
 
   swal.fire({
     icon: 'warning',
@@ -199,21 +234,28 @@ function onSave() {
         const isCreating = ['Create', 'Copy'].includes(actionText.value)
         const dataURL = `${store.server.url_backend}/operation${endpointApi}${isCreating ? '' : ('/' + route.params.id)}`
         isRequesting.value = true
+
+        const payload = Object.assign({}, values, {
+          is_active: values.is_active ? 1 : 0,
+          m_approval_det: detailArr.value
+        })
+        if (isCreating && payload.id) {
+          delete payload.id
+        }
+
         const res = await fetch(dataURL, {
           method: isCreating ? 'POST' : 'PUT',
           headers: {
             'Content-Type': 'Application/json',
             Authorization: `${store.user.token_type} ${store.user.token}`
           },
-          body: JSON.stringify(Object.assign(values, {
-            'm_approval_det': detailArr.value
-          }))
+          body: JSON.stringify(payload)
         })
         if (!res.ok) {
           if ([400, 422].includes(res.status)) {
             const responseJson = await res.json()
             formErrors.value = responseJson.errors || {}
-            throw new Error(responseJson.message || "Failed when trying to post data")
+            throw new Error(responseJson.message || (Array.isArray(responseJson.errors) ? responseJson.errors[0] : "Failed when trying to post data"))
           } else {
             throw new Error("Failed when trying to post data")
           }
@@ -223,7 +265,7 @@ function onSave() {
         isBadForm.value = true
         swal.fire({
           icon: 'error',
-          text: err
+          text: err?.message || err
         })
       }
       isRequesting.value = false
