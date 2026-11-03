@@ -105,6 +105,8 @@ onBeforeMount(async () => {
   for (const key in initialValues) {
     values[key] = initialValues[key]
   }
+  values.is_superadmin = (values.is_superadmin === true || values.is_superadmin === 1 || values.is_superadmin === '1' || values.is_superadmin === 'true' || values.is_superadmin === 't')
+  values.is_active = (values.is_active === true || values.is_active === 1 || values.is_active === '1' || values.is_active === 'true' || values.is_active === 't')
 })
 
 function onBack() {
@@ -142,6 +144,8 @@ function onReset() {
       for (const key in initialValues) {
         values[key] = initialValues[key]
       }
+      values.is_superadmin = (values.is_superadmin === true || values.is_superadmin === 1 || values.is_superadmin === '1' || values.is_superadmin === 'true' || values.is_superadmin === 't')
+      values.is_active = (values.is_active === true || values.is_active === 1 || values.is_active === '1' || values.is_active === 'true' || values.is_active === 't')
     }
   })
 }
@@ -151,15 +155,34 @@ function clearAll(){
 }
 
 function onSave() {
-  //values.tags = JSON.stringify(values.tags)
+  formErrors.value = {}
+  if (!values.name || String(values.name).trim() === '') {
+    formErrors.value.name = ['Kolom Nama wajib diisi']
+  }
+
+  if (Object.keys(formErrors.value).length > 0) {
+    return swal.fire({
+      icon: 'error',
+      text: 'Harap lengkapi semua kolom yang bertanda bintang (*)'
+    })
+  }
+
+  if (!trx_dtl.value || trx_dtl.value.length === 0) {
+    return swal.fire({
+      icon: 'error',
+      text: 'Detail hak akses menu wajib diisi minimal 1 menu'
+    })
+  }
+
   values.m_role_det = trx_dtl.value
-  for(const i in values.m_role_det) {
-    for(const k in values.m_role_det[i]){
-      if(typeof values.m_role_det[i][k] == 'boolean'){
+  for (const i in values.m_role_det) {
+    for (const k in values.m_role_det[i]) {
+      if (typeof values.m_role_det[i][k] === 'boolean') {
         values.m_role_det[i][k] = values.m_role_det[i][k] ? 1 : 0
       }
     }
   }
+
   swal.fire({
     icon: 'warning',
     text: 'Save data?',
@@ -170,32 +193,37 @@ function onSave() {
         const isCreating = ['Create','Copy','Tambah'].includes(actionText.value)
         const dataURL = `${store.server.url_backend}/operation${endpointApi}${isCreating ? '' : ('/' + route.params.id)}`
         isRequesting.value = true
-        values.is_active = values.is_active ? 1 : 0
-        values.is_superadmin = values.is_superadmin ? 1 : 0
+
+        const payload = Object.assign({}, values, {
+          is_active: values.is_active ? 1 : 0,
+          is_superadmin: values.is_superadmin ? 1 : 0
+        })
+
         const res = await fetch(dataURL, {
           method: isCreating ? 'POST' : 'PUT',
           headers: {
             'Content-Type': 'Application/json',
             Authorization: `${store.user.token_type} ${store.user.token}`
           },
-          body: JSON.stringify(values)
+          body: JSON.stringify(payload)
         })
         if (!res.ok) {
           if ([400, 422].includes(res.status)) {
             const responseJson = await res.json()
             formErrors.value = responseJson.errors || {}
-            throw new Error(responseJson.errors || responseJson.message || "Failed when trying to post data")
+            const errMsg = (Array.isArray(responseJson.errors) ? responseJson.errors[0] : (typeof responseJson.errors === 'string' ? responseJson.errors : responseJson.message)) || "Failed when trying to post data";
+            throw new Error(errMsg)
           } else {
             throw new Error("Failed when trying to post data")
           }
         }
-        router.replace('/' + modulPath + '?reload='+(Date.parse(new Date())))
+        router.replace('/' + modulPath + '?reload=' + (Date.parse(new Date())))
       } catch (err) {
-        console.log("ERR ",  err)
+        console.log("ERR ", err)
         isBadForm.value = true
         swal.fire({
           icon: 'error',
-          text: err
+          text: err?.message || err
         })
       }
       isRequesting.value = false
@@ -297,7 +325,8 @@ const landing = reactive({
       authorization: `${store.user.token_type} ${store.user.token}`
     },
     params: {
-      simplest: true
+      simplest: true,
+      searchfield: 'this.name, this.is_superadmin, this.is_active'
     },
     onsuccess(response) {
       if (response && response.data) {
@@ -369,6 +398,14 @@ const landing = reactive({
   {
     headerName: 'Status',
     field: 'status',
+    filter: 'ColFilter',
+    filterParams: {
+      options: ['Active', 'Inactive']
+    },
+    filterValueGetter: (params) => {
+      const val = params.data ? (params.data.status !== undefined ? params.data.status : params.data.is_active) : params.value
+      return (val === 'Active' || val === true || val === 1 || val === '1' || val === 'true' || val === 't') ? 'Active' : 'Inactive'
+    },
     valueGetter: (params) => {
       const val = params.data ? (params.data.status !== undefined ? params.data.status : params.data.is_active) : params.value
       return (val === 'Active' || val === true || val === 1 || val === '1' || val === 'true' || val === 't') ? 'Active' : 'Inactive'

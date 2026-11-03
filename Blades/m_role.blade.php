@@ -43,7 +43,7 @@
         </div> -->
         <!-- START COLUMN -->
         <div>
-          <label class="font-semibold">Nama <label class="text-red-500 space-x-0 pl-0"></label></label>
+          <label class="font-semibold">Nama <label class="text-red-500 space-x-0 pl-0">*</label></label>
           <FieldX :bind="{ readonly: !actionText }" class=" py-2 !mt-0"
               :value="values.name" :errorname="formErrors.name?'failed':''"
               @input="v=>values.name=v" :hints="formErrors.name" 
@@ -124,40 +124,41 @@
             }
           }"
             :columns="[{
-              checkboxSelection: true,
-              headerCheckboxSelection: true,
               headerName: 'No',
-              valueGetter:(params)=>{
-                return ''
-              },
+              valueGetter: (params) => params.node.rowIndex + 1,
               width: 60,
               sortable: false, resizable: false, filter: false,
               cellClass: ['justify-center', 'bg-gray-50']
             },
             {
-              pinned: true,
               field: 'modul',
               headerName: 'Modul',
               cellClass: ['border-r', '!border-gray-200', 'justify-center'],
-              filter:true,
+              filter: true,
               flex: 1
             },
             {
-              pinned: false,
               field: 'submodul',
               headerName: 'Sub Modul',
               cellClass: ['border-r', '!border-gray-200', 'justify-center'],
-              filter:true,
+              filter: true,
               flex: 1
             },
             {
-              pinned: false,
               field: 'menu',
               headerName: 'Nama Menu',
               cellClass: ['border-r', '!border-gray-200', 'justify-center'],
-              filter:true,
+              filter: true,
               flex: 1
             },
+            {
+              checkboxSelection: true,
+              headerCheckboxSelection: true,
+              headerName: 'Pilih',
+              width: 80,
+              sortable: false, resizable: false, filter: false,
+              cellClass: ['justify-center', 'bg-gray-50']
+            }
             ]"
           >
             <div class="flex justify-center w-full h-full items-center px-2 py-1.5 text-xs rounded text-white bg-blue-500 hover:bg-blue-700 hover:bg-blue-600 transition-all duration-200">
@@ -209,15 +210,9 @@
                 flex: 1,
                 headerName: 'Nama Menu',
                 field: 'menu',
-                editable: actionText?true:false,
+                editable: false,
                 sortable: false, resizable: true, filter: false,
-                cellClass: ['!border-gray-200'],
-                cellEditor: 'FieldNumber',
-                cellEditorParams: {
-                  input(val, api){
-                    api.data['colname']=val
-                  }
-                }
+                cellClass: ['!border-gray-200']
               },
               {
                 headerName: 'Preview',
