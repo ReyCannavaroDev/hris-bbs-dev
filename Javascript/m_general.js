@@ -124,6 +124,24 @@ function onReset() {
 }
 
 async function onSave() {
+  formErrors.value = {}
+  if (!values.key || String(values.key).trim() === '') {
+    formErrors.value.key = 'Kolom Key wajib diisi'
+  }
+  if (!values.group || String(values.group).trim() === '') {
+    formErrors.value.group = 'Kolom Group wajib diisi'
+  }
+  if (!values.value || String(values.value).trim() === '') {
+    formErrors.value.value = 'Kolom Value wajib diisi'
+  }
+
+  if (Object.keys(formErrors.value).length > 0) {
+    return swal.fire({
+      icon: 'error',
+      text: 'Harap lengkapi semua kolom yang bertanda bintang (*)'
+    })
+  }
+
   //values.tags = JSON.stringify(values.tags)
       try {
         const isCreating = ['Create','Copy','Tambah'].includes(actionText.value)

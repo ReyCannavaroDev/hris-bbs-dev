@@ -99,7 +99,7 @@
             :check="false" />
         </div>
         <div class="grid grid-cols-12 items-center gap-y-2">
-          <label class="col-span-12">Value 2<label class="text-red-500 space-x-0 pl-0">*</label></label>
+          <label class="col-span-12">Value 2</label>
           <FieldX  
             class="col-span-12 !mt-0"
             :bind="{ readonly: !actionText }"

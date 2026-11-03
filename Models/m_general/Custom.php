@@ -7,6 +7,7 @@ class m_general extends \App\Models\BasicModels\m_general
     public function __construct()
     {
         parent::__construct();
+        $this->required = array_unique(array_merge($this->required, ['key']));
     }
     
     public $fileColumns    = [ /*file_column*/ ];
@@ -78,11 +79,41 @@ class m_general extends \App\Models\BasicModels\m_general
             return [
                 "errors" => ['Maaf akun anda tidak memiliki akses untuk menambahkan data']
             ];
+        $errors = [];
+        if (empty($arrayData['key'])) {
+            $errors['key'] = ['Kolom Key wajib diisi'];
+        }
+        if (!empty($errors)) {
+            return [
+                "model"  => $model,
+                "data"   => $arrayData,
+                "errors" => $errors
+            ];
+        }
         return [
             "model"  => $model,
             "data"   => array_merge($arrayData,[
                 'm_dir_id' =>  $m_dir_id
             ])
+        ];
+    }
+
+    public function updateBefore( $model, $arrayData, $metaData, $id=null )
+    {
+        $errors = [];
+        if (array_key_exists('key', $arrayData) && empty($arrayData['key'])) {
+            $errors['key'] = ['Kolom Key wajib diisi'];
+        }
+        if (!empty($errors)) {
+            return [
+                "model"  => $model,
+                "data"   => $arrayData,
+                "errors" => $errors
+            ];
+        }
+        return [
+            "model"  => $model,
+            "data"   => $arrayData
         ];
     }
     
