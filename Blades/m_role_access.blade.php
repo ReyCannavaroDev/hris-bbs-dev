@@ -28,20 +28,28 @@
       </div>
       <div class="grid grid-cols-2 gap-3">
         <!-- START COLUMN -->
-        <!-- <div>
-          <label for="Direktorat" class="font-semibold select-all">Direktorat <span class="text-red-500 space-x-0 pl-0"></span></label>
-          <FieldX :bind="{ readonly: true }" class="w-full py-2 !mt-0"
-              :value="values.direktorat" :errorText="formErrors.direktorat?'failed':''"
-              @input="v=>values.direktorat=v" :hints="formErrors.direktorat" 
-              :check="false"
-              label=""
-              placeholder=""
-          />
-        </div> -->
-        <div >
-          <label class="font-semibold">Pengguna <label class="text-red-500 space-x-0 pl-0"></label></label>
+        <div>
+          <label class="font-semibold">Pengguna</label>
           <FieldX :bind="{ readonly: true }" class="py-2 !mt-0" :value="values.name"
             :errorname="formErrors.name?'failed':''" @input="v=>values.name=v" :hints="formErrors.name"
+            :check="false" />
+        </div>
+        <div>
+          <label class="font-semibold">Company</label>
+          <FieldX :bind="{ readonly: true }" class="py-2 !mt-0" :value="values.company"
+            :errorname="formErrors.company?'failed':''" @input="v=>values.company=v" :hints="formErrors.company"
+            :check="false" />
+        </div>
+        <div>
+          <label class="font-semibold">Username</label>
+          <FieldX :bind="{ readonly: true }" class="py-2 !mt-0" :value="values.username"
+            :errorname="formErrors.username?'failed':''" @input="v=>values.username=v" :hints="formErrors.username"
+            :check="false" />
+        </div>
+        <div>
+          <label class="font-semibold">Email</label>
+          <FieldX :bind="{ readonly: true }" class="py-2 !mt-0" :value="values.email"
+            :errorname="formErrors.email?'failed':''" @input="v=>values.email=v" :hints="formErrors.email"
             :check="false" />
         </div>
         <!-- END COLUMN -->
@@ -53,7 +61,7 @@
             headers: {'Content-Type': 'Application/json', authorization: `${store.user.token_type} ${store.user.token}`},
             params: { 
               simplest: true,
-              where: 'm_role.is_active = true'  
+              where: 'this.is_active = true'  
             },
             onsuccess:(response)=>{
               response.data = [...response.data].map((dt)=>{
@@ -67,12 +75,8 @@
               return response
             }
           }" :columns="[{
-              checkboxSelection: true,
-              headerCheckboxSelection: true,
               headerName: 'No',
-              valueGetter:(params)=>{
-                return ''
-              },
+              valueGetter:(params)=>params.node.rowIndex + 1,
               width: 60,
               sortable: false, resizable: false, filter: false,
               cellClass: ['justify-center', 'bg-gray-50']
@@ -85,6 +89,14 @@
               filter:false,
               flex: 1
             },
+            {
+              headerName: 'Pilih',
+              checkboxSelection: true,
+              headerCheckboxSelection: true,
+              width: 80,
+              sortable: false, resizable: false, filter: false,
+              cellClass: ['justify-center', 'bg-gray-50']
+            }
             ]">
           <div
             class="flex justify-center w-full h-full items-center px-2 py-1.5 text-xs rounded text-white bg-blue-500 hover:bg-blue-700 hover:bg-blue-600 transition-all duration-200">

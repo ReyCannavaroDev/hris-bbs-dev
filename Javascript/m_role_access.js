@@ -35,18 +35,21 @@ let trx_dtl = ref([])
 const onDetailAdd = (rows) => {
   let stop = false
   let dataArr = [...trx_dtl.value]
-    trx_dtl.value.forEach(row => {
-      if(row.is_superadmin && trx_dtl.value.length){
-          swal.fire({
-            icon: 'warning',
-            text: row.is_superadmin+"User ini sudah memiliki akses role superadmin, tidak dapat menambah role yang lain"
-          })
-          stop = true
-          return
-      }
-    })
-    if(stop) return
+  trx_dtl.value.forEach(row => {
+    if(row.is_superadmin && trx_dtl.value.length){
+      swal.fire({
+        icon: 'warning',
+        text: "User ini sudah memiliki akses role superadmin, tidak dapat menambah role yang lain"
+      })
+      stop = true
+      return
+    }
+  })
+  if(stop) return
   rows.forEach(row => {
+    if (dataArr.some(existing => existing.id === row.id || existing.m_role_id === row.id)) {
+      return
+    }
     row.m_role_id = row.id
     if(row.is_superadmin && trx_dtl.value.length){
       swal.fire({
@@ -55,14 +58,12 @@ const onDetailAdd = (rows) => {
       })
       dataArr = []
       dataArr.push(row)
-      console.log(dataArr.value)
       trx_dtl.value = dataArr
       return
     }
     dataArr.push(row)
   })
   trx_dtl.value = dataArr
-
 }
 
 const values = reactive({
@@ -150,11 +151,21 @@ function onReset() {
       for (const key in initialValues) {
         values[key] = initialValues[key]
       }
+      values.company = initialValues['m_comp.nama'] || initialValues['m_dir.nama'] || initialValues.company || initialValues.direktorat || ''
+      values.username = initialValues.username || ''
+      values.email = initialValues.email || ''
     }
   })
 }
 
 function onSave() {
+  if (!trx_dtl.value || trx_dtl.value.length === 0) {
+    swal.fire({
+      icon: 'warning',
+      text: 'Detail hak akses wajib diisi minimal 1 role'
+    })
+    return
+  }
   //values.tags = JSON.stringify(values.tags)
   values.detail = trx_dtl.value
   for(const i in values.detail) {
@@ -263,6 +274,7 @@ const landing = reactive({
       if (response && response.data) {
         response.data = response.data.map((item) => {
           item.status = (item.is_active === true || item.is_active === 1 || item.is_active === '1' || item.is_active === 'true' || item.is_active === 't') ? 'Active' : 'Inactive'
+          item.company = item['m_comp.nama'] || item['m_dir.nama'] || item.company || '-'
           return item
         })
       }
@@ -311,14 +323,30 @@ const landing = reactive({
     cellClass: [ 'border-r', '!border-gray-200']
   },
   {
-    headerName: 'Direktorat',
-    field: 'm_dir.nama',
+    headerName: 'Company',
+    field: 'company',
     filter: true,
     sortable: true,
     flex:1,
     filter: 'ColFilter',
     resizable: true,
-    cellClass: [ 'border-r', '!border-gray-200']
+    cellClass: [ 'border-r', '!border-gray-200'],
+    valueGetter: (params) => {
+      return params.data ? (params.data.company || params.data['m_comp.nama'] || params.data['m_dir.nama'] || '-') : '-'
+    }
+  },
+  {
+    headerName: 'Role',
+    field: 'role_names',
+    filter: true,
+    sortable: true,
+    flex:1,
+    filter: 'ColFilter',
+    resizable: true,
+    cellClass: [ 'border-r', '!border-gray-200'],
+    valueGetter: (params) => {
+      return params.data ? (params.data.role_names || '-') : '-'
+    }
   },
   {
     headerName: 'Status',

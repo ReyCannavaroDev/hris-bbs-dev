@@ -27,8 +27,25 @@ class m_role_access extends \App\Models\BasicModels\m_role_access
     public function custom_store($req)
     {
         $id = (int)$req->pengguna_id;
+        if (empty($id)) {
+            return response([
+                'status' => 'error',
+                'message' => 'User ID tidak valid',
+                'errors' => ['pengguna_id' => ['User ID tidak valid']]
+            ], 422);
+        }
+
+        $details = $req->detail ?? [];
+        if (empty($details) || count($details) === 0) {
+            return response([
+                'status' => 'error',
+                'message' => 'Detail hak akses wajib diisi minimal 1 role',
+                'errors' => ['detail' => ['Detail hak akses wajib diisi minimal 1 role']]
+            ], 422);
+        }
+
         $this->where('user_id', $id)->delete();
-        foreach($req->detail as $d){
+        foreach($details as $d){
             $this->create([
                 'user_id'   => $id,
                 'm_role_id' => $d['m_role_id'],

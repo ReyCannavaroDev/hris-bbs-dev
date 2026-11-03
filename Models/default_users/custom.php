@@ -33,6 +33,11 @@ class default_users extends \App\Models\BasicModels\default_users
         $object = [];
         $req = app()->request;
         if($req->from == 'role_access'){
+            $roles = m_role_access::join('m_role as r','r.id','m_role_access.m_role_id')
+                ->where('m_role_access.user_id', $row['id'])
+                ->pluck('r.name')
+                ->toArray();
+            $object['role_names'] = !empty($roles) ? implode(', ', $roles) : '-';
             $object['is_superadmin'] = 
                 m_role_access::join('m_role as r','r.id','m_role_access.m_role_id')
                 ->where('m_role_access.user_id', $row['id'])
