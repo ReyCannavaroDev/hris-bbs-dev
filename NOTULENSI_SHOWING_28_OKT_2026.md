@@ -8,16 +8,16 @@
 
 ---
 
-## ðŸ“Œ Ringkasan Eksekutif
+## 📌 Ringkasan Eksekutif
 Berdasarkan sesi demonstrasi sistem (*showing*) di hadapan manajemen PT Berkah Bersaudara Sentosa (BBS) pada tanggal 28 Oktober 2026, secara garis besar alur inti HRIS (struktur organisasi, presensi mobile, dan alur finalisasi payroll) telah diapresiasi dan diterima dengan baik. 
 
 Terdapat beberapa penyesuaian aturan bisnis (*business logic*) dan permintaan fitur tambahan yang perlu diakomodasi sebelum sesi presentasi final via Zoom pada **Jumat, 6 November 2026**. Dokumen ini merangkum seluruh poin notulensi, memetakan progres yang telah diselesaikan, dan menyusun rencana kerja teknisnya.
 
 ---
 
-## ðŸ“‹ Detail Notulensi Rapat & Keputusan Bisnis
+## 📋 Detail Notulensi Rapat & Keputusan Bisnis
 
-### 1. Keterlambatan Presensi & Denda (MoM Poin 3.B)
+### 1. Keterlambatan Presensi & Denda (MoM Poin 3.B) — ✅ Selesai Dikerjakan (Mas Duta - 3 Nov 2026, Commit `482ea06`)
 - **Aturan Pembulatan Baru:**  
   Keterlambatan **dibulatkan ke atas**. Terlambat 1 menit dihitung dan dibulatkan menjadi 30 menit (kena 1 tier denda Rp 25.000).
 - **Formula Teknis:**  
@@ -27,6 +27,10 @@ Terdapat beberapa penyesuaian aturan bisnis (*business logic*) dan permintaan fi
     - Terlambat 1 menit s/d 30 menit $\rightarrow$ Denda Rp 25.000.
     - Terlambat 31 menit s/d 60 menit $\rightarrow$ Denda Rp 50.000.
 - **Dispensasi:** Karyawan yang memiliki Izin Resmi P24 yang disetujui atasan tetap dibebaskan dari denda keterlambatan.
+- **Detail Implementasi (Commit `482ea06`):**
+  - Formula pembulatan ke atas `(int) ceil($menit / 30)` aktif di `Cores/PerhitunganGaji.php`.
+  - Disertakan data riwayat presensi harian pada komponen denda keterlambatan.
+  - Dropdown interaktif *'Rincian Keterlambatan'* ditambahkan pada modal rincian gaji di `Blades/t_perhitungan_gaji.blade.php` dan `Blades/t_final_gaji.blade.php`.
 
 ---
 
@@ -54,7 +58,7 @@ Terdapat beberapa penyesuaian aturan bisnis (*business logic*) dan permintaan fi
 - **Tanggal Cut-off Resmi:**  
   Fix ditetapkan pada **Tanggal 25** setiap bulannya.
 - **Rentang Periode Penggajian Bulanan & Mingguan:**  
-  - Bulanan: Berjalan dari **tanggal 26 bulan sebelumnya s/d tanggal 25 bulan berjalan** (contoh: 26 September â€“ 25 Oktober).
+  - Bulanan: Berjalan dari **tanggal 26 bulan sebelumnya s/d tanggal 25 bulan berjalan** (contoh: 26 September – 25 Oktober).
   - Mingguan: Auto-set durasi 1 minggu di modul perhitungan.
 - **Preset Sistem & Fleksibilitas Penggajian:**  
   - Form filter periode di modul Perhitungan Gaji (`t_perhitungan_gaji`) dan Finalisasi Gaji (`t_final_gaji`) otomatis memberikan default rentang tanggal 26 s/d 25 untuk bulanan atau 1 minggu untuk mingguan dengan format rapi `DD/MM/YYYY`.
@@ -89,11 +93,14 @@ Terdapat beberapa penyesuaian aturan bisnis (*business logic*) dan permintaan fi
 
 ---
 
-### 7. Piutang / Kasbon Karyawan (`t_potongan`)
+### 7. Piutang / Kasbon Karyawan (`t_potongan`) — ✅ Selesai Dikerjakan (Mas Duta - 3 Nov 2026, Commit `482ea06`)
 - **Kolom Baru pada Landing Table:**  
   Menambahkan kolom **Sisa Angsuran (Rp)** di tabel depan modul `t_potongan` agar pihak Finance dapat memonitor sisa kewajiban piutang karyawan tanpa harus klik tombol detail satu per satu.
 - **Skenario Pelunasan Khusus (Karyawan Resign):**  
   Menyediakan tombol aksi **Pelunasan Manual** pada transaksi kasbon. Tombol ini digunakan saat karyawan mengundurkan diri dan melunasi sisa kasbonnya secara langsung/tunai di luar sistem pemotongan gaji rutin. Tombol ini otomatis memperbarui status menjadi `is_lunas = 1`.
+- **Detail Implementasi (Commit `482ea06`):**
+  - Penambahan kolom `sisa_angsuran` via `transformRowData` di `Models/t_potongan/Custom.php` dan kolom tabel di `Blades/t_potongan.blade.php` serta `Javascript/t_potongan.js`.
+  - Endpoint `custom_pelunasanManual` di `Models/t_potongan/Custom.php` dengan pencatatan otomatis ke `t_potongan_det_bayar` (`status_bayar = 'LUNAS MANUAL'`).
 
 ---
 
@@ -104,7 +111,7 @@ Terdapat beberapa penyesuaian aturan bisnis (*business logic*) dan permintaan fi
 
 ---
 
-### 9. Transaksi Lembur & Approval (`t_lembur`) — ✅ Selesai Dikerjakan (Duta - 29 Okt 2026)
+### 9. Transaksi Lembur, Approval & Dokumen SPK (`t_lembur`) — ✅ Selesai Dikerjakan (Mas Duta - 29 Okt & 3 Nov 2026, Commit `11b923f` & `d0ba545`)
 - **Penyelesaian Alur Approval (Commit `11b923f`):**  
   - Target approver pada workflow persetujuan lembur sudah divalidasi ketat di `Models/t_lembur/Custom.php`: hanya **Superadmin** dan **Atasan Langsung** (`m_kary.atasan_id == auth()->user()->m_kary_id`) yang berhak menyetujui, menolak, atau merevisi (`canApprove`).
   - Handling form saat status `IN APPROVAL` otomatis terkunci menjadi *Read-Only* (`isReadOnly`) di `Blades/t_lembur.blade.php` dan `Javascript/t_lembur.js`, dan tombol aksi `Approve`/`Reject`/`Revise` hanya muncul jika user memiliki hak akses.
@@ -116,24 +123,24 @@ Terdapat beberapa penyesuaian aturan bisnis (*business logic*) dan permintaan fi
 
 ---
 
-## 📊 Matriks Status Pengerjaan (Update 29 Oktober 2026)
+## 📊 Matriks Status Pengerjaan (Update 3 November 2026)
 
 | No | Modul / Fitur | PIC | Status | Keterangan & Commit |
 |---|---|---|:---:|---|
-| 1 | **Alur Approval Lembur (`t_lembur`)** | Mas Duta | ✅ Selesai | Validasi approver atasan/superadmin & read-only in approval (`11b923f`) |
-| 2 | **Format Tanggal Notifikasi & Lembur** | Mas Duta | ✅ Selesai | Formatter tanggal DD/MM/YYYY rapi (`2dd2e97`, `ec9cf12`) |
-| 3 | **Denda Keterlambatan Pembulatan ke Atas** | Rey | ⏳ To Do | Pembulatan `ceil($menit/30) * 25000` di Cores |
-| 4 | **Gaji Pokok Per-Personal & Field `gaji_acuan` (UMK BPJS)** | Rey / Tim | ⏳ To Do | Master gaji karyawan & dasar pengali BPJS |
-| 5 | **Sinkronisasi Resign & Inactive Karyawan** | Rey / Tim | ⏳ To Do | Two-way trigger `tanggal_berhenti_kerja` $\leftrightarrow$ `is_active` |
-| 6 | **Preset Cut-Off Payroll Tanggal 25** | Rey | ⏳ To Do | Rentang tanggal otomatis 26 s/d 25 di form gaji |
-| 7 | **PPh 21 Disubsidi Perusahaan (Gross-up)** | Rey | ⏳ To Do | Tunjangan pajak agar take home pay utuh |
-| 8 | **Mutasi Karyawan Prorata (Opsi 2)** | Rey | ⏳ To Do | Split perhitungan hari kerja divisi lama vs divisi baru |
-| 9 | **Aturan Cuti 12 Hari & Split Izin Khusus** | Rey / Tim | ⏳ To Do | Batas 3 hari berturut-turut & izin khusus terpisah |
-| 10 | **Kolom Sisa Angsuran & Pelunasan Manual Kasbon** | Rey / Tim | ⏳ To Do | Kolom nominal sisa & tombol pelunasan karyawan resign |
+| 1 | **Alur Approval Lembur & SPK (`t_lembur`)** | Mas Duta | ✅ Selesai | Validasi approver atasan/superadmin, read-only in approval, & format SPK (`11b923f`, `d0ba545`) |
+| 2 | **Format Tanggal Notifikasi & Lembur** | Mas Duta | ✅ Selesai | Formatter tanggal DD/MM/YYYY rapi di Notifikasi, Lembur, & SPL (`2dd2e97`, `ec9cf12`, `d0ba545`) |
+| 3 | **Preset Cut-Off Payroll Tanggal 25 & Fleksibilitas Gaji** | Mas Duta | ✅ Selesai | Auto-set dinamis 26 s/d 25 bulanan, 1 minggu lembur, opsi 'LEMBUR SAJA', & fix label overlapping (`d0ba545`) |
+| 4 | **Denda Keterlambatan Pembulatan ke Atas** | Mas Duta | ✅ Selesai | Formula `ceil($menit/30) * 25000`, history presensi harian, & dropdown rincian denda (`482ea06`) |
+| 5 | **Kolom Sisa Angsuran & Pelunasan Manual Kasbon (`t_potongan`)** | Mas Duta | ✅ Selesai | Kolom Sisa Angsuran di landing table & tombol/endpoint Pelunasan Manual (`482ea06`) |
+| 6 | **Gaji Pokok Per-Personal & Field `gaji_acuan` (UMK BPJS)** | Rey / Tim | ⏳ To Do | Master gaji karyawan & dasar pengali BPJS |
+| 7 | **Sinkronisasi Resign & Inactive Karyawan** | Rey / Tim | ⏳ To Do | Two-way trigger `tanggal_berhenti_kerja` $\leftrightarrow$ `is_active` |
+| 8 | **PPh 21 Disubsidi Perusahaan (Gross-up)** | Rey | ⏳ To Do | Tunjangan pajak agar take home pay utuh |
+| 9 | **Mutasi Karyawan Prorata (Opsi 2)** | Rey | ⏳ To Do | Split perhitungan hari kerja divisi lama vs divisi baru |
+| 10 | **Aturan Cuti 12 Hari & Split Izin Khusus** | Rey / Tim | ⏳ To Do | Batas 3 hari berturut-turut & izin khusus terpisah |
 
 ---
 
-## ðŸŽ¯ Rencana Kerja & Action Items (Sprint 29 Okt â€“ 5 Nov 2026)
+## 🎯 Rencana Kerja & Action Items (Sprint 29 Okt – 5 Nov 2026)
 
 Berikut daftar tugas pengerjaan yang akan diselesaikan secara bertahap menuju presentasi final tanggal 6 November 2026:
 
