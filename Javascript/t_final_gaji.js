@@ -45,12 +45,60 @@ function formatRupiah(amount) {
 //  @if( $id )------------------- VALUES FORM ! PENTING JANGAN DIHAPUS
 let initialValues = {}
 let _id = 0
+
 let now = new Date()
 let tempYear = now.getFullYear()
-let tempMonth = String(now.getMonth() + 1).padStart(2, '0')
-let firstDay = `${tempYear}-${tempMonth}-01`
-let lastDayDate = new Date(tempYear, now.getMonth() + 1, 0)
-let lastDay = `${tempYear}-${tempMonth}-${String(lastDayDate.getDate()).padStart(2, '0')}`
+let tempMonth = now.getMonth()
+
+function parseDate(v) {
+  if (!v) return null
+  if (v instanceof Date) return isNaN(v.getTime()) ? null : v
+  if (typeof v !== 'string') return null
+  const raw = v.trim().split(' ')[0]
+  const parts = raw.split(/[-/.]/)
+  if (parts.length !== 3) return null
+
+  let year, month, day
+  if (parts[0].length === 4) {
+    year = parseInt(parts[0], 10)
+    month = parseInt(parts[1], 10) - 1
+    day = parseInt(parts[2], 10)
+  } else if (parts[2].length === 4) {
+    day = parseInt(parts[0], 10)
+    month = parseInt(parts[1], 10) - 1
+    year = parseInt(parts[2], 10)
+  } else {
+    return null
+  }
+
+  const d = new Date(year, month, day)
+  return isNaN(d.getTime()) ? null : d
+}
+
+function formatDateDisplay(d) {
+  if (!d) return ''
+  const dateObj = (d instanceof Date) ? d : parseDate(d)
+  if (!dateObj) return d
+  const day = String(dateObj.getDate()).padStart(2, '0')
+  const month = String(dateObj.getMonth() + 1).padStart(2, '0')
+  const year = dateObj.getFullYear()
+  return `${day}/${month}/${year}`
+}
+
+function formatDateApi(d) {
+  if (!d) return ''
+  const dateObj = (d instanceof Date) ? d : parseDate(d)
+  if (!dateObj) return d
+  const day = String(dateObj.getDate()).padStart(2, '0')
+  const month = String(dateObj.getMonth() + 1).padStart(2, '0')
+  const year = dateObj.getFullYear()
+  return `${year}-${month}-${day}`
+}
+
+let dStart = new Date(tempYear, tempMonth, 1)
+let dEnd = new Date(tempYear, tempMonth + 1, 0)
+let firstDay = formatDateDisplay(dStart)
+let lastDay = formatDateDisplay(dEnd)
 
 const values = reactive({
   periode_awal: firstDay,
@@ -66,6 +114,80 @@ const values = reactive({
 function clearDetail() {
   detailArr.value = []
   values.total_pengeluaran_gaji = 0
+}
+
+const tipePeriodeText = ref('')
+const periodeOptions = ref([])
+const periodeOptionsMap = reactive({
+  LEMBUR: 'LEMBUR SAJA'
+})
+
+function onLoadPeriodeOptions(response) {
+  if (!response) return
+  let list = response.data || response || []
+  if (Array.isArray(list)) {
+    if (!list.some(o => String(o.value || '').toUpperCase().includes('LEMBUR'))) {
+      list.push({ id: 'LEMBUR', value: 'LEMBUR SAJA' })
+    }
+    periodeOptions.value = list
+    list.forEach((item) => {
+      if (item.id && item.value) {
+        periodeOptionsMap[item.id] = String(item.value).toUpperCase()
+      }
+    })
+    periodeOptionsMap['LEMBUR'] = 'LEMBUR SAJA'
+  }
+}
+
+async function loadPeriodeGajiOptions() {
+  try {
+    const res = await fetch(`${store.server.url_backend}/operation/m_general?where=this.group='PERIODE GAJI' and this.is_active='true'&simplest=true`, {
+      headers: {
+        Authorization: `${store.user.token_type} ${store.user.token}`
+      }
+    })
+    if (res.ok) {
+      const json = await res.json()
+      onLoadPeriodeOptions(json)
+    }
+  } catch (e) {
+    console.warn('Gagal memuat opsi periode gaji:', e)
+  }
+}
+
+function isTipeLemburSaja() {
+  const t = String(tipePeriodeText.value || '').toUpperCase()
+  return t.includes('LEMBUR') || values.periode_gaji_id === 'LEMBUR'
+}
+
+
+function onPeriodeAwalChange(v) {
+  const d = parseDate(v)
+  values.periode_awal = d ? formatDateDisplay(d) : v
+  clearDetail()
+}
+
+function onPeriodeAkhirChange(v) {
+  const d = parseDate(v)
+  values.periode_akhir = d ? formatDateDisplay(d) : v
+  clearDetail()
+}
+
+function onTipePeriodeChange(objVal) {
+  if (objVal && typeof objVal === 'object') {
+    tipePeriodeText.value = String(objVal.value || objVal.nama || objVal.label || '').toUpperCase()
+    if (objVal.id !== undefined) {
+      values.periode_gaji_id = objVal.id
+      periodeOptionsMap[objVal.id] = tipePeriodeText.value
+    }
+  } else if (typeof objVal === 'string' || typeof objVal === 'number') {
+    values.periode_gaji_id = objVal
+    tipePeriodeText.value = periodeOptionsMap[objVal] || String(objVal).toUpperCase()
+  } else {
+    values.periode_gaji_id = null
+    tipePeriodeText.value = ''
+  }
+  clearDetail()
 }
 
 function openDetail(i) {
@@ -198,19 +320,7 @@ async function generatePPH(popup = true) {
 }
 
 function formatDate(dateStr) {
-  if (!dateStr) return null
-  if (typeof dateStr === 'string') {
-    if (dateStr.includes('/')) {
-      const parts = dateStr.split('/')
-      if (parts.length === 3) {
-        return `${parts[2]}-${parts[1].padStart(2, '0')}-${parts[0].padStart(2, '0')}`
-      }
-    } else if (/^\d{2}-\d{2}-\d{4}$/.test(dateStr)) {
-      const parts = dateStr.split('-')
-      return `${parts[2]}-${parts[1]}-${parts[0]}`
-    }
-  }
-  return dateStr
+  return formatDateApi(dateStr)
 }
 
 async function generatePerhitungan() {
@@ -222,10 +332,92 @@ async function generatePerhitungan() {
   }
 
   clearDetail()
+  const tglAwalFormatted = formatDate(values.periode_awal)
+  const tglAkhirFormatted = formatDate(values.periode_akhir)
+
+  // 1. KASUS KHUSUS: TIPE LEMBUR SAJA (Hanya tarik data dari perhitungan lembur)
+  if (isTipeLemburSaja()) {
+    try {
+      isRequesting.value = true
+      const lemburURL = `${store.server.url_backend}/operation/t_perhitungan_lembur`
+      const lemburParams = {
+        scopes: 'GenerateForFinal',
+        periode_awal: tglAwalFormatted,
+        periode_akhir: tglAkhirFormatted,
+        paginate: 9999
+      }
+      if (values.m_dir_id) lemburParams.m_dir_id = values.m_dir_id
+      if (values.m_divisi_id) lemburParams.m_divisi_id = values.m_divisi_id
+      if (values.m_dept_id) lemburParams.m_dept_id = values.m_dept_id
+
+      const resLembur = await fetch(lemburURL + '?' + new URLSearchParams(lemburParams), {
+        headers: {
+          'Content-Type': 'Application/json',
+          Authorization: `${store.user.token_type} ${store.user.token}`,
+        }
+      })
+      if (!resLembur.ok) {
+        throw new Error('Gagal mengambil data perhitungan lembur')
+      }
+      const jsonLembur = await resLembur.json()
+      const dataLembur = jsonLembur.data || []
+
+      if (!dataLembur.length) {
+        return swal.fire({
+          icon: 'info',
+          text: 'Tidak ada data perhitungan lembur pada rentang periode dan filter yang dipilih.'
+        })
+      }
+
+      const rows = dataLembur.map((l) => {
+        const nominal = Number(l.total_lembur || 0)
+        return {
+          _id: ++_id,
+          id: null,
+          t_perhitungan_gaji_id: null,
+          m_kary_id: l.m_kary_id,
+          'm_kary.nik': l['m_kary.nik'] || l.nik || '-',
+          'm_kary.nama_lengkap': l['m_kary.nama_lengkap'] || l.nama_lengkap || '-',
+          karyawan: l['m_kary.nama_lengkap'] || l.nama_lengkap || '-',
+          'm_kary_dir.nama': l['m_kary_dir.nama'] || '-',
+          'm_kary_divisi.nama': l['m_kary_divisi.nama'] || l.divisi_nama || '-',
+          'm_kary_dept.nama': l['m_kary_dept.nama'] || l.dept_nama || '-',
+          periode: l.periode || (values.periode_awal + ' s/d ' + values.periode_akhir),
+          periode_in_date: l.periode_awal || tglAwalFormatted,
+          total_tax: 0,
+          total_gaji: nominal,
+          netto: nominal,
+          detail_gaji: [
+            {
+              label: 'Upah Lembur',
+              factor: '+',
+              value: nominal,
+              type: 'Lembur',
+              can_adjust: 1
+            }
+          ],
+          deskripsi: l.deskripsi || ''
+        }
+      })
+
+      detailArr.value = rows
+      summaryPengeluaranGaji()
+    } catch (err) {
+      isBadForm.value = true
+      swal.fire({
+        icon: 'error',
+        text: err?.message || err || 'Gagal mengambil data perhitungan lembur'
+      })
+    } finally {
+      isRequesting.value = false
+    }
+    return
+  }
+
+  // 2. KASUS PERHITUNGAN GAJI (BULANAN / MINGGUAN / SEMUA)
   try {
+    isRequesting.value = true
     const dataURL = `${store.server.url_backend}/operation/t_perhitungan_gaji`
-    const tglAwalFormatted = formatDate(values.periode_awal)
-    const tglAkhirFormatted = formatDate(values.periode_akhir)
 
     const params = {
       scopes: 'GenerateForFinal',
@@ -250,33 +442,35 @@ async function generatePerhitungan() {
       if ([400, 422].includes(res.status)) {
         const responseJson = await res.json()
         formErrors.value = responseJson.errors || {}
-        throw (responseJson.errors?.length ? responseJson.errors[0] : responseJson.message || "Gagal mengambil data perhitungan gaji")
+        throw (responseJson.errors?.length ? responseJson.errors[0] : responseJson.message || 'Gagal mengambil data perhitungan gaji')
       } else if (res.status === 500) {
         const responseJson = await res.json().catch(() => ({}))
-        throw (responseJson.message || "Terjadi kesalahan server saat mengambil data perhitungan gaji.")
+        throw (responseJson.message || 'Terjadi kesalahan server saat mengambil data perhitungan gaji.')
       } else {
-        throw ("Gagal mengambil data perhitungan gaji")
+        throw ('Gagal mengambil data perhitungan gaji')
       }
     }
 
     const result = await res.json()
     const resultData = result.data || []
 
-    // Filter validasi sisi client: pastikan data perhitungan gaji yang ditarik benar-benar sesuai periode yang dipilih
-    const startParts = tglAwalFormatted.split('-')
-    const endParts = tglAkhirFormatted.split('-')
-    const expLabelAwal = `${startParts[2]}/${startParts[1]}/${startParts[0]}`
-    const expLabelAkhir = `${endParts[2]}/${endParts[1]}/${endParts[0]}`
-    const expPeriode = (expLabelAwal === expLabelAkhir) ? expLabelAwal : `${expLabelAwal} - ${expLabelAkhir}`
+    let filteredData = Array.isArray(resultData) ? [...resultData] : []
 
-    const filteredData = resultData.filter((item) => {
-      if (!item.periode) return true
-      return item.periode === expPeriode || 
-             (item.periode_in_date === tglAwalFormatted && item.periode.includes(expLabelAkhir)) ||
-             (item.periode.includes(expLabelAwal) && item.periode.includes(expLabelAkhir))
-    })
+    // Filter sisi client jika tipe periode gaji dipilih (Bulanan / Mingguan)
+    if (values.periode_gaji_id) {
+      const selectedId = String(values.periode_gaji_id)
+      const selectedText = String(tipePeriodeText.value || '').toUpperCase()
+      filteredData = filteredData.filter((item) => {
+        const itemPeriodeId = String(item.periode_id || item['m_kary.periode_gaji_id'] || '')
+        const itemPeriodeText = String(item.periode_text || item['periode.value'] || '').toUpperCase()
+        if (selectedId && itemPeriodeId && itemPeriodeId === selectedId) return true
+        if (selectedText && itemPeriodeText && (itemPeriodeText.includes(selectedText) || selectedText.includes(itemPeriodeText))) return true
+        if (!itemPeriodeId && !itemPeriodeText) return true
+        return false
+      })
+    }
 
-    // Integrasi: Tarik data perhitungan lembur untuk periode ini jika tersedia
+    // Integrasi: Tarik data perhitungan lembur untuk memperbarui komponen lembur karyawan terkait
     try {
       const lemburURL = `${store.server.url_backend}/operation/t_perhitungan_lembur`
       const lemburParams = {
@@ -329,37 +523,6 @@ async function generatePerhitungan() {
               item.netto = Number(item.netto || 0) + nominalLembur
             }
           })
-
-          dataLembur.forEach((l) => {
-            const exists = filteredData.some((item) => item.m_kary_id === l.m_kary_id)
-            if (!exists && Number(l.total_lembur || 0) > 0) {
-              filteredData.push({
-                _id: ++_id,
-                t_perhitungan_gaji_id: null,
-                m_kary_id: l.m_kary_id,
-                'm_kary.nik': l['m_kary.nik'] || l.nik || '-',
-                'm_kary.nama_lengkap': l['m_kary.nama_lengkap'] || l.nama_lengkap || '-',
-                karyawan: l['m_kary.nama_lengkap'] || l.nama_lengkap || '-',
-                'm_kary_dir.nama': l['m_kary_dir.nama'] || '-',
-                'm_kary_divisi.nama': l['m_kary_divisi.nama'] || '-',
-                'm_kary_dept.nama': l['m_kary_dept.nama'] || '-',
-                periode: l.periode || expPeriode,
-                total_gaji: Number(l.total_lembur || 0),
-                total_tax: 0,
-                netto: Number(l.total_lembur || 0),
-                detail_gaji: [
-                  {
-                    label: 'Upah Lembur',
-                    factor: '+',
-                    value: Number(l.total_lembur || 0),
-                    type: 'Lembur',
-                    can_adjust: 1
-                  }
-                ],
-                deskripsi: l.deskripsi || ''
-              })
-            }
-          })
         }
       }
     } catch (e) {
@@ -369,13 +532,13 @@ async function generatePerhitungan() {
     if (!filteredData.length) {
       return swal.fire({
         icon: 'warning',
-        text: 'Tidak ditemukan data Perhitungan Gaji maupun Perhitungan Lembur untuk periode ini. Pastikan proses perhitungan sudah dilakukan terlebih dahulu.'
+        text: 'Tidak ditemukan data Perhitungan Gaji untuk periode dan filter yang dipilih.'
       })
     }
 
     filteredData.forEach((item) => {
       item._id = ++_id
-      item.t_perhitungan_gaji_id = item.id
+      item.t_perhitungan_gaji_id = item.t_perhitungan_gaji_id !== undefined ? item.t_perhitungan_gaji_id : item.id
       item.karyawan = item['m_kary.nama_lengkap'] || item.karyawan
       item.deskripsi = item['deskripsi'] || ''
       if (typeof item.detail_gaji === 'string') {
@@ -391,6 +554,8 @@ async function generatePerhitungan() {
       icon: 'error',
       text: err?.message || err || 'Terjadi kesalahan'
     })
+  } finally {
+    isRequesting.value = false
   }
 }
 
@@ -501,7 +666,7 @@ async function onSave() {
     })
 
     const detObj = {
-      t_perhitungan_gaji_id: v.t_perhitungan_gaji_id || (isCreating ? v.id : undefined),
+      t_perhitungan_gaji_id: isTipeLemburSaja() ? null : (v.t_perhitungan_gaji_id || (isCreating ? v.id : null)),
       m_kary_id: v.m_kary_id,
       m_kary_dir_id: v.m_kary_dir_id || null,
       m_kary_divisi_id: v.m_kary_divisi_id || null,
@@ -579,11 +744,19 @@ function onReset() {
       for (const key in initialValues) {
         values[key] = initialValues[key]
       }
+
+      if (initialValues.periode_awal) {
+        values.periode_awal = formatDateDisplay(initialValues.periode_awal)
+      }
+      if (initialValues.periode_akhir) {
+        values.periode_akhir = formatDateDisplay(initialValues.periode_akhir)
+      }
     }
   })
 }
 
 onBeforeMount(async () => {
+  await loadPeriodeGajiOptions()
   if (isRead) {
     try {
       const editedId = route.params.id

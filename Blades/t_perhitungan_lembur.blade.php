@@ -1,13 +1,15 @@
 @if(!$req->has('id'))
+@verbatim
 <div class="bg-white p-6 rounded-xl h-[570px]">
   <TableApi ref='apiTable' :api="landing.api" :columns="landing.columns" :actions="landing.actions">
     <template #header>
-      <RouterLink v-if="currentMenu?.can_create||true||store.user.data.username==='developer'" :to="$route.path+'/create?'+(Date.parse(new Date()))" class="bg-blue-500 text-white hover:bg-blue-600 rounded-[6px] py-2 px-[12.5px]">
+      <RouterLink :to="$route.path+'/create?'+(Date.parse(new Date()))" class="bg-blue-500 text-white hover:bg-blue-600 rounded-[6px] py-2 px-[12.5px]">
         <icon fa="bolt" /> Generate Gaji Lembur
       </RouterLink>
     </template>
   </TableApi>
 </div>
+@endverbatim
 @else
 
 @verbatim
@@ -29,10 +31,9 @@
               :check="false"
               type="date"
               label=""
-              placeholder="YYYY-MM-DD"
+              placeholder="DD/MM/YYYY"
               @input="(v)=>{
-                values.periode_awal=v
-                detailArr = []
+                onPeriodeAwalChange(v)
               }"
           />
         </div>
@@ -44,10 +45,9 @@
               :check="false"
               type="date"
               label=""
-              placeholder="YYYY-MM-DD"
+              placeholder="DD/MM/YYYY"
               @input="(v)=>{
-                values.periode_akhir=v
-                detailArr = []
+                onPeriodeAkhirChange(v)
               }"
           />
         </div>
@@ -222,42 +222,44 @@
             </tr>
           </thead>
           <tbody>
-            <tr v-if="detailArr.length" v-for="(item, i) in detailArr" :key="item.id || i" class="border-t hover:bg-yellow-100">
-              <td class="text-center border border-[#CACACA] px-2 py-1">
-                {{ i + 1 }}.
-              </td>
-              <td class="text-left border border-[#CACACA] px-2">
-                {{ item.periode }}
-              </td>
-              <td class="text-left border border-[#CACACA] px-2">
-                {{ item['m_kary.nik'] || item.nik || item.kode || '-' }}
-              </td>
-              <td class="text-left border border-[#CACACA] px-2 font-medium">
-                {{ item.karyawan || item.nama_lengkap }}
-              </td>
-              <td class="text-left border border-[#CACACA] px-2 text-sm">
-                {{ item.divisi_nama || item['m_kary_divisi.nama'] || '-' }} / {{ item.dept_nama || item['m_kary_dept.nama'] || '-' }}
-              </td>
-              <td class="text-center border border-[#CACACA] px-2">
-                {{ item.grading || '-' }}
-              </td>
-              <td class="text-center border border-[#CACACA] px-2 font-semibold bg-green-50">
-                {{ item.total_jam_diakui }} jam
-              </td>
-              <td class="text-right border border-[#CACACA] px-2">
-                {{ formatRupiah(item.tarif_lembur) }}
-              </td>
-              <td class="text-right border border-[#CACACA] px-2 font-bold text-green-700 bg-green-50">
-                {{ formatRupiah(item.total_lembur) }}
-              </td>
-              <td class="border border-[#CACACA]">
-                <div class="flex justify-center">
-                  <button @click="openDetail(i)" class="rounded-lg flex items-center justify-center p-1 text-blue-600 hover:text-blue-800" title="Lihat SPK Lembur">
-                    <icon fa="circle-info" size="lg" />
-                  </button>
-                </div>
-              </td>
-            </tr>
+            <template v-if="detailArr && detailArr.length">
+              <tr v-for="(item, i) in detailArr" :key="item.id || i" class="border-t hover:bg-yellow-100">
+                <td class="text-center border border-[#CACACA] px-2 py-1">
+                  {{ i + 1 }}.
+                </td>
+                <td class="text-left border border-[#CACACA] px-2">
+                  {{ item.periode }}
+                </td>
+                <td class="text-left border border-[#CACACA] px-2">
+                  {{ item['m_kary.nik'] || item.nik || item.kode || '-' }}
+                </td>
+                <td class="text-left border border-[#CACACA] px-2 font-medium">
+                  {{ item.karyawan || item.nama_lengkap }}
+                </td>
+                <td class="text-left border border-[#CACACA] px-2 text-sm">
+                  {{ item.divisi_nama || item['m_kary_divisi.nama'] || '-' }} / {{ item.dept_nama || item['m_kary_dept.nama'] || '-' }}
+                </td>
+                <td class="text-center border border-[#CACACA] px-2">
+                  {{ item.grading || '-' }}
+                </td>
+                <td class="text-center border border-[#CACACA] px-2 font-semibold bg-green-50">
+                  {{ item.total_jam_diakui }} jam
+                </td>
+                <td class="text-right border border-[#CACACA] px-2">
+                  {{ formatRupiah(item.tarif_lembur) }}
+                </td>
+                <td class="text-right border border-[#CACACA] px-2 font-bold text-green-700 bg-green-50">
+                  {{ formatRupiah(item.total_lembur) }}
+                </td>
+                <td class="border border-[#CACACA]">
+                  <div class="flex justify-center">
+                    <button @click="openDetail(i)" class="rounded-lg flex items-center justify-center p-1 text-blue-600 hover:text-blue-800" title="Lihat SPK Lembur">
+                      <icon fa="circle-info" size="lg" />
+                    </button>
+                  </div>
+                </td>
+              </tr>
+            </template>
             <tr v-else class="text-center">
               <td colspan="10" class="py-[20px] text-gray-500">
                 Belum ada data lembur untuk ditampilkan. Silakan pilih rentang periode dan klik "Hitung Lembur".
@@ -310,17 +312,19 @@
             </tr>
           </thead>
           <tbody>
-            <tr v-if="detailArrOpen.items.length" v-for="(spk, idx) in detailArrOpen.items" :key="idx" class="border hover:bg-gray-50">
-              <td class="text-center border p-2">{{ idx + 1 }}</td>
-              <td class="text-center border p-2">{{ spk.tanggal }}</td>
-              <td class="text-left border p-2 font-mono text-xs">{{ spk.nomor }}</td>
-              <td class="text-left border p-2">{{ spk.tipe_lembur }}</td>
-              <td class="text-center border p-2">{{ spk.jam_mulai }} - {{ spk.jam_selesai }}</td>
-              <td class="text-center border p-2">{{ spk.jam_mulai_realisasi }} - {{ spk.jam_selesai_realisasi }}</td>
-              <td class="text-center border p-2 font-semibold bg-green-50">{{ spk.diakui_jam }} jam</td>
-              <td class="text-right border p-2">{{ formatRupiah(spk.tarif_lembur) }}</td>
-              <td class="text-right border p-2 font-bold text-green-700 bg-green-50">{{ formatRupiah(spk.total_lembur) }}</td>
-            </tr>
+            <template v-if="detailArrOpen.items && detailArrOpen.items.length">
+              <tr v-for="(spk, idx) in detailArrOpen.items" :key="idx" class="border hover:bg-gray-50">
+                <td class="text-center border p-2">{{ idx + 1 }}</td>
+                <td class="text-center border p-2">{{ spk.tanggal }}</td>
+                <td class="text-left border p-2 font-mono text-xs">{{ spk.nomor }}</td>
+                <td class="text-left border p-2">{{ spk.tipe_lembur }}</td>
+                <td class="text-center border p-2">{{ spk.jam_mulai }} - {{ spk.jam_selesai }}</td>
+                <td class="text-center border p-2">{{ spk.jam_mulai_realisasi }} - {{ spk.jam_selesai_realisasi }}</td>
+                <td class="text-center border p-2 font-semibold bg-green-50">{{ spk.diakui_jam }} jam</td>
+                <td class="text-right border p-2">{{ formatRupiah(spk.tarif_lembur) }}</td>
+                <td class="text-right border p-2 font-bold text-green-700 bg-green-50">{{ formatRupiah(spk.total_lembur) }}</td>
+              </tr>
+            </template>
             <tr v-else>
               <td colspan="9" class="text-center py-4 text-gray-500">Tidak ada rincian SPK lembur.</td>
             </tr>

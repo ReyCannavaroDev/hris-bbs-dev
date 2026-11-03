@@ -31,7 +31,7 @@ const is_superadmin = ref(false);
 
 const isReadOnly = computed(() => {
   if (['Create', 'Copy', 'Tambah'].includes(actionText.value)) return false
-  if (['IN APPROVAL', 'HALF APPROVED'].includes(values.status) || is_approval) return true
+  if (['IN APPROVAL', 'HALF APPROVED', 'APPROVED', 'REJECTED'].includes(values.status) || is_approval) return true
   return !actionText.value
 })
 
@@ -151,7 +151,7 @@ onBeforeMount(async () => {
         }
 
         // Jika status transaksi IN APPROVAL atau HALF APPROVED, load juga info approval & cek akses approval
-        if (['IN APPROVAL', 'HALF APPROVED'].includes(values.status)) {
+        if (['IN APPROVAL', 'HALF APPROVED', 'APPROVED', 'REJECTED'].includes(values.status)) {
           try {
             const apiApp = await fetch(`${store.server.url_backend}/operation/t_lembur/detail?trx_id=${editedId}`, {
               headers: {

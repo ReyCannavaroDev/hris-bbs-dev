@@ -3,16 +3,79 @@
 namespace App\Models\CustomModels;
 
 use Carbon\Carbon;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 class t_perhitungan_lembur extends \App\Models\BasicModels\t_perhitungan_lembur
 {
     private $helper;
+
+    public $fileColumns = [ /*file_column*/ ];
 
     public function __construct()
     {
         parent::__construct();
         $this->helper = getCore("Helper");
         $this->casts['detail_lembur'] = 'array';
+
+        $this->columns = [
+            "id", "nomor", "m_comp_id", "m_dir_id", "m_kary_id", "m_kary_dir_id", "m_kary_divisi_id",
+            "m_kary_dept_id", "periode", "periode_awal", "periode_akhir", "total_spk_min",
+            "total_realisasi_min", "total_diakui_min", "total_jam_diakui", "tarif_lembur",
+            "total_lembur", "detail_lembur", "deskripsi", "status", "creator_id", "last_editor_id",
+            "created_at", "updated_at"
+        ];
+        $this->columnsFull = [
+            "id:bigint", "nomor:string:50", "m_comp_id:bigint", "m_dir_id:bigint", "m_kary_id:bigint",
+            "m_kary_dir_id:bigint", "m_kary_divisi_id:bigint", "m_kary_dept_id:bigint",
+            "periode:string:100", "periode_awal:date", "periode_akhir:date", "total_spk_min:integer",
+            "total_realisasi_min:integer", "total_diakui_min:integer", "total_jam_diakui:decimal",
+            "tarif_lembur:decimal", "total_lembur:decimal", "detail_lembur:json", "deskripsi:text",
+            "status:string:50", "creator_id:bigint", "last_editor_id:bigint", "created_at:datetime", "updated_at:datetime"
+        ];
+        $this->fillable = [
+            "nomor", "m_comp_id", "m_dir_id", "m_kary_id", "m_kary_dir_id", "m_kary_divisi_id",
+            "m_kary_dept_id", "periode", "periode_awal", "periode_akhir", "total_spk_min",
+            "total_realisasi_min", "total_diakui_min", "total_jam_diakui", "tarif_lembur",
+            "total_lembur", "detail_lembur", "deskripsi", "status", "creator_id", "last_editor_id"
+        ];
+        $this->createable = $this->fillable;
+        $this->updateable = $this->fillable;
+        $this->searchable = [
+            "id", "nomor", "m_kary.nik", "m_kary.nama_lengkap", "m_kary_dir.nama", "m_kary_divisi.nama", "m_kary_dept.nama", "periode", "total_lembur", "status"
+        ];
+        $this->joins = [
+            "m_kary.id=t_perhitungan_lembur.m_kary_id",
+            "m_dir.id=t_perhitungan_lembur.m_kary_dir_id",
+            "m_divisi.id=t_perhitungan_lembur.m_kary_divisi_id",
+            "m_dept.id=t_perhitungan_lembur.m_kary_dept_id",
+            "default_users.id=t_perhitungan_lembur.creator_id",
+            "default_users.id=t_perhitungan_lembur.last_editor_id"
+        ];
+    }
+
+    public function m_kary() : BelongsTo
+    {
+        return $this->belongsTo('App\Models\BasicModels\m_kary', 'm_kary_id', 'id');
+    }
+
+    public function m_dir() : BelongsTo
+    {
+        return $this->belongsTo('App\Models\BasicModels\m_dir', 'm_dir_id', 'id');
+    }
+
+    public function m_kary_dir() : BelongsTo
+    {
+        return $this->belongsTo('App\Models\BasicModels\m_dir', 'm_kary_dir_id', 'id');
+    }
+
+    public function m_kary_divisi() : BelongsTo
+    {
+        return $this->belongsTo('App\Models\BasicModels\m_divisi', 'm_kary_divisi_id', 'id');
+    }
+
+    public function m_kary_dept() : BelongsTo
+    {
+        return $this->belongsTo('App\Models\BasicModels\m_dept', 'm_kary_dept_id', 'id');
     }
 
     public $createAdditionalData = [
@@ -138,8 +201,8 @@ class t_perhitungan_lembur extends \App\Models\BasicModels\t_perhitungan_lembur
             }
 
             // Normalisasi format tanggal Y-m-d
-            $strDateFrom = (strlen($rawAwal) === 7) ? $rawAwal . '-01' : date('Y-m-d', strtotime($rawAwal));
-            $strDateTo = (strlen($rawAkhir) === 7) ? date('Y-m-t', strtotime($rawAkhir . '-01')) : date('Y-m-d', strtotime($rawAkhir));
+            $strDateFrom = (strlen($rawAwal) === 7) ? $rawAwal . '-01' : date('Y-m-d', strtotime(str_replace('/', '-', $rawAwal)));
+            $strDateTo = (strlen($rawAkhir) === 7) ? date('Y-m-t', strtotime(str_replace('/', '-', $rawAkhir) . '-01')) : date('Y-m-d', strtotime(str_replace('/', '-', $rawAkhir)));
 
             $labelAwal = date('d/m/Y', strtotime($strDateFrom));
             $labelAkhir = date('d/m/Y', strtotime($strDateTo));
@@ -342,8 +405,8 @@ class t_perhitungan_lembur extends \App\Models\BasicModels\t_perhitungan_lembur
         $rawAkhir = $req->periode_akhir;
 
         if ($rawAwal && $rawAkhir) {
-            $strDateFrom = (strlen($rawAwal) === 7) ? $rawAwal . '-01' : date('Y-m-d', strtotime($rawAwal));
-            $strDateTo = (strlen($rawAkhir) === 7) ? date('Y-m-t', strtotime($rawAkhir . '-01')) : date('Y-m-d', strtotime($rawAkhir));
+            $strDateFrom = (strlen($rawAwal) === 7) ? $rawAwal . '-01' : date('Y-m-d', strtotime(str_replace('/', '-', $rawAwal)));
+            $strDateTo = (strlen($rawAkhir) === 7) ? date('Y-m-t', strtotime(str_replace('/', '-', $rawAkhir) . '-01')) : date('Y-m-d', strtotime(str_replace('/', '-', $rawAkhir)));
 
             $labelAwal = date('d/m/Y', strtotime($strDateFrom));
             $labelAkhir = date('d/m/Y', strtotime($strDateTo));

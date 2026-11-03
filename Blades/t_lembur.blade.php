@@ -299,7 +299,7 @@
             :hints="formErrors.keterangan" :check="false" label="" placeholder="Tuliskan keterangan" />
         </div>
 
-        <div v-show="['IN APPROVAL', 'HALF APPROVED'].includes(values.status) || route.query.is_approval">
+        <div v-show="['IN APPROVAL', 'HALF APPROVED', 'APPROVED', 'REJECTED'].includes(values.status) || route.query.is_approval">
           <div class="flex items-center mb-2 mt-3">
             <button
                 type="button"
@@ -400,10 +400,10 @@
         <button v-show="route.query.action?.toLowerCase() === 'verifikasi'" @click="posted" class="bg-orange-500 hover:bg-orange-600 text-white px-[36.5px] py-[5px] font-semibold rounded-[4px] ">
             Posted
           </button>
-        <button v-show="!actionText || ['IN APPROVAL', 'HALF APPROVED'].includes(values.status)" @click="onBack" class="bg-gray-500 hover:bg-gray-600 text-white px-[36.5px] py-[5px] font-semibold rounded-[4px]">
+        <button v-show="!actionText || ['IN APPROVAL', 'HALF APPROVED', 'APPROVED', 'REJECTED'].includes(values.status)" @click="onBack" class="bg-gray-500 hover:bg-gray-600 text-white px-[36.5px] py-[5px] font-semibold rounded-[4px]">
             Kembali
           </button>
-        <button v-show="actionText && !['IN APPROVAL', 'HALF APPROVED'].includes(values.status)" @click="onSave" class="bg-[#10B981] hover:bg-[#0ea774] text-white px-[36.5px] py-[5px] font-semibold rounded-[4px]">
+        <button v-show="actionText && !['IN APPROVAL', 'HALF APPROVED', 'APPROVED', 'REJECTED'].includes(values.status)" @click="onSave" class="bg-[#10B981] hover:bg-[#0ea774] text-white px-[36.5px] py-[5px] font-semibold rounded-[4px]">
             Simpan
           </button>
       </div>

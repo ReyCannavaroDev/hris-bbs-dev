@@ -29,12 +29,9 @@
               :check="false"
               type="date"
               label=""
-              placeholder="YYYY-MM-DD"
+              placeholder="DD/MM/YYYY"
               @input="(v)=>{
-                //$log(v)
-                values.periode_awal=v
-                detailArr = []
-                //$log(values.divisi)
+                onPeriodeAwalChange(v)
               }"
           />
         </div>
@@ -46,12 +43,9 @@
               :check="false"
               type="date"
               label=""
-              placeholder="YYYY-MM-DD"
+              placeholder="DD/MM/YYYY"
               @input="(v)=>{
-                //$log(v)
-                values.periode_akhir=v
-                detailArr = []
-                //$log(values.divisi)
+                onPeriodeAkhirChange(v)
               }"
           />
         </div>
@@ -157,21 +151,21 @@
             fa-icon="search" :check="true" />
         </div>
         <div>
-          <label class="font-semibold">Periode Gaji (Tipe Penggajian)</label>
           <FieldSelect
             class="w-full py-2 !mt-0"
             :bind="{ disabled: !actionText, clearable:true }"
             :value="values.periode_gaji_id" 
             :check="false"
             @input="(v)=>{
-              values.periode_gaji_id=v
-              values.m_kary_id=null
-              detailArr = []
+              onPeriodeGajiInput(v)
+            }"
+            @update:valueFull="(objVal)=>{
+              onTipePeriodeChange(objVal)
             }"
             :errorText="formErrors.periode_gaji_id?'failed':''"
             :hints="formErrors.periode_gaji_id"
-            placeholder="Pilih Periode Gaji (Semua / Bulanan / Mingguan)"
-            label=""
+            label="Periode Gaji (Tipe Penggajian)"
+            placeholder="Pilih Periode Gaji"
             displayField="value"
             valueField="id"
             :api="{
@@ -184,6 +178,10 @@
                   single:true,
                   where:`this.group='PERIODE GAJI' and this.is_active='true'`,
                   transform:false,
+                },
+                onsuccess(response) {
+                  onLoadPeriodeOptions(response)
+                  return response
                 }
             }"
             fa-icon="search" :check="true" />

@@ -27,18 +27,16 @@
           <label class="font-semibold">Periode Awal<span class="text-red-500 space-x-0 pl-0">*</span></label>
           <FieldX :bind="{ readonly: !actionText , required: true}" class="w-full py-2 !mt-0"
             :value="values.periode_awal" :errorText="formErrors.periode_awal?'failed':''"
-            :hints="formErrors.periode_awal" :check="false" type="date" label="" placeholder="YYYY-MM-DD" @input="(v)=>{
-                values.periode_awal=v
-                clearDetail()
+            :hints="formErrors.periode_awal" :check="false" type="date" label="" placeholder="DD/MM/YYYY" @input="(v)=>{
+                onPeriodeAwalChange(v)
               }" />
         </div>
         <div>
           <label class="font-semibold">Periode Akhir<span class="text-red-500 space-x-0 pl-0">*</span></label>
           <FieldX :bind="{ readonly: !actionText , required: true}" class="w-full py-2 !mt-0"
             :value="values.periode_akhir" :errorText="formErrors.periode_akhir?'failed':''"
-            :hints="formErrors.periode_akhir" :check="false" type="date" label="" placeholder="YYYY-MM-DD" @input="(v)=>{
-                values.periode_akhir=v
-                clearDetail()
+            :hints="formErrors.periode_akhir" :check="false" type="date" label="" placeholder="DD/MM/YYYY" @input="(v)=>{
+                onPeriodeAkhirChange(v)
               }" />
         </div>
 
@@ -51,6 +49,7 @@
               values.m_dept_id=null
               clearDetail()
             }" :errorText="formErrors.m_dir_id?'failed':''" :hints="formErrors.m_dir_id" placeholder="Pilih Company / Cabang"
+            label=""
             displayField="nama" valueField="id" :api="{
                 url: `${store.server.url_backend}/operation/m_dir`,
                 headers: {
@@ -73,6 +72,7 @@
               values.m_dept_id=null
               clearDetail()
             }" :errorText="formErrors.m_divisi_id?'failed':''" :hints="formErrors.m_divisi_id" placeholder="Pilih Divisi"
+            label=""
             displayField="nama" valueField="id" :api="{
                 url: `${store.server.url_backend}/operation/m_divisi`,
                 headers: {
@@ -94,6 +94,7 @@
               values.m_dept_id=v
               clearDetail()
             }" :errorText="formErrors.m_dept_id?'failed':''" :hints="formErrors.m_dept_id" placeholder="Pilih Departemen"
+            label=""
             displayField="nama" valueField="id" :api="{
                 url: `${store.server.url_backend}/operation/m_dept`,
                 headers: {
@@ -109,19 +110,22 @@
         </div>
 
         <div>
-          <label class="font-semibold">Periode Gaji (Tipe Penggajian)</label>
+          <label class="font-semibold block mb-1">Periode Gaji (Tipe Penggajian)</label>
           <FieldSelect
-            class="w-full py-2 !mt-0"
+            class="w-full py-2 mt-1"
             :bind="{ disabled: !actionText, clearable:true }"
             :value="values.periode_gaji_id" 
             :check="false"
             @input="(v)=>{
-              values.periode_gaji_id=v
-              clearDetail()
+              onTipePeriodeChange(v)
+            }"
+            @update:valueFull="(objVal)=>{
+              onTipePeriodeChange(objVal)
             }"
             :errorText="formErrors.periode_gaji_id?'failed':''"
             :hints="formErrors.periode_gaji_id"
-            placeholder="Pilih Periode Gaji (Semua / Bulanan / Mingguan)"
+            placeholder="Bulanan / Mingguan / Lembur Saja"
+            label=""
             displayField="value"
             valueField="id"
             :api="{
@@ -134,6 +138,10 @@
                   single:true,
                   where:`this.group='PERIODE GAJI' and this.is_active='true'`,
                   transform:false,
+                },
+                onsuccess(response) {
+                  onLoadPeriodeOptions(response)
+                  return response
                 }
             }"
             fa-icon="search" :check="true" />

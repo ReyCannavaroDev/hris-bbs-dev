@@ -74,17 +74,25 @@ class generate_approval extends \App\Models\BasicModels\generate_approval
         $userAuth = auth()->user();
         $isSuperadmin = (bool) ($userAuth->is_superadmin ?? false);
 
-        $query = generate_approval::selectRaw("generate_approval.*, 
+        $query = generate_approval::selectRaw("
+            generate_approval.id, generate_approval.m_comp_id, generate_approval.m_dir_id, generate_approval.nomor, generate_approval.m_approval_id, generate_approval.trx_id, generate_approval.trx_name, generate_approval.form_name, generate_approval.trx_table, generate_approval.trx_nomor, generate_approval.trx_date, generate_approval.trx_creator_id, generate_approval.creator_id, generate_approval.created_at, generate_approval.updated_at, generate_approval.last_approve_id, generate_approval.last_approve_det_id,
             (case 
                 when generate_approval.trx_table = 't_lembur' then coalesce((select tl.status from t_lembur tl where tl.id = generate_approval.trx_id), generate_approval.status)
                 else generate_approval.status 
             end) as status,
             (select u.name from default_users u where u.id = generate_approval.creator_id) creator")
-            ->leftJoin('default_users', 'default_users.id', 'generate_approval.creator_id');
+            ->leftJoin('default_users', 'default_users.id', 'generate_approval.creator_id')
+            ->whereIn('generate_approval.status', ['PROGRESS', 'HALF APPROVED'])
+            ->whereRaw("case when generate_approval.trx_table = 't_lembur' then coalesce((select tl.status from t_lembur tl where tl.id = generate_approval.trx_id), generate_approval.status) not in ('APPROVED', 'REJECTED') else true end");
+
+        // Tiket yang sudah pernah disetujui oleh user bersangkutan tidak boleh muncul lagi di inbox outstanding miliknya
+        $query->whereRaw("generate_approval.id not in (
+            select d_done.generate_approval_id from generate_approval_det d_done 
+            where d_done.action_user_id = " . intval($userAuth->id) . " and d_done.is_done = true
+        )");
 
         if ($isSuperadmin) {
-            $data = $query->whereIn('generate_approval.status', ['PROGRESS', 'HALF APPROVED'])
-                ->orderBy('generate_approval.id', 'desc')
+            $data = $query->orderBy('generate_approval.id', 'desc')
                 ->search(['trx_name', 'nomor', 'trx_date', 'trx_nomor', 'default_users.name'])
                 ->paginate(app()->request->paginate ?? 50);
             return response($data);
@@ -139,18 +147,28 @@ class generate_approval extends \App\Models\BasicModels\generate_approval
         $combinedRoleIds = array_unique(array_merge($userRoleIds, $hrdRoleIds));
         $roleIdsIn = !empty($combinedRoleIds) ? implode(',', array_map('intval', $combinedRoleIds)) : '0';
 
-        $data = $query->whereIn('generate_approval.status', ['PROGRESS', 'HALF APPROVED'])
-            ->where(function($q) use ($userAuth, $roleIdsIn) {
-                // Skenario 1: User adalah last_approve_id langsung
-                $q->where('generate_approval.last_approve_id', $userAuth->id)
-                  // Skenario 2: User memiliki role (atau terdeteksi HRD) untuk slot approval yang belum selesai
-                  ->orWhereRaw("generate_approval.id in (
-                      select d.generate_approval_id from generate_approval_det d 
-                      where d.m_role_id in ($roleIdsIn)
-                        and d.is_done = false
-                  )");
+        // Alur fleksibel: baik Atasan maupun HRD dapat melihat tiket outstanding jika slotnya belum selesai
+        $data = $query->where(function($q) use ($userAuth, $roleIdsIn, $isHrd) {
+                // Skenario 1: User adalah last_approve_id langsung yang aktif dan slot belum selesai
+                $q->where(function($sub) use ($userAuth) {
+                    $sub->where('generate_approval.last_approve_id', $userAuth->id)
+                        ->whereRaw("generate_approval.id in (
+                            select d.generate_approval_id from generate_approval_det d 
+                            where d.is_done = false
+                              and (d.urutan_level = 1 or lower(coalesce((select r.name from m_role r where r.id = d.m_role_id), '')) like '%atasan%')
+                        )");
+                })
+                // Skenario 2: Slot approval HRD / role user yang belum selesai
+                ->orWhereRaw("generate_approval.id in (
+                    select d.generate_approval_id from generate_approval_det d 
+                    where d.is_done = false
+                      and (
+                          d.m_role_id in ($roleIdsIn)
+                          " . ($isHrd ? " or d.urutan_level >= 2 or lower(coalesce((select r.name from m_role r where r.id = d.m_role_id), '')) like '%hr%' or lower(coalesce((select r.name from m_role r where r.id = d.m_role_id), '')) like '%personalia%'" : "") . "
+                      )
+                )");
 
-                // Skenario 3: Transaksi t_lembur khusus bagi atasan dari karyawan bersangkutan
+                // Skenario 3: Transaksi t_lembur untuk atasan langsung dari karyawan bersangkutan jika slot atasan belum selesai
                 if (!empty($userAuth->m_kary_id)) {
                     $q->orWhereRaw("generate_approval.trx_table = 't_lembur' and generate_approval.trx_id in (
                         select tl.id from t_lembur tl 
@@ -159,6 +177,7 @@ class generate_approval extends \App\Models\BasicModels\generate_approval
                           and generate_approval.id in (
                               select d.generate_approval_id from generate_approval_det d 
                               where d.is_done = false
+                                and (d.urutan_level = 1 or lower(coalesce((select r.name from m_role r where r.id = d.m_role_id), '')) like '%atasan%')
                           )
                     )");
                 }
@@ -285,44 +304,168 @@ class generate_approval extends \App\Models\BasicModels\generate_approval
         \DB::beginTransaction();
 
         try {
-            $conf = [
-                "app_id" => $req->id,
-                "app_type" => $req->type, // APPROVED, REVISED, REJECTED,
-                "app_note" => $req->note, // alasan approve
-            ];
+            $userAuth = auth()->user();
             $datas = generate_approval::where('id', $req->id)->first();
 
             if (!$datas) {
                 return $this->helper->customResponse('errors', 404, "Data not found");
             }
 
-            $cek = \DB::table($datas['trx_table'])->where('id', $datas['trx_id'])->first();
-            if($cek->status === 'REJECTED' || $cek->status === 'REVISED'){
+            $cek = \DB::table($datas->trx_table)->where('id', $datas->trx_id)->first();
+            if ($cek && ($cek->status === 'REJECTED' || $cek->status === 'REVISED')) {
                 return $this->helper->customResponse('Data Sudah Dalam Status Rejected atau Revised , Harap Ulangi atau Perbaiki Pengajuan', 422);
             }
 
-            $app = $this->helper->approvalProgress($conf);
-            if ($app->status) {
-                $data = \DB::table($datas['trx_table'])->where('id',$app->trx_id);
-                if ($app->finish) {
-                    $data->update([
-                        "status" => $req->type,
-                    ]);
-                } else {
-                    if($req->type != 'APPROVED'){                        
-                        $data->update([
-                            "status" => $req->type,
-                        ]);
-                    }else{
-                        $midStatus = ($datas['trx_table'] == 't_lembur') ? 'HALF APPROVED' : 'IN APPROVAL';
-                        $data->update([
-                            "status" => $midStatus,
-                        ]);
-                        if ($datas['trx_table'] == 't_lembur') {
-                            \DB::table('generate_approval')->where('id', $app_id)->update(['status' => 'HALF APPROVED']);
-                        }
+            // Identifikasi peran user (Atasan / HRD / Superadmin)
+            $isSuperadmin = (bool) ($userAuth->is_superadmin ?? false);
+            $userRoleIds = \DB::table('m_role_access')->where('user_id', $userAuth->id)->pluck('m_role_id')->toArray();
+            $userRoleNames = \DB::table('m_role')->whereIn('id', $userRoleIds)->pluck('name')->map(function($n) {
+                return strtolower($n);
+            })->toArray();
+
+            $isAtasan = false;
+            if ($datas->trx_table === 't_lembur') {
+                $trxKary = \DB::table('t_lembur')->where('id', $datas->trx_id)->first();
+                if ($trxKary && !empty($userAuth->m_kary_id)) {
+                    $atasanId = \DB::table('m_kary')->where('id', $trxKary->m_kary_id)->value('atasan_id');
+                    if ($atasanId && $atasanId == $userAuth->m_kary_id) {
+                        $isAtasan = true;
                     }
                 }
+            }
+            foreach ($userRoleNames as $rn) {
+                if (stripos($rn, 'atasan') !== false) {
+                    $isAtasan = true;
+                }
+            }
+
+            $isHrd = false;
+            foreach ($userRoleNames as $rn) {
+                if (stripos($rn, 'hr') !== false || stripos($rn, 'personalia') !== false) {
+                    $isHrd = true;
+                    break;
+                }
+            }
+            if (!$isHrd && !empty($userAuth->m_kary_id)) {
+                $userKary = \DB::table('m_kary')
+                    ->leftJoin('m_posisi', 'm_posisi.id', '=', 'm_kary.m_posisi_id')
+                    ->leftJoin('m_divisi', 'm_divisi.id', '=', 'm_kary.m_divisi_id')
+                    ->where('m_kary.id', $userAuth->m_kary_id)
+                    ->select('m_posisi.desc_kerja as posisi_nama', 'm_divisi.nama as divisi_nama')
+                    ->first();
+                if ($userKary) {
+                    $posNama = strtolower($userKary->posisi_nama ?? '');
+                    $divNama = strtolower($userKary->divisi_nama ?? '');
+                    if (stripos($posNama, 'hr') !== false || stripos($posNama, 'personalia') !== false ||
+                        stripos($divNama, 'hr') !== false || stripos($divNama, 'personalia') !== false) {
+                        $isHrd = true;
+                    }
+                }
+            }
+
+            // Ambil slot detail approval yang belum selesai
+            $undoneDets = \DB::table('generate_approval_det')
+                ->leftJoin('m_role', 'm_role.id', '=', 'generate_approval_det.m_role_id')
+                ->where('generate_approval_det.generate_approval_id', $datas->id)
+                ->where('generate_approval_det.is_done', false)
+                ->select('generate_approval_det.*', 'm_role.name as role_name')
+                ->orderBy('generate_approval_det.urutan_level', 'asc')
+                ->get();
+
+            if ($undoneDets->isEmpty()) {
+                return $this->helper->customResponse('Seluruh persetujuan sudah selesai dilakukan', 422);
+            }
+
+            // Tentukan target detail slot secara fleksibel:
+            $targetDet = null;
+            if ($isAtasan) {
+                $targetDet = $undoneDets->first(function($d) {
+                    return stripos(strtolower($d->role_name ?? ''), 'atasan') !== false || $d->urutan_level == 1;
+                });
+            }
+            if (!$targetDet && $isHrd) {
+                $targetDet = $undoneDets->first(function($d) use ($userRoleIds) {
+                    return stripos(strtolower($d->role_name ?? ''), 'hr') !== false 
+                        || stripos(strtolower($d->role_name ?? ''), 'personalia') !== false
+                        || in_array($d->m_role_id, $userRoleIds)
+                        || $d->urutan_level >= 2;
+                });
+            }
+            if (!$targetDet) {
+                $targetDet = $undoneDets->first(function($d) use ($userRoleIds) {
+                    return in_array($d->m_role_id, $userRoleIds);
+                });
+            }
+            if (!$targetDet && $isSuperadmin) {
+                $targetDet = $undoneDets->first();
+            }
+
+            if (!$targetDet) {
+                return $this->helper->customResponse('Anda tidak memiliki akses untuk menyetujui transaksi ini', 403);
+            }
+
+            // Update slot detail terpilih
+            $now = date('Y-m-d H:i:s');
+            \DB::table('generate_approval_det')->where('id', $targetDet->id)->update([
+                'action_at' => $now,
+                'action_type' => $req->type,
+                'action_user_id' => $userAuth->id,
+                'action_note' => $req->note ?? 'Approved',
+                'is_done' => true,
+            ]);
+
+            // Catat log approval
+            \DB::table('generate_approval_log')->insert([
+                'nomor' => $datas->nomor,
+                'generate_approval_id' => $datas->id,
+                'generate_approval_det_id' => $targetDet->id,
+                'trx_id' => $datas->trx_id,
+                'trx_table' => $datas->trx_table,
+                'trx_name' => $datas->trx_name,
+                'trx_nomor' => $datas->trx_nomor,
+                'trx_date' => $datas->trx_date,
+                'trx_creator_id' => $datas->trx_creator_id,
+                'action_type' => $req->type,
+                'action_user_id' => $userAuth->id,
+                'creator_id' => $userAuth->id,
+                'action_at' => $now,
+                'action_note' => $req->note ?? 'Approved',
+                'created_at' => $now,
+                'updated_at' => $now,
+            ]);
+
+            // Cek slot yang tersisa
+            $remainingDets = \DB::table('generate_approval_det')
+                ->where('generate_approval_id', $datas->id)
+                ->where('is_done', false)
+                ->get();
+
+            if ($req->type === 'REJECTED') {
+                \DB::table($datas->trx_table)->where('id', $datas->trx_id)->update(['status' => 'REJECTED']);
+                \DB::table('generate_approval')->where('id', $datas->id)->update([
+                    'status' => 'REJECTED',
+                    'last_approve_id' => null,
+                    'last_approve_det_id' => null
+                ]);
+            } elseif ($remainingDets->isEmpty()) {
+                // Semua approver sudah selesai
+                \DB::table($datas->trx_table)->where('id', $datas->trx_id)->update(['status' => 'APPROVED']);
+                \DB::table('generate_approval')->where('id', $datas->id)->update([
+                    'status' => 'APPROVED',
+                    'last_approve_id' => null,
+                    'last_approve_det_id' => null
+                ]);
+            } else {
+                // Masih ada approval lain -> status HALF APPROVED
+                $midStatus = ($datas->trx_table === 't_lembur') ? 'HALF APPROVED' : 'IN APPROVAL';
+                \DB::table($datas->trx_table)->where('id', $datas->trx_id)->update(['status' => $midStatus]);
+                
+                $nextDet = $remainingDets->first();
+                \DB::table('generate_approval')->where('id', $datas->id)->update([
+                    'status' => 'PROGRESS',
+                    'last_approve_det_id' => $nextDet ? $nextDet->id : null,
+                    'last_approve_id' => null
+                ]);
             }
 
             \DB::commit();
@@ -332,7 +475,6 @@ class generate_approval extends \App\Models\BasicModels\generate_approval
             \DB::rollback();
 
             return $this->helper->responseCatch($e);
-
         }
     }
 

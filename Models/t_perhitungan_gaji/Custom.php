@@ -673,13 +673,13 @@ class t_perhitungan_gaji extends \App\Models\BasicModels\t_perhitungan_gaji
             if (strlen($rawAwal) === 7) {
                 $strDateFrom = $rawAwal . '-01';
             } else {
-                $strDateFrom = date('Y-m-d', strtotime($rawAwal));
+                $strDateFrom = date('Y-m-d', strtotime(str_replace('/', '-', $rawAwal)));
             }
 
             if (strlen($rawAkhir) === 7) {
-                $strDateTo = date('Y-m-t', strtotime($rawAkhir . '-01'));
+                $strDateTo = date('Y-m-t', strtotime(str_replace('/', '-', $rawAkhir) . '-01'));
             } else {
-                $strDateTo = date('Y-m-d', strtotime($rawAkhir));
+                $strDateTo = date('Y-m-d', strtotime(str_replace('/', '-', $rawAkhir)));
             }
 
             $labelAwal = date('d/m/Y', strtotime($strDateFrom));
@@ -761,8 +761,8 @@ class t_perhitungan_gaji extends \App\Models\BasicModels\t_perhitungan_gaji
         $rawAkhir = $req->periode_akhir;
 
         if ($rawAwal && $rawAkhir) {
-            $strDateFrom = (strlen($rawAwal) === 7) ? $rawAwal . '-01' : date('Y-m-d', strtotime($rawAwal));
-            $strDateTo = (strlen($rawAkhir) === 7) ? date('Y-m-t', strtotime($rawAkhir . '-01')) : date('Y-m-d', strtotime($rawAkhir));
+            $strDateFrom = (strlen($rawAwal) === 7) ? $rawAwal . '-01' : date('Y-m-d', strtotime(str_replace('/', '-', $rawAwal)));
+            $strDateTo = (strlen($rawAkhir) === 7) ? date('Y-m-t', strtotime(str_replace('/', '-', $rawAkhir) . '-01')) : date('Y-m-d', strtotime(str_replace('/', '-', $rawAkhir)));
 
             $labelAwal = date('d/m/Y', strtotime($strDateFrom));
             $labelAkhir = date('d/m/Y', strtotime($strDateTo));
@@ -770,26 +770,26 @@ class t_perhitungan_gaji extends \App\Models\BasicModels\t_perhitungan_gaji
 
             // Filter agar HANYA mengambil data perhitungan gaji yang sesuai persis dengan periode yang dipilih,
             // atau yang periode_in_date-nya sama persis dan memuat label tanggal akhir
-            $model = $model->where(function($q) use ($expectedPeriode, $strDateFrom, $labelAwal, $labelAkhir) {
+            $model = $model->where(function($q) use ($expectedPeriode, $strDateFrom, $strDateTo, $labelAwal, $labelAkhir) {
                 $q->where('t_perhitungan_gaji.periode', $expectedPeriode)
-                  ->orWhere(function($sub) use ($strDateFrom, $labelAkhir) {
-                      $sub->where('t_perhitungan_gaji.periode_in_date', $strDateFrom)
-                          ->where('t_perhitungan_gaji.periode', 'like', '%' . $labelAkhir . '%');
+                  ->orWhere(function($sub) use ($strDateFrom, $strDateTo) {
+                      $sub->where('t_perhitungan_gaji.periode_in_date', '<=', $strDateTo)
+                          ->where('t_perhitungan_gaji.periode_in_date', '>=', $strDateFrom);
                   })
                   ->orWhere(function($sub2) use ($labelAwal, $labelAkhir) {
                       $sub2->where('t_perhitungan_gaji.periode', 'like', '%' . $labelAwal . '%')
-                           ->where('t_perhitungan_gaji.periode', 'like', '%' . $labelAkhir . '%');
+                           ->orWhere('t_perhitungan_gaji.periode', 'like', '%' . $labelAkhir . '%');
                   });
             });
         } elseif ($rawAwal) {
-            $strDateFrom = (strlen($rawAwal) === 7) ? $rawAwal . '-01' : date('Y-m-d', strtotime($rawAwal));
+            $strDateFrom = (strlen($rawAwal) === 7) ? $rawAwal . '-01' : date('Y-m-d', strtotime(str_replace('/', '-', $rawAwal)));
             $labelAwal = date('d/m/Y', strtotime($strDateFrom));
             $model = $model->where(function($q) use ($strDateFrom, $labelAwal) {
                 $q->where('t_perhitungan_gaji.periode_in_date', '>=', $strDateFrom)
                   ->orWhere('t_perhitungan_gaji.periode', 'like', '%' . $labelAwal . '%');
             });
         } elseif ($rawAkhir) {
-            $strDateTo = (strlen($rawAkhir) === 7) ? date('Y-m-t', strtotime($rawAkhir . '-01')) : date('Y-m-d', strtotime($rawAkhir));
+            $strDateTo = (strlen($rawAkhir) === 7) ? date('Y-m-t', strtotime(str_replace('/', '-', $rawAkhir) . '-01')) : date('Y-m-d', strtotime(str_replace('/', '-', $rawAkhir)));
             $labelAkhir = date('d/m/Y', strtotime($strDateTo));
             $model = $model->where(function($q) use ($strDateTo, $labelAkhir) {
                 $q->where('t_perhitungan_gaji.periode_in_date', '<=', $strDateTo)
@@ -800,7 +800,21 @@ class t_perhitungan_gaji extends \App\Models\BasicModels\t_perhitungan_gaji
         if($req->m_dir_id) $model = $model->where('t_perhitungan_gaji.m_kary_dir_id', $req->m_dir_id);
         if($req->m_divisi_id) $model = $model->where('t_perhitungan_gaji.m_kary_divisi_id', $req->m_divisi_id);
         if($req->m_dept_id) $model = $model->where('t_perhitungan_gaji.m_kary_dept_id', $req->m_dept_id);
-        if($req->periode_gaji_id) $model = $model->where('t_perhitungan_gaji.periode_id', $req->periode_gaji_id);
+        if ($req->periode_gaji_id) {
+            $val = $req->periode_gaji_id;
+            if (strtoupper($val) === 'LEMBUR') {
+                $model = $model->whereRaw('1=0');
+            } elseif (is_numeric($val)) {
+                $model = $model->where(function ($q) use ($val) {
+                    $q->where('t_perhitungan_gaji.periode_id', $val)
+                      ->orWhere('m_kary.periode_gaji_id', $val);
+                });
+            } else {
+                $model = $model->where(function ($q) use ($val) {
+                    $q->whereRaw("EXISTS (SELECT 1 FROM m_general mg WHERE (mg.id = t_perhitungan_gaji.periode_id OR mg.id = m_kary.periode_gaji_id) AND UPPER(mg.value) = ?)", [strtoupper($val)]);
+                });
+            }
+        }
         if($req->m_kary_id) $model = $model->where('t_perhitungan_gaji.m_kary_id', $req->m_kary_id);
 
         // Proteksi anti-double finalize: data perhitungan gaji yang sudah masuk ke finalisasi berstatus POSTED tidak ditarik ulang

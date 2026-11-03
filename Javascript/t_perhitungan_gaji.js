@@ -49,12 +49,202 @@ function formatRupiah(amount) {
 let initialValues = {}
 const changedValues = []
 let _id = 0
+
 let now = new Date()
 let tempYear = now.getFullYear()
-let tempMonth = String(now.getMonth() + 1).padStart(2, '0')
-let firstDay = `${tempYear}-${tempMonth}-01`
-let lastDayDate = new Date(tempYear, now.getMonth() + 1, 0)
-let lastDay = `${tempYear}-${tempMonth}-${String(lastDayDate.getDate()).padStart(2, '0')}`
+let tempMonth = now.getMonth()
+
+function parseDate(v) {
+  if (!v) return null
+  if (v instanceof Date) return isNaN(v.getTime()) ? null : v
+  if (typeof v !== 'string') return null
+  const raw = v.trim().split(' ')[0]
+  const parts = raw.split(/[-/.]/)
+  if (parts.length !== 3) return null
+
+  let year, month, day
+  if (parts[0].length === 4) {
+    year = parseInt(parts[0], 10)
+    month = parseInt(parts[1], 10) - 1
+    day = parseInt(parts[2], 10)
+  } else if (parts[2].length === 4) {
+    day = parseInt(parts[0], 10)
+    month = parseInt(parts[1], 10) - 1
+    year = parseInt(parts[2], 10)
+  } else {
+    return null
+  }
+
+  const d = new Date(year, month, day)
+  return isNaN(d.getTime()) ? null : d
+}
+
+function formatDateDisplay(d) {
+  if (!d) return ''
+  const dateObj = (d instanceof Date) ? d : parseDate(d)
+  if (!dateObj) return d
+  const day = String(dateObj.getDate()).padStart(2, '0')
+  const month = String(dateObj.getMonth() + 1).padStart(2, '0')
+  const year = dateObj.getFullYear()
+  return `${day}/${month}/${year}`
+}
+
+function formatDateApi(d) {
+  if (!d) return ''
+  const dateObj = (d instanceof Date) ? d : parseDate(d)
+  if (!dateObj) return d
+  const day = String(dateObj.getDate()).padStart(2, '0')
+  const month = String(dateObj.getMonth() + 1).padStart(2, '0')
+  const year = dateObj.getFullYear()
+  return `${year}-${month}-${day}`
+}
+
+let dStart = new Date(tempYear, tempMonth, 1)
+let dEnd = new Date(tempYear, tempMonth + 1, 0)
+let firstDay = formatDateDisplay(dStart)
+let lastDay = formatDateDisplay(dEnd)
+
+const tipePeriodeText = ref('')
+
+function isTipeMingguan() {
+  const t = String(tipePeriodeText.value || '').toLowerCase()
+  return t.includes('minggu')
+}
+
+function isTipeBulanan() {
+  const t = String(tipePeriodeText.value || '').toLowerCase()
+  return t.includes('bulan')
+}
+
+
+function calcEndMonthly(d) {
+  const year = d.getFullYear()
+  const month = d.getMonth()
+  const day = d.getDate()
+  if (day === 1) {
+    return new Date(year, month + 1, 0)
+  }
+  const maxDaysNextMonth = new Date(year, month + 2, 0).getDate()
+  const targetDay = Math.min(day - 1, maxDaysNextMonth)
+  return new Date(year, month + 1, targetDay)
+}
+
+function calcStartMonthly(d) {
+  const year = d.getFullYear()
+  const month = d.getMonth()
+  const day = d.getDate()
+  const lastDayThisMonth = new Date(year, month + 1, 0).getDate()
+  if (day === lastDayThisMonth) {
+    return new Date(year, month, 1)
+  }
+  const maxDaysPrevMonth = new Date(year, month, 0).getDate()
+  const targetDay = Math.min(day + 1, maxDaysPrevMonth)
+  return new Date(year, month - 1, targetDay)
+}
+
+const periodeOptions = ref([])
+const periodeOptionsMap = reactive({})
+
+function onLoadPeriodeOptions(response) {
+  if (!response) return
+  const list = response.data || response || []
+  if (Array.isArray(list)) {
+    periodeOptions.value = list
+    list.forEach((item) => {
+      if (item.id && item.value) {
+        periodeOptionsMap[item.id] = String(item.value).toUpperCase()
+      }
+    })
+    if (values.periode_gaji_id && !tipePeriodeText.value) {
+      onPeriodeGajiInput(values.periode_gaji_id)
+    }
+  }
+}
+
+function onPeriodeGajiInput(v) {
+  values.periode_gaji_id = v
+  values.m_kary_id = null
+  detailArr.value = []
+  if (!v) {
+    tipePeriodeText.value = ''
+    return
+  }
+
+  const mapped = periodeOptionsMap[v]
+  if (mapped) {
+    tipePeriodeText.value = mapped
+  } else if (isNaN(v)) {
+    tipePeriodeText.value = String(v).toUpperCase()
+  } else {
+    const found = periodeOptions.value.find((o) => String(o.id) === String(v))
+    if (found) {
+      tipePeriodeText.value = String(found.value || '').toUpperCase()
+    }
+  }
+
+  if (values.periode_awal) {
+    onPeriodeAwalChange(values.periode_awal)
+  }
+}
+
+function onPeriodeAwalChange(v) {
+  const d = parseDate(v)
+  if (d) {
+    values.periode_awal = formatDateDisplay(d)
+  } else {
+    values.periode_awal = v
+  }
+  detailArr.value = []
+  if (!d) return
+
+  // Jika periode gaji (tipe penggajian) tidak diisi, periode tanggal bebas diisi
+  if (!values.periode_gaji_id && !tipePeriodeText.value) return
+
+  if (isTipeMingguan()) {
+    const end = new Date(d)
+    end.setDate(end.getDate() + 6)
+    values.periode_akhir = formatDateDisplay(end)
+  } else if (isTipeBulanan()) {
+    values.periode_akhir = formatDateDisplay(calcEndMonthly(d))
+  }
+}
+
+function onPeriodeAkhirChange(v) {
+  const d = parseDate(v)
+  if (d) {
+    values.periode_akhir = formatDateDisplay(d)
+  } else {
+    values.periode_akhir = v
+  }
+  detailArr.value = []
+  if (!d) return
+
+  // Jika periode gaji (tipe penggajian) tidak diisi, periode tanggal bebas diisi
+  if (!values.periode_gaji_id && !tipePeriodeText.value) return
+
+  if (isTipeMingguan()) {
+    const start = new Date(d)
+    start.setDate(start.getDate() - 6)
+    values.periode_awal = formatDateDisplay(start)
+  } else if (isTipeBulanan()) {
+    values.periode_awal = formatDateDisplay(calcStartMonthly(d))
+  }
+}
+
+function onTipePeriodeChange(objVal) {
+  if (objVal && typeof objVal === 'object') {
+    tipePeriodeText.value = String(objVal.value || objVal.nama || objVal.label || '').toUpperCase()
+    if (objVal.id) periodeOptionsMap[objVal.id] = tipePeriodeText.value
+  } else if (typeof objVal === 'string' || typeof objVal === 'number') {
+    onPeriodeGajiInput(objVal)
+    return
+  } else {
+    tipePeriodeText.value = ''
+  }
+  if (values.periode_gaji_id && tipePeriodeText.value && values.periode_awal) {
+    onPeriodeAwalChange(values.periode_awal)
+  }
+}
 
 const values = reactive({
   periode_awal: firstDay,
@@ -115,6 +305,13 @@ onBeforeMount(async () => {
     values[key] = initialValues[key]
   }
 
+  if (initialValues.periode_awal) {
+    values.periode_awal = formatDateDisplay(initialValues.periode_awal)
+  }
+  if (initialValues.periode_akhir) {
+    values.periode_akhir = formatDateDisplay(initialValues.periode_akhir)
+  }
+
   if (isRead && initialValues && initialValues.id) {
     const itemData = { ...initialValues }
     itemData.karyawan = itemData['m_kary.nama_lengkap'] || itemData.karyawan || itemData.nama_lengkap || '-'
@@ -173,14 +370,7 @@ function onReset() {
 
 
 function formatDate(dateStr) {
-  if (!dateStr) return null
-  if (typeof dateStr === 'string' && dateStr.includes('/')) {
-    const parts = dateStr.split('/')
-    if (parts.length === 3) {
-      return `${parts[2]}-${parts[1].padStart(2, '0')}-${parts[0].padStart(2, '0')}`
-    }
-  }
-  return dateStr
+  return formatDateApi(dateStr)
 }
 
 async function generatePerhitungan() {
@@ -246,8 +436,13 @@ async function generatePerhitungan() {
 
 async function onSave() {
   // merging detail data
-    values['detail'] = detailArr.value ?? detailArr._value
-      try {
+    const payload = {
+          ...values,
+          periode_awal: formatDateApi(values.periode_awal),
+          periode_akhir: formatDateApi(values.periode_akhir),
+          detail: detailArr.value ?? detailArr._value
+        }
+        try {
         const dataURL = `${store.server.url_backend}/operation/t_perhitungan_gaji/save`
         isRequesting.value = true
 
@@ -257,7 +452,7 @@ async function onSave() {
             'Content-Type': 'Application/json',
             Authorization: `${store.user.token_type} ${store.user.token}`
           },
-          body: JSON.stringify(values)
+          body: JSON.stringify(payload)
         })
         if (!res.ok) {
           if ([400, 422].includes(res.status)) {

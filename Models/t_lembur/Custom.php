@@ -441,20 +441,20 @@ class t_lembur extends \App\Models\BasicModels\t_lembur
             // Tentukan target slot yang diproses oleh user secara fleksibel / paralel
             $targetSlot = null;
 
-            // 1. Jika Atasan langsung, cari slot Atasan
+            // 1. Jika Atasan langsung, cari slot Atasan (urutan_level 1 atau nama role atasan)
             if ($isAtasan) {
                 $targetSlot = $undoneDetails->first(function($d) {
-                    return stripos(strtolower($d->role_name ?? ''), 'atasan') !== false;
+                    return $d->urutan_level == 1 || stripos(strtolower($d->role_name ?? ''), 'atasan') !== false;
                 });
             }
 
-            // 2. Jika HRD, cari slot HRD
+            // 2. Jika HRD, cari slot HRD (urutan_level 2 atau nama role hr/personalia)
             if (!$targetSlot && ($isHrd || !empty(array_intersect($userRoleIds, $undoneDetails->pluck('m_role_id')->toArray())))) {
                 $targetSlot = $undoneDetails->first(function($d) use ($userRoleIds) {
                     $rnLower = strtolower($d->role_name ?? '');
                     $nameMatch = (stripos($rnLower, 'hr') !== false) || (stripos($rnLower, 'personalia') !== false);
                     $roleIdMatch = in_array($d->m_role_id, $userRoleIds);
-                    return $nameMatch || $roleIdMatch;
+                    return $nameMatch || $roleIdMatch || $d->urutan_level >= 2;
                 });
             }
 
@@ -535,6 +535,7 @@ class t_lembur extends \App\Models\BasicModels\t_lembur
 
                     \DB::table('generate_approval')->where('id', $generateApproval->id)->update([
                         'status' => 'HALF APPROVED',
+                        'last_approve_id' => null,
                         'last_approve_det_id' => $nextSlotId,
                         'updated_at' => $timestamp
                     ]);
@@ -630,6 +631,9 @@ class t_lembur extends \App\Models\BasicModels\t_lembur
             $isSuperadmin = (bool) ($userAuth->is_superadmin ?? false);
 
             $trx = \DB::table('t_lembur')->where('id', $app->trx_id)->first();
+            if ($trx && !empty($trx->status) && isset($data->approval)) {
+                $data->approval->status = $trx->status;
+            }
             $isAtasan = false;
             if ($trx && $trx->m_kary_id) {
                 $atasanKaryId = \DB::table('m_kary')->where('id', $trx->m_kary_id)->value('atasan_id');

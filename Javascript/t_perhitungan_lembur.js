@@ -64,14 +64,87 @@ const changedValues = []
 let _id = 0
 let now = new Date()
 let tempYear = now.getFullYear()
-let tempMonth = String(now.getMonth() + 1).padStart(2, '0')
-let firstDay = `${tempYear}-${tempMonth}-01`
-let lastDayDate = new Date(tempYear, now.getMonth() + 1, 0)
-let lastDay = `${tempYear}-${tempMonth}-${String(lastDayDate.getDate()).padStart(2, '0')}`
+let tempMonth = now.getMonth()
+
+function parseDate(v) {
+  if (!v) return null
+  if (v instanceof Date) return isNaN(v.getTime()) ? null : v
+  if (typeof v !== 'string') return null
+  const raw = v.trim().split(' ')[0]
+  const parts = raw.split(/[-/.]/)
+  if (parts.length !== 3) return null
+
+  let year, month, day
+  if (parts[0].length === 4) {
+    year = parseInt(parts[0], 10)
+    month = parseInt(parts[1], 10) - 1
+    day = parseInt(parts[2], 10)
+  } else if (parts[2].length === 4) {
+    day = parseInt(parts[0], 10)
+    month = parseInt(parts[1], 10) - 1
+    year = parseInt(parts[2], 10)
+  } else {
+    return null
+  }
+
+  const d = new Date(year, month, day)
+  return isNaN(d.getTime()) ? null : d
+}
+
+function formatDateDisplay(d) {
+  if (!d) return ''
+  const dateObj = (d instanceof Date) ? d : parseDate(d)
+  if (!dateObj) return d
+  const day = String(dateObj.getDate()).padStart(2, '0')
+  const month = String(dateObj.getMonth() + 1).padStart(2, '0')
+  const year = dateObj.getFullYear()
+  return `${day}/${month}/${year}`
+}
+
+function formatDateApi(d) {
+  if (!d) return ''
+  const dateObj = (d instanceof Date) ? d : parseDate(d)
+  if (!dateObj) return d
+  const day = String(dateObj.getDate()).padStart(2, '0')
+  const month = String(dateObj.getMonth() + 1).padStart(2, '0')
+  const year = dateObj.getFullYear()
+  return `${year}-${month}-${day}`
+}
+
+// Durasi perhitungan lembur default 1 minggu (7 hari: +6 hari dari awal)
+let dInit = new Date(tempYear, tempMonth, 1)
+let dInitEnd = new Date(dInit)
+dInitEnd.setDate(dInitEnd.getDate() + 6)
+let firstDay = formatDateDisplay(dInit)
+let endDay = formatDateDisplay(dInitEnd)
+
+function onPeriodeAwalChange(v) {
+  const d = parseDate(v)
+  values.periode_awal = d ? formatDateDisplay(d) : v
+  detailArr.value = []
+  if (!d) return
+
+  // Di perhitungan lembur durasinya selalu 1 minggu (7 hari, yaitu + 6 hari)
+  const end = new Date(d)
+  end.setDate(end.getDate() + 6)
+  values.periode_akhir = formatDateDisplay(end)
+}
+
+function onPeriodeAkhirChange(v) {
+  const d = parseDate(v)
+  values.periode_akhir = d ? formatDateDisplay(d) : v
+  detailArr.value = []
+  if (!d) return
+
+  // Di perhitungan lembur durasinya selalu 1 minggu (7 hari, yaitu - 6 hari)
+  const start = new Date(d)
+  start.setDate(start.getDate() - 6)
+  values.periode_awal = formatDateDisplay(start)
+}
 
 const values = reactive({
   periode_awal: firstDay,
-  periode_akhir: lastDay,
+  periode_akhir: endDay,
   m_dir_id: null,
   m_divisi_id: null,
   m_dept_id: null,
@@ -117,6 +190,13 @@ onBeforeMount(async () => {
     values[key] = initialValues[key]
   }
 
+  if (initialValues.periode_awal) {
+    values.periode_awal = formatDateDisplay(initialValues.periode_awal)
+  }
+  if (initialValues.periode_akhir) {
+    values.periode_akhir = formatDateDisplay(initialValues.periode_akhir)
+  }
+
   if (isRead && initialValues && initialValues.id) {
     const itemData = { ...initialValues }
     itemData.karyawan = itemData['m_kary.nama_lengkap'] || itemData.karyawan || itemData.nama_lengkap || '-'
@@ -135,14 +215,7 @@ function onBack() {
 }
 
 function formatDate(dateStr) {
-  if (!dateStr) return null
-  if (typeof dateStr === 'string' && dateStr.includes('/')) {
-    const parts = dateStr.split('/')
-    if (parts.length === 3) {
-      return `${parts[2]}-${parts[1].padStart(2, '0')}-${parts[0].padStart(2, '0')}`
-    }
-  }
-  return dateStr
+  return formatDateApi(dateStr)
 }
 
 async function generatePerhitungan() {
@@ -214,7 +287,12 @@ async function onSave() {
     })
   }
 
-  values['detail'] = detailArr.value
+  const payload = {
+    ...values,
+    periode_awal: formatDateApi(values.periode_awal),
+    periode_akhir: formatDateApi(values.periode_akhir),
+    detail: detailArr.value
+  }
   try {
     const dataURL = `${store.server.url_backend}/operation${endpointApi}/save`
     isRequesting.value = true
@@ -225,7 +303,7 @@ async function onSave() {
         'Content-Type': 'Application/json',
         Authorization: `${store.user.token_type} ${store.user.token}`
       },
-      body: JSON.stringify(values)
+      body: JSON.stringify(payload)
     })
 
     if (!res.ok) {
