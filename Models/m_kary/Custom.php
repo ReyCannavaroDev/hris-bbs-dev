@@ -152,7 +152,36 @@ class m_kary extends \App\Models\BasicModels\m_kary
             $cutiTerpakai = 0;
             $adjReguler = 0;
             if (!empty($tipeRegulerIds)) {
-                $cutiTerpakai = \DB::table('t_cuti')->where('m_kary_id', $karyId)->whereIn('tipe_cuti_id', $tipeRegulerIds)->whereIn('status', ['APPROVED', 'POSTED'])->whereYear('date_from', $currentYear)->sum('interval') ?? 0;
+                // Exclude Izin Khusus (Sakit SKD, Menikah, Duka/Meninggal) agar tidak memotong kuota 12 hari reguler
+                $cutiTerpakai = \DB::table('t_cuti')
+                    ->leftJoin('m_general as al', 'al.id', '=', 't_cuti.alasan_id')
+                    ->leftJoin('m_general as tc', 'tc.id', '=', 't_cuti.tipe_cuti_id')
+                    ->where('t_cuti.m_kary_id', $karyId)
+                    ->whereIn('t_cuti.tipe_cuti_id', $tipeRegulerIds)
+                    ->whereIn('t_cuti.status', ['APPROVED', 'POSTED'])
+                    ->whereYear('t_cuti.date_from', $currentYear)
+                    ->where(function($q) {
+                        $q->where(function($sub) {
+                            $sub->whereNull('al.value')
+                                ->orWhere(function($w) {
+                                    $w->whereRaw("LOWER(COALESCE(al.value, '')) NOT LIKE '%sakit%'")
+                                      ->whereRaw("LOWER(COALESCE(al.value, '')) NOT LIKE '%nikah%'")
+                                      ->whereRaw("LOWER(COALESCE(al.value, '')) NOT LIKE '%meninggal%'")
+                                      ->whereRaw("LOWER(COALESCE(al.value, '')) NOT LIKE '%kematian%'")
+                                      ->whereRaw("LOWER(COALESCE(al.value, '')) NOT LIKE '%duka%'");
+                                });
+                        })->where(function($sub2) {
+                            $sub2->whereNull('tc.value')
+                                 ->orWhere(function($w2) {
+                                     $w2->whereRaw("LOWER(COALESCE(tc.value, '')) NOT LIKE '%sakit%'")
+                                        ->whereRaw("LOWER(COALESCE(tc.value, '')) NOT LIKE '%nikah%'")
+                                        ->whereRaw("LOWER(COALESCE(tc.value, '')) NOT LIKE '%meninggal%'")
+                                        ->whereRaw("LOWER(COALESCE(tc.value, '')) NOT LIKE '%kematian%'")
+                                        ->whereRaw("LOWER(COALESCE(tc.value, '')) NOT LIKE '%duka%'");
+                                 });
+                        });
+                    })
+                    ->sum('t_cuti.interval') ?? 0;
                 $adjReguler = \DB::table('t_cuti_adjustment')->where('m_kary_id', $karyId)->whereIn('tipe_cuti_id', $tipeRegulerIds)->whereYear('date', $currentYear)->sum('value') ?? 0;
             }
             $sisaCuti = max(0, ($jatahCuti + $adjReguler) - $cutiTerpakai);

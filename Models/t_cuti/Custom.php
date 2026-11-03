@@ -83,6 +83,115 @@ class t_cuti extends \App\Models\BasicModels\t_cuti
         return $minutesDifference;
     }
 
+    private function validateCutiBusinessRules($arrayData, $interval, $interval_min, $id = null)
+    {
+        $karyId = $arrayData['m_kary_id'] ?? null;
+        if (!$karyId) {
+            return response([
+                "status"  => "error",
+                "message" => "Akun ini tidak tersambung dengan data karyawan manapun!",
+                "errors"  => ["m_kary_id" => ["Akun ini tidak tersambung dengan data karyawan manapun!"]]
+            ], 422);
+        }
+
+        // Ambil data m_general untuk alasan & tipe cuti
+        $alasanObj = !empty($arrayData['alasan_id']) ? \DB::table('m_general')->where('id', $arrayData['alasan_id'])->first() : null;
+        $tipeObj   = !empty($arrayData['tipe_cuti_id']) ? \DB::table('m_general')->where('id', $arrayData['tipe_cuti_id'])->first() : null;
+
+        $checkStr = strtolower(trim(
+            ($alasanObj->value ?? '') . ' ' .
+            ($alasanObj->code ?? '') . ' ' .
+            ($tipeObj->value ?? '') . ' ' .
+            ($tipeObj->code ?? '') . ' ' .
+            ($arrayData['keterangan'] ?? '')
+        ));
+
+        $isP24 = (!empty($arrayData['time_from']) && !empty($arrayData['time_to'])) || str_contains($checkStr, 'p24');
+        $isSakit = str_contains($checkStr, 'sakit');
+        $isMenikah = str_contains($checkStr, 'nikah') || str_contains($checkStr, 'menikah');
+        $isMeninggal = str_contains($checkStr, 'meninggal') || str_contains($checkStr, 'kematian') || str_contains($checkStr, 'duka');
+
+        if ($isP24) {
+            // Izin parsial jam-jaman (P24) tidak dibatasi 3 hari harian
+            return null;
+        }
+
+        $durasiHari = (int) ($interval ?? 1);
+
+        // 1. Izin Khusus: Sakit (SKD) - maksimal 3 hari kerja & wajib upload surat dokter
+        if ($isSakit) {
+            if ($durasiHari > 3) {
+                return response([
+                    "status"  => "error",
+                    "message" => "Pengajuan izin sakit dengan Surat Keterangan Dokter (SKD) maksimal 3 hari kerja per pengajuan.",
+                    "errors"  => ["interval" => ["Pengajuan izin sakit dengan Surat Keterangan Dokter (SKD) maksimal 3 hari kerja per pengajuan."]]
+                ], 422);
+            }
+            if (empty($arrayData['attachment'])) {
+                return response([
+                    "status"  => "error",
+                    "message" => "Pengajuan izin sakit wajib melampirkan Surat Keterangan Dokter (SKD).",
+                    "errors"  => ["attachment" => ["Pengajuan izin sakit wajib melampirkan Surat Keterangan Dokter (SKD)."]]
+                ], 422);
+            }
+            return null; // Izin khusus sakit tidak memotong kuota cuti reguler
+        }
+
+        // 2. Izin Khusus: Menikah - maksimal 3 hari kerja
+        if ($isMenikah) {
+            if ($durasiHari > 3) {
+                return response([
+                    "status"  => "error",
+                    "message" => "Pengajuan cuti menikah maksimal 3 hari kerja.",
+                    "errors"  => ["interval" => ["Pengajuan cuti menikah maksimal 3 hari kerja."]]
+                ], 422);
+            }
+            return null; // Izin khusus menikah tidak memotong kuota cuti reguler
+        }
+
+        // 3. Izin Khusus: Keluarga Meninggal - maksimal 3 hari kerja
+        if ($isMeninggal) {
+            if ($durasiHari > 3) {
+                return response([
+                    "status"  => "error",
+                    "message" => "Pengajuan cuti duka cita / keluarga meninggal maksimal 3 hari kerja.",
+                    "errors"  => ["interval" => ["Pengajuan cuti duka cita / keluarga meninggal maksimal 3 hari kerja."]]
+                ], 422);
+            }
+            return null; // Izin khusus duka cita tidak memotong kuota cuti reguler
+        }
+
+        // 4. Cuti Reguler / Tahunan (MoM Poin 5: Maksimal 3 hari berturut-turut & potong kuota 12 hari)
+        if ($durasiHari > 3) {
+            return response([
+                "status"  => "error",
+                "message" => "Pengambilan cuti reguler maksimal 3 hari berturut-turut per pengajuan.",
+                "errors"  => ["interval" => ["Pengambilan cuti reguler maksimal 3 hari berturut-turut per pengajuan."]]
+            ], 422);
+        }
+
+        // Cek sisa kuota cuti tahunan karyawan
+        $kary = \DB::table('m_kary')->where('id', $karyId)->first();
+        if ($kary) {
+            $sisaCuti = (int) ($kary->cuti_sisa_reguler ?? 12);
+            if ($id) {
+                $oldCuti = \DB::table('t_cuti')->where('id', $id)->first();
+                if ($oldCuti && in_array($oldCuti->status, ['APPROVED', 'POSTED'])) {
+                    $sisaCuti += (int) ($oldCuti->interval ?? 0);
+                }
+            }
+            if ($durasiHari > $sisaCuti) {
+                return response([
+                    "status"  => "error",
+                    "message" => "Sisa kuota cuti tahunan tidak mencukupi (sisa kuota: {$sisaCuti} hari, pengajuan: {$durasiHari} hari).",
+                    "errors"  => ["interval" => ["Sisa kuota cuti tahunan tidak mencukupi (sisa kuota: {$sisaCuti} hari, pengajuan: {$durasiHari} hari)."]]
+                ], 422);
+            }
+        }
+
+        return null;
+    }
+
     public function createBefore($model, $arrayData, $metaData, $id = null)
     {   
         if(!isset($arrayData['m_kary_id'])){
@@ -103,7 +212,12 @@ class t_cuti extends \App\Models\BasicModels\t_cuti
             $interval_min = @$this->hitungMenit($arrayData['time_from'], $arrayData['time_to']) ?? 1;
         }
 
-        
+        // Validasi Aturan Bisnis Cuti & Dispensasi MoM Poin 5
+        $validationErr = $this->validateCutiBusinessRules($arrayData, $interval, $interval_min, $id);
+        if ($validationErr) {
+            return $validationErr;
+        }
+
         $newArrayData = array_merge($arrayData, [
             "nomor" => $this->helper->generateNomor("KODE CUTI"),
             "interval" => $interval,
@@ -142,6 +256,12 @@ class t_cuti extends \App\Models\BasicModels\t_cuti
 
         if (isset($arrayData['time_from']) && isset($arrayData['time_to'])) {
             $interval_min = @$this->hitungMenit($arrayData['time_from'], $arrayData['time_to']) ?? 1;
+        }
+
+        // Validasi Aturan Bisnis Cuti & Dispensasi MoM Poin 5
+        $validationErr = $this->validateCutiBusinessRules($arrayData, $interval, $interval_min, $id);
+        if ($validationErr) {
+            return $validationErr;
         }
 
         if (app()->request->header("Source") == "mobile") {
@@ -311,7 +431,31 @@ class t_cuti extends \App\Models\BasicModels\t_cuti
                     $data->update([
                         "status" => $req->type
                     ]);
-                   
+
+                    // Jika approval APPROVED, periksa apakah cuti reguler untuk potong kuota di m_kary
+                    if ($req->type === 'APPROVED' && !empty($data->m_kary_id) && $data->interval > 0) {
+                        $alasanObj = !empty($data->alasan_id) ? \DB::table('m_general')->where('id', $data->alasan_id)->first() : null;
+                        $tipeObj   = !empty($data->tipe_cuti_id) ? \DB::table('m_general')->where('id', $data->tipe_cuti_id)->first() : null;
+                        $checkStr  = strtolower(trim(($alasanObj->value ?? '') . ' ' . ($tipeObj->value ?? '') . ' ' . ($data->keterangan ?? '')));
+
+                        $isKhusus = str_contains($checkStr, 'sakit') ||
+                                    str_contains($checkStr, 'nikah') ||
+                                    str_contains($checkStr, 'menikah') ||
+                                    str_contains($checkStr, 'meninggal') ||
+                                    str_contains($checkStr, 'kematian') ||
+                                    str_contains($checkStr, 'duka') ||
+                                    str_contains($checkStr, 'p24') ||
+                                    (!empty($data->time_from) && !empty($data->time_to));
+
+                        if (!$isKhusus) {
+                            // Cuti Reguler: potong kuota sisa cuti reguler karyawan
+                            \DB::table('m_kary')
+                                ->where('id', $data->m_kary_id)
+                                ->update([
+                                    'cuti_sisa_reguler' => \DB::raw("GREATEST(0, COALESCE(cuti_sisa_reguler, 12) - {$data->interval})")
+                                ]);
+                        }
+                    }
                 } else {
                     $data->update([
                         "status" => "IN APPROVAL",

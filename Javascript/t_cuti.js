@@ -252,6 +252,67 @@ function onSave() {
       return;
     }
 
+    // --- VALIDASI ATURAN BISNIS CUTI & DISPENSASI (MoM POIN 5) ---
+    const strCheck = ((values.alasan_string || '') + ' ' + (values.tipe_string || '') + ' ' + (values.keterangan || '')).toLowerCase();
+    const isP24 = values.tipe_string?.toLowerCase() === 'p24' || (values.time_from && values.time_to);
+    const isSakit = strCheck.includes('sakit');
+    const isMenikah = strCheck.includes('nikah') || strCheck.includes('menikah');
+    const isMeninggal = strCheck.includes('meninggal') || strCheck.includes('kematian') || strCheck.includes('duka');
+
+    if (!isP24 && values.date_from && values.date_to) {
+      const dFrom = new Date(values.date_from);
+      const dTo = new Date(values.date_to);
+      const diffTime = dTo.getTime() - dFrom.getTime();
+      const diffDays = Math.round(diffTime / (1000 * 3600 * 24)) + 1;
+
+      if (isSakit) {
+        if (diffDays > 3) {
+          isBadForm.value = true;
+          swal.fire({
+            icon: 'error',
+            text: 'Pengajuan izin sakit dengan Surat Keterangan Dokter (SKD) maksimal 3 hari kerja per pengajuan.',
+          });
+          return;
+        }
+        if (!values.attachment) {
+          isBadForm.value = true;
+          swal.fire({
+            icon: 'error',
+            text: 'Pengajuan izin sakit wajib melampirkan file Surat Keterangan Dokter (SKD).',
+          });
+          return;
+        }
+      } else if (isMenikah) {
+        if (diffDays > 3) {
+          isBadForm.value = true;
+          swal.fire({
+            icon: 'error',
+            text: 'Pengajuan cuti menikah maksimal 3 hari kerja.',
+          });
+          return;
+        }
+      } else if (isMeninggal) {
+        if (diffDays > 3) {
+          isBadForm.value = true;
+          swal.fire({
+            icon: 'error',
+            text: 'Pengajuan cuti duka cita / keluarga meninggal maksimal 3 hari kerja.',
+          });
+          return;
+        }
+      } else {
+        // Cuti Reguler: maksimal 3 hari berturut-turut per pengajuan
+        if (diffDays > 3) {
+          isBadForm.value = true;
+          swal.fire({
+            icon: 'error',
+            text: 'Pengambilan cuti reguler maksimal 3 hari berturut-turut per pengajuan.',
+          });
+          return;
+        }
+      }
+    }
+
     const isCreating = ['Create', 'Copy', 'Tambah'].includes(actionText.value);
 
     if (values.status === 'REVISED') {
@@ -286,7 +347,7 @@ function onSave() {
         isBadForm.value = true;
         swal.fire({
           icon: 'error',
-          text: 'Harap Lengkapi Data',
+          text: err.message || err || 'Harap Lengkapi Data',
         });
       })
       .finally(() => {

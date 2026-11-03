@@ -146,7 +146,7 @@ Terdapat beberapa penyesuaian aturan bisnis (*business logic*) dan permintaan fi
 | 7 | **Sinkronisasi Resign & Inactive Karyawan** | Rey / Tim | ✅ Selesai | Two-way reactive trigger `tgl_berhenti` $\leftrightarrow$ `is_active` & auto-deactivate `default_users` |
 | 8 | **PPh 21 Disubsidi Perusahaan (Gross-up)** | Rey | ⏳ To Do | Tunjangan pajak agar take home pay utuh |
 | 9 | **Mutasi Karyawan Prorata (Opsi 2)** | Rey | ⏳ To Do | Split perhitungan hari kerja divisi lama vs divisi baru |
-| 10 | **Aturan Cuti 12 Hari & Split Izin Khusus** | Rey / Tim | ⏳ To Do | Batas 3 hari berturut-turut & izin khusus terpisah |
+| 10 | **Aturan Cuti 12 Hari & Split Izin Khusus** | Rey Cannavaro | ✅ Selesai | Batas 3 hari berturut-turut, SKD wajib lampiran, & izin khusus (Menikah/Meninggal/Sakit) bebas kuota 12 hari |
 
 ---
 
@@ -177,9 +177,9 @@ Berikut daftar tugas pengerjaan yang akan diselesaikan secara bertahap menuju pr
 - [ ] **Task 3.2:** Terapkan skema PPh 21 Gross-up (tunjangan pajak ditanggung perusahaan) agar take-home pay karyawan utuh.
 - [ ] **Task 3.3:** Implementasikan kalkulasi prorata mutasi divisi (Opsi 2) untuk karyawan yang mengalami mutasi di tengah periode.
 
-### Track 4: Modul Cuti & Aturan 12 Hari (`t_cuti`)
-- [ ] **Task 4.1:** Validasi batas maksimal 3 hari berturut-turut untuk cuti tahunan dari kuota 12 hari.
-- [ ] **Task 4.2:** Pisahkan counter untuk izin khusus (Menikah 3 hari, Keluarga Meninggal 3 hari, Sakit 3 hari) agar tidak memotong kuota 12 hari cuti reguler.
+### Track 4: Modul Cuti & Aturan 12 Hari (`t_cuti`) — ✅ Selesai Dikerjakan (Rey Cannavaro - 3 Nov 2026)
+- [x] **Task 4.1:** Validasi batas maksimal 3 hari berturut-turut untuk cuti tahunan dari kuota 12 hari di `Models/t_cuti/Custom.php` dan `Javascript/t_cuti.js`.
+- [x] **Task 4.2:** Pisahkan counter untuk izin khusus (Menikah 3 hari, Keluarga Meninggal 3 hari, Sakit SKD 3 hari) agar tidak memotong kuota 12 hari cuti reguler di `Models/m_kary/Custom.php`, `Cores/PerhitunganGaji.php`, dan `Models/t_cuti/Custom.php`.
 
 ### Track 5: Modul Piutang / Kasbon (`t_potongan`)
 - [x] **Task 5.1:** Tambahkan kolom `Sisa Angsuran` (Nominal Rp) pada tampilan tabel landing `t_potongan`.

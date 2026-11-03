@@ -321,11 +321,24 @@ class PerhitunganGaji
         foreach ($daftarCuti as $cuti) {
             $keteranganLower = strtolower(trim(($cuti->keterangan ?? '') . ' ' . ($cuti->alasan_value ?? '') . ' ' . ($cuti->tipe_cuti_value ?? '')));
 
-            // MoM 3.D: Sakit dengan surat dokter dikecualikan
+            // MoM 3.D & MoM 5: Izin Khusus (Sakit SKD, Menikah, Duka/Meninggal) tidak memotong kuota cuti maupun upah gaji
+            $isIzinKhusus = false;
+            $tipeKhusus = '';
             if (str_contains($keteranganLower, 'sakit')) {
+                $isIzinKhusus = true;
+                $tipeKhusus = 'Sakit (SKD)';
+            } elseif (str_contains($keteranganLower, 'nikah') || str_contains($keteranganLower, 'menikah')) {
+                $isIzinKhusus = true;
+                $tipeKhusus = 'Cuti Menikah';
+            } elseif (str_contains($keteranganLower, 'meninggal') || str_contains($keteranganLower, 'kematian') || str_contains($keteranganLower, 'duka')) {
+                $isIzinKhusus = true;
+                $tipeKhusus = 'Keluarga Meninggal';
+            }
+
+            if ($isIzinKhusus) {
                 $rincianIzin[] = [
                     'nomor'      => $cuti->nomor,
-                    'tipe'       => 'Sakit (Bebas Potongan)',
+                    'tipe'       => $tipeKhusus . ' (Bebas Potongan)',
                     'date_from'  => $cuti->date_from,
                     'date_to'    => $cuti->date_to,
                     'keterangan' => $cuti->keterangan,

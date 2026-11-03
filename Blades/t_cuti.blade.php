@@ -139,7 +139,9 @@
         <div>
           <label class="font-semibold">Alasan<span class="text-red-500 space-x-0 pl-0">*</span></label>
           <FieldSelect :bind="{ disabled: !actionText, clearable:false }" class="col-span-12 !mt-0 w-full"
-            :value="values.alasan_id" @input="v=>values.alasan_id=v" :errorText="formErrors.alasan_id?'failed':''"
+            :value="values.alasan_id" @input="v=>values.alasan_id=v"
+            @update:valueFull="(e)=>{ values.alasan_string = e?.value || '' }"
+            :errorText="formErrors.alasan_id?'failed':''"
             :hints="formErrors.alasan_id" label="" placeholder="Alasan" valueField="id" displayField="value" :api="{
               url: `${store.server.url_backend}/operation/m_general`,
               headers: {
@@ -209,7 +211,7 @@
         </div>
 
         <div>
-          <label class="col-span-12">Surat Dokter<label class="text-red-500 space-x-0 pl-0"></label></label>
+          <label class="col-span-12">Surat Dokter<span v-if="values.alasan_string?.toLowerCase().includes('sakit') || values.tipe_string?.toLowerCase().includes('sakit')" class="text-red-500 pl-1 font-bold">* (Wajib untuk Sakit)</span></label>
           <FieldUpload class="w-full py-2 !mt-0"
           :bind="{ readonly: !actionText,disabled: !actionText }"
             :value="values.attachment" @input="(v)=>values.attachment=v" :maxSize="10"
