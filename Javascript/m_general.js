@@ -126,13 +126,13 @@ function onReset() {
 async function onSave() {
   formErrors.value = {}
   if (!values.key || String(values.key).trim() === '') {
-    formErrors.value.key = 'Kolom Key wajib diisi'
+    formErrors.value.key = ['Kolom Key wajib diisi']
   }
   if (!values.group || String(values.group).trim() === '') {
-    formErrors.value.group = 'Kolom Group wajib diisi'
+    formErrors.value.group = ['Kolom Group wajib diisi']
   }
   if (!values.value || String(values.value).trim() === '') {
-    formErrors.value.value = 'Kolom Value wajib diisi'
+    formErrors.value.value = ['Kolom Value wajib diisi']
   }
 
   if (Object.keys(formErrors.value).length > 0) {
