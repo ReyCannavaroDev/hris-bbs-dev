@@ -20,19 +20,45 @@ class t_cuti extends \App\Models\BasicModels\t_cuti
     public $createAdditionalData = ["creator_id" => "auth:id"];
     public $updateAdditionalData = ["last_editor_id" => "auth:id"];
 
+    private function parseCarbonDate($val)
+    {
+        if (!$val) return null;
+        if ($val instanceof Carbon) return $val;
+        $val = trim((string) $val);
+        if (str_contains($val, '/')) {
+            try {
+                return Carbon::createFromFormat('d/m/Y', $val);
+            } catch (\Exception $e) {}
+        }
+        try {
+            return Carbon::parse($val);
+        } catch (\Exception $e) {
+            return null;
+        }
+    }
+
     public function transformRowData( array $row )
     {
         $approval = generate_approval_log::where('trx_table', 't_cuti')->where('trx_id', $row['id']) ->orderBy('created_at', 'desc')->value('action_note');
-        return array_merge( $row, [
-            'approval_note' => $approval ?? '-'
-        ] );
+        $row['approval_note'] = $approval ?? '-';
+
+        foreach (['date_from', 'date_to'] as $col) {
+            if (!empty($row[$col])) {
+                try {
+                    $row[$col] = Carbon::parse($row[$col])->format('d/m/Y');
+                } catch (\Exception $e) {}
+            }
+        }
+
+        return $row;
     }
 
     
 
     private function hitungHari($from , $to) {
-        $dateFrom = Carbon::parse($from);
-        $dateTo = Carbon::parse($to);
+        $dateFrom = $this->parseCarbonDate($from);
+        $dateTo = $this->parseCarbonDate($to);
+        if (!$dateFrom || !$dateTo) return 1;
 
         $period = CarbonPeriod::create($dateFrom, $dateTo);
         $tanggalMerah = \DB::table('m_libur_nasional')->pluck('tanggal')->toArray();
@@ -237,6 +263,15 @@ class t_cuti extends \App\Models\BasicModels\t_cuti
             $newArrayData['m_dir_id'] = \DB::table('m_kary')->where('id', $newArrayData['m_kary_id'])->value('m_dir_id');
         }
 
+        foreach (['date_from', 'date_to'] as $dCol) {
+            if (!empty($newArrayData[$dCol])) {
+                $parsed = $this->parseCarbonDate($newArrayData[$dCol]);
+                if ($parsed) {
+                    $newArrayData[$dCol] = $parsed->format('Y-m-d');
+                }
+            }
+        }
+
         return [
             "model" => $model,
             "data" => $newArrayData,
@@ -279,6 +314,14 @@ class t_cuti extends \App\Models\BasicModels\t_cuti
             $newArrayData['m_dir_id'] = \DB::table('m_kary')->where('id', $newArrayData['m_kary_id'])->value('m_dir_id');
         }
 
+        foreach (['date_from', 'date_to'] as $dCol) {
+            if (!empty($newArrayData[$dCol])) {
+                $parsed = $this->parseCarbonDate($newArrayData[$dCol]);
+                if ($parsed) {
+                    $newArrayData[$dCol] = $parsed->format('Y-m-d');
+                }
+            }
+        }
 
         return [
             "model"  => $model,

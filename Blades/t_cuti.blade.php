@@ -188,14 +188,14 @@
     <div>
       <label class="font-semibold">Tanggal Awal<label class="text-red-500 space-x-0 pl-0">*</label></label>
       <FieldX :bind="{ readonly: !actionText,disabled: !actionText }" type="date" class="w-full py-2 !mt-0" :value="values.date_from"
-        label="" placeholder="Pilih Tanggal" :errorText="formErrors.date_from?'failed':''"
-        @input="v=>values.date_from=v" :hints="formErrors.date_from" :check="false" />
+        label="" placeholder="DD/MM/YYYY" :errorText="formErrors.date_from?'failed':''"
+        @input="v=>onDateFromChange(v)" :hints="formErrors.date_from" :check="false" />
     </div>
     <div v-show="values.tipe_string?.toLowerCase() !== 'p24'">
       <label class="font-semibold">Tanggal Akhir<label class="text-red-500 space-x-0 pl-0">*</label></label>
       <FieldX :bind="{ readonly: !actionText,disabled: !actionText }" type="date" class="w-full py-2 !mt-0" :value="values.date_to"
-        label="" placeholder="Pilih Tanggal" :errorText="formErrors.date_to?'failed':''"
-        @input="v=>values.date_to=v" :hints="formErrors.date_to" :check="false" />
+        label="" placeholder="DD/MM/YYYY" :errorText="formErrors.date_to?'failed':''"
+        @input="v=>onDateToChange(v)" :hints="formErrors.date_to" :check="false" />
     </div>
         <div  v-if="values.tipe_cuti_id === 15434 || values.tipe_string?.toLowerCase() === 'p24'">
           <label class="font-semibold">Waktu Awal<label class="text-red-500 space-x-0 pl-0"></label></label>

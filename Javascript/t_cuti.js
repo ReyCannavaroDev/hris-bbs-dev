@@ -30,6 +30,51 @@ onBeforeMount(() => {
   console.log(store.user.data?.is_superadmin)
 })
 
+function parseDate(v) {
+  if (!v) return null
+  if (v instanceof Date) return isNaN(v.getTime()) ? null : v
+  if (typeof v !== 'string') return null
+  const raw = v.trim().split(' ')[0]
+  const parts = raw.split(/[-/.]/)
+  if (parts.length !== 3) return null
+
+  let year, month, day
+  if (parts[0].length === 4) {
+    year = parseInt(parts[0], 10)
+    month = parseInt(parts[1], 10) - 1
+    day = parseInt(parts[2], 10)
+  } else if (parts[2].length === 4) {
+    day = parseInt(parts[0], 10)
+    month = parseInt(parts[1], 10) - 1
+    year = parseInt(parts[2], 10)
+  } else {
+    return null
+  }
+
+  const d = new Date(year, month, day)
+  return isNaN(d.getTime()) ? null : d
+}
+
+function formatDateDisplay(d) {
+  if (!d) return ''
+  const dateObj = (d instanceof Date) ? d : parseDate(d)
+  if (!dateObj) return d
+  const day = String(dateObj.getDate()).padStart(2, '0')
+  const month = String(dateObj.getMonth() + 1).padStart(2, '0')
+  const year = dateObj.getFullYear()
+  return `${day}/${month}/${year}`
+}
+
+function formatDateApi(d) {
+  if (!d) return ''
+  const dateObj = (d instanceof Date) ? d : parseDate(d)
+  if (!dateObj) return d
+  const day = String(dateObj.getDate()).padStart(2, '0')
+  const month = String(dateObj.getMonth() + 1).padStart(2, '0')
+  const year = dateObj.getFullYear()
+  return `${year}-${month}-${day}`
+}
+
 //  @if( $id )------------------- VALUES FORM ! PENTING JANGAN DIHAPUS
 let initialValues = {}
 const changedValues = []
@@ -38,15 +83,24 @@ const values = reactive({
 })
 const totalDays = ref();
 
+function onDateFromChange(val) {
+  const d = parseDate(val)
+  values.date_from = d ? formatDateDisplay(d) : val
+}
+
+function onDateToChange(val) {
+  const d = parseDate(val)
+  values.date_to = d ? formatDateDisplay(d) : val
+}
 
 watchEffect(() => {
   if (values.date_from && values.date_to && values.date_from !== '' && values.date_to !== '') {
-    const dateFrom = new Date(values.date_from);
-    const dateTo = new Date(values.date_to);
+    const dateFrom = parseDate(values.date_from);
+    const dateTo = parseDate(values.date_to);
 
-    if (!isNaN(dateFrom.getTime()) && !isNaN(dateTo.getTime())) {
+    if (dateFrom && dateTo) {
       const timeDifference = dateTo.getTime() - dateFrom.getTime();
-      const daysDifference = Math.floor(timeDifference / (1000 * 3600 * 24));
+      const daysDifference = Math.round(timeDifference / (1000 * 3600 * 24)) + 1;
 
       totalDays.value = daysDifference;
     } else {
@@ -136,6 +190,8 @@ onBeforeMount(async () => {
   for (const key in initialValues) {
     values[key] = initialValues[key]
   }
+  if (values.date_from) values.date_from = formatDateDisplay(values.date_from)
+  if (values.date_to) values.date_to = formatDateDisplay(values.date_to)
 })
 
 onMounted(()=>{
@@ -235,15 +291,11 @@ function formatDate(date) {
 
 function onSave() {
   try {
-    // Format Tanggal Awal
-    values.date_from = formatDate(values.date_from)
-    // Format Tanggal Akhir
-    if(values.tipe_string?.toLowerCase() === 'p24'){
-      values.date_to = values.date_from
-    }else{    
-      values.date_to = formatDate(values.date_to)
-    }
-    if (values.date_from && values.date_to && values.date_to < values.date_from) {
+    const isP24 = values.tipe_string?.toLowerCase() === 'p24' || (values.time_from && values.time_to);
+    const dFrom = parseDate(values.date_from);
+    const dTo = isP24 ? dFrom : parseDate(values.date_to);
+
+    if (dFrom && dTo && dTo < dFrom) {
       isBadForm.value = true;
       swal.fire({
         icon: 'error',
@@ -254,14 +306,11 @@ function onSave() {
 
     // --- VALIDASI ATURAN BISNIS CUTI & DISPENSASI (MoM POIN 5) ---
     const strCheck = ((values.alasan_string || '') + ' ' + (values.tipe_string || '') + ' ' + (values.keterangan || '')).toLowerCase();
-    const isP24 = values.tipe_string?.toLowerCase() === 'p24' || (values.time_from && values.time_to);
     const isSakit = strCheck.includes('sakit');
     const isMenikah = strCheck.includes('nikah') || strCheck.includes('menikah');
     const isMeninggal = strCheck.includes('meninggal') || strCheck.includes('kematian') || strCheck.includes('duka');
 
-    if (!isP24 && values.date_from && values.date_to) {
-      const dFrom = new Date(values.date_from);
-      const dTo = new Date(values.date_to);
+    if (!isP24 && dFrom && dTo) {
       const diffTime = dTo.getTime() - dFrom.getTime();
       const diffDays = Math.round(diffTime / (1000 * 3600 * 24)) + 1;
 
@@ -321,6 +370,14 @@ function onSave() {
 
     const dataURL = `${store.server.url_backend}/operation${endpointApi}${isCreating ? '' : ('/' + route.params.id)}`;
 
+    const payload = { ...values };
+    payload.date_from = formatDateApi(values.date_from);
+    if (isP24) {
+      payload.date_to = payload.date_from;
+    } else {
+      payload.date_to = formatDateApi(values.date_to);
+    }
+
     isRequesting.value = true;
 
     fetch(dataURL, {
@@ -329,7 +386,7 @@ function onSave() {
         'Content-Type': 'Application/json',
         Authorization: `${store.user.token_type} ${store.user.token}`,
       },
-      body: JSON.stringify(values),
+      body: JSON.stringify(payload),
     })
       .then(async (res) => {
         if (!res.ok) {
@@ -655,7 +712,8 @@ const landing = reactive({
     flex: 1,
     filter: 'ColFilter',
     resizable: true,
-    cellClass: ['border-r', '!border-gray-200', 'justify-left']
+    cellClass: ['border-r', '!border-gray-200', 'justify-center'],
+    valueGetter: (params) => formatDateDisplay(params?.data?.date_from)
   },
   {
     field: 'date_to',
@@ -665,7 +723,8 @@ const landing = reactive({
     flex: 1,
     filter: 'ColFilter',
     resizable: true,
-    cellClass: ['border-r', '!border-gray-200', 'justify-left']
+    cellClass: ['border-r', '!border-gray-200', 'justify-center'],
+    valueGetter: (params) => formatDateDisplay(params?.data?.date_to)
   },
  {
     headerName: 'Status',
