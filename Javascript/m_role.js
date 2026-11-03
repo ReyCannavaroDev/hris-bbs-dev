@@ -326,13 +326,17 @@ const landing = reactive({
     },
     params: {
       simplest: true,
-      searchfield: 'this.name, this.is_superadmin, this.is_active'
+      searchfield: 'this.name'
     },
     onsuccess(response) {
       if (response && response.data) {
         response.data = response.data.map((item) => {
-          item.superadmin = (item.is_superadmin === true || item.is_superadmin === 1 || item.is_superadmin === '1' || item.is_superadmin === 'true' || item.is_superadmin === 't') ? 'Yes' : 'No'
-          item.status = (item.is_active === true || item.is_active === 1 || item.is_active === '1' || item.is_active === 'true' || item.is_active === 't') ? 'Active' : 'Inactive'
+          const isSuper = (item.is_superadmin === true || item.is_superadmin === 1 || item.is_superadmin === '1' || item.is_superadmin === 'true' || item.is_superadmin === 't')
+          const isActive = (item.is_active === true || item.is_active === 1 || item.is_active === '1' || item.is_active === 'true' || item.is_active === 't')
+          item.is_superadmin = isSuper
+          item.superadmin = isSuper ? 'Yes' : 'No'
+          item.is_active = isActive
+          item.status = isActive ? 'Active' : 'Inactive'
           return item
         })
       }
@@ -372,17 +376,18 @@ const landing = reactive({
   },
   {
     headerName: 'Super Admin',
-    field: 'superadmin',
+    field: 'is_superadmin',
+    filter: true,
     filter: 'ColFilter',
     filterParams: {
       options: ['Yes', 'No']
     },
     filterValueGetter: (params) => {
-      const val = params.data ? (params.data.superadmin !== undefined ? params.data.superadmin : params.data.is_superadmin) : params.value
+      const val = params.data ? (params.data.is_superadmin !== undefined ? params.data.is_superadmin : params.data.superadmin) : params.value
       return (val === 'Yes' || val === true || val === 1 || val === '1' || val === 'true') ? 'Yes' : 'No'
     },
     valueGetter: (params) => {
-      const val = params.data ? (params.data.superadmin !== undefined ? params.data.superadmin : params.data.is_superadmin) : params.value
+      const val = params.data ? (params.data.is_superadmin !== undefined ? params.data.is_superadmin : params.data.superadmin) : params.value
       return (val === 'Yes' || val === true || val === 1 || val === '1' || val === 'true') ? 'Yes' : 'No'
     },
     sortable: true,
@@ -397,17 +402,18 @@ const landing = reactive({
   },
   {
     headerName: 'Status',
-    field: 'status',
+    field: 'is_active',
+    filter: true,
     filter: 'ColFilter',
     filterParams: {
       options: ['Active', 'Inactive']
     },
     filterValueGetter: (params) => {
-      const val = params.data ? (params.data.status !== undefined ? params.data.status : params.data.is_active) : params.value
+      const val = params.data ? (params.data.is_active !== undefined ? params.data.is_active : params.data.status) : params.value
       return (val === 'Active' || val === true || val === 1 || val === '1' || val === 'true' || val === 't') ? 'Active' : 'Inactive'
     },
     valueGetter: (params) => {
-      const val = params.data ? (params.data.status !== undefined ? params.data.status : params.data.is_active) : params.value
+      const val = params.data ? (params.data.is_active !== undefined ? params.data.is_active : params.data.status) : params.value
       return (val === 'Active' || val === true || val === 1 || val === '1' || val === 'true' || val === 't') ? 'Active' : 'Inactive'
     },
     sortable: true,
@@ -425,9 +431,7 @@ const landing = reactive({
 onActivated(() => {
   //  reload table api landing
   if (apiTable.value) {
-    if (route.query.reload) {
-      apiTable.value.reload()
-    }
+    apiTable.value.reload()
   }
 })
 

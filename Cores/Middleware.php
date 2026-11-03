@@ -18,10 +18,27 @@ class Middleware
         // Normalisasi filter is_active dan status agar support 'Active' dan 'Inactive' via query where
         if (!empty($requestData['where']) && $modelInstance && in_array('is_active', $modelInstance->columns ?? [])) {
             $requestData['where'] = preg_replace_callback(
-                '/(?:this\.)?(?:status|is_active)\s*(?:=|ilike|like)\s*[\'"]%?(active|inactive)%?[\'"]?/i',
+                '/(?:this\.)?(?:status|is_active)\s*(?:=|ilike|like)\s*[\'"]?%?(active|inactive)%?[\'"]?/i',
                 function ($m) {
                     $bool = strtolower($m[1]) === 'active' ? 'true' : 'false';
                     return "this.is_active=$bool";
+                },
+                $requestData['where']
+            );
+            if ($request->query) {
+                $request->query->set('where', $requestData['where']);
+            }
+            $_GET['where'] = $requestData['where'];
+        }
+
+        // Normalisasi filter is_superadmin dan superadmin agar support 'Yes', 'No', 'true', 'false' via query where
+        if (!empty($requestData['where']) && $modelInstance && in_array('is_superadmin', $modelInstance->columns ?? [])) {
+            $requestData['where'] = preg_replace_callback(
+                '/(?:this\.)?(?:superadmin|is_superadmin)\s*(?:=|ilike|like)\s*[\'"]?%?(yes|no|true|false|1|0)%?[\'"]?/i',
+                function ($m) {
+                    $val = strtolower($m[1]);
+                    $bool = in_array($val, ['yes', 'true', '1'], true) ? 'true' : 'false';
+                    return "this.is_superadmin=$bool";
                 },
                 $requestData['where']
             );
@@ -78,6 +95,34 @@ class Middleware
                 unset($requestData['filter_status']);
             }
         }
+
+        // Normalisasi filter_is_superadmin dan filter_superadmin
+        if (isset($requestData['filter_is_superadmin']) || isset($requestData['filter_superadmin'])) {
+            $rawVal = $requestData['filter_is_superadmin'] ?? $requestData['filter_superadmin'];
+            $val = strtolower(trim((string)$rawVal));
+            $boolVal = in_array($val, ['yes', 'true', '1'], true) ? 'true' : (in_array($val, ['no', 'false', '0'], true) ? 'false' : null);
+            if ($boolVal !== null) {
+                $condition = "this.is_superadmin=$boolVal";
+                if (!empty($requestData['where'])) {
+                    if (preg_match('/\bthis\.is_superadmin\s*=\s*(?:true|false|1|0)\b/i', $requestData['where'])) {
+                        $requestData['where'] = preg_replace('/\bthis\.is_superadmin\s*=\s*(?:true|false|1|0)\b/i', $condition, $requestData['where']);
+                    } else {
+                        $requestData['where'] .= " and $condition";
+                    }
+                } else {
+                    $requestData['where'] = $condition;
+                }
+                if ($request->query) {
+                    $request->query->set('where', $requestData['where']);
+                    $request->query->remove('filter_is_superadmin');
+                    $request->query->remove('filter_superadmin');
+                }
+                $_GET['where'] = $requestData['where'];
+                unset($_GET['filter_is_superadmin'], $_GET['filter_superadmin']);
+                unset($requestData['filter_is_superadmin'], $requestData['filter_superadmin']);
+            }
+        }
+
         if (isset($requestData['search'])) {
             $searchVal = strtolower(trim((string)$requestData['search']));
             if ($searchVal === 'active' || $searchVal === 'inactive') {
@@ -87,6 +132,27 @@ class Middleware
                     if (!empty($requestData['where'])) {
                         if (preg_match('/\bthis\.is_active\s*=\s*(?:true|false|1|0)\b/i', $requestData['where'])) {
                             $requestData['where'] = preg_replace('/\bthis\.is_active\s*=\s*(?:true|false|1|0)\b/i', $condition, $requestData['where']);
+                        } else {
+                            $requestData['where'] .= " and $condition";
+                        }
+                    } else {
+                        $requestData['where'] = $condition;
+                    }
+                    if ($request->query) {
+                        $request->query->set('where', $requestData['where']);
+                        $request->query->remove('search');
+                    }
+                    $_GET['where'] = $requestData['where'];
+                    unset($_GET['search']);
+                    unset($requestData['search']);
+                }
+            } elseif ($searchVal === 'yes' || $searchVal === 'no') {
+                if ($modelInstance && in_array('is_superadmin', $modelInstance->columns ?? [])) {
+                    $boolVal = ($searchVal === 'yes') ? 'true' : 'false';
+                    $condition = "this.is_superadmin=$boolVal";
+                    if (!empty($requestData['where'])) {
+                        if (preg_match('/\bthis\.is_superadmin\s*=\s*(?:true|false|1|0)\b/i', $requestData['where'])) {
+                            $requestData['where'] = preg_replace('/\bthis\.is_superadmin\s*=\s*(?:true|false|1|0)\b/i', $condition, $requestData['where']);
                         } else {
                             $requestData['where'] .= " and $condition";
                         }
