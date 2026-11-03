@@ -293,7 +293,7 @@ const landing = reactive({
     cellClass: ['justify-center', 'bg-gray-50', 'border-r', '!border-gray-200']
   },
   {
-    headerName: 'Nama',
+    headerName: 'Nama Karyawan',
     field: 'name',
     filter: true,
     sortable: true,
@@ -305,16 +305,6 @@ const landing = reactive({
   {
     headerName: 'Username',
     field: 'username',
-    filter: true,
-    sortable: true,
-    flex:1,
-    filter: 'ColFilter',
-    resizable: true,
-    cellClass: [ 'border-r', '!border-gray-200']
-  },
-  {
-    headerName: 'Email',
-    field: 'email',
     filter: true,
     sortable: true,
     flex:1,

@@ -26,18 +26,12 @@
         </h1>
         <hr>
       </div>
-      <div class="grid grid-cols-2 gap-3">
+      <div class="grid grid-cols-3 gap-3">
         <!-- START COLUMN -->
         <div>
-          <label class="font-semibold">Pengguna</label>
+          <label class="font-semibold">Nama Karyawan</label>
           <FieldX :bind="{ readonly: true }" class="py-2 !mt-0" :value="values.name"
             :errorname="formErrors.name?'failed':''" @input="v=>values.name=v" :hints="formErrors.name"
-            :check="false" />
-        </div>
-        <div>
-          <label class="font-semibold">Company</label>
-          <FieldX :bind="{ readonly: true }" class="py-2 !mt-0" :value="values.company"
-            :errorname="formErrors.company?'failed':''" @input="v=>values.company=v" :hints="formErrors.company"
             :check="false" />
         </div>
         <div>
@@ -47,9 +41,9 @@
             :check="false" />
         </div>
         <div>
-          <label class="font-semibold">Email</label>
-          <FieldX :bind="{ readonly: true }" class="py-2 !mt-0" :value="values.email"
-            :errorname="formErrors.email?'failed':''" @input="v=>values.email=v" :hints="formErrors.email"
+          <label class="font-semibold">Company</label>
+          <FieldX :bind="{ readonly: true }" class="py-2 !mt-0" :value="values.company"
+            :errorname="formErrors.company?'failed':''" @input="v=>values.company=v" :hints="formErrors.company"
             :check="false" />
         </div>
         <!-- END COLUMN -->
