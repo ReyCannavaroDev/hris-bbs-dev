@@ -231,6 +231,71 @@ function onSave() {
   })
 }
 
+// Intercept fetch to apply action button concept (where=this.is_superadmin=true/false and where=this.is_active=true/false) to table column filters
+if (typeof window !== 'undefined' && !window.__m_role_fetch_intercepted__) {
+  window.__m_role_fetch_intercepted__ = true
+  const originalFetch = window.fetch
+  window.fetch = async function (input, init) {
+    let url = typeof input === 'string' ? input : (input && input.url ? input.url : '')
+    if (url && url.includes('/operation/m_role')) {
+      try {
+        const urlObj = new URL(url, window.location.origin)
+        const isSuperadmin = urlObj.searchParams.get('filter_is_superadmin')
+        const isActive = urlObj.searchParams.get('filter_is_active')
+        const status = urlObj.searchParams.get('filter_status')
+        const currentWhere = urlObj.searchParams.get('where') || ''
+
+        let modified = false
+        let conds = []
+        if (currentWhere) {
+          conds = currentWhere.split(/\s+and\s+/i).map(c => c.trim()).filter(Boolean)
+        }
+
+        if (isSuperadmin !== null) {
+          const val = String(isSuperadmin).toLowerCase().trim()
+          const boolVal = (val === 'yes' || val === 'true' || val === '1') ? 'true' : ((val === 'no' || val === 'false' || val === '0') ? 'false' : null)
+          conds = conds.filter(c => !/\bthis\.is_superadmin\b/i.test(c))
+          if (boolVal !== null) {
+            conds.push(`this.is_superadmin=${boolVal}`)
+          }
+          urlObj.searchParams.delete('filter_is_superadmin')
+          modified = true
+        }
+
+        const activeFilter = (isActive !== null) ? isActive : status
+        if (activeFilter !== null) {
+          const val = String(activeFilter).toLowerCase().trim()
+          const boolVal = (val === 'active' || val === 'true' || val === '1') ? 'true' : ((val === 'inactive' || val === 'false' || val === '0') ? 'false' : null)
+          conds = conds.filter(c => !/\bthis\.is_active\b/i.test(c))
+          if (boolVal !== null) {
+            conds.push(`this.is_active=${boolVal}`)
+          }
+          urlObj.searchParams.delete('filter_is_active')
+          urlObj.searchParams.delete('filter_status')
+          modified = true
+        }
+
+        if (modified) {
+          if (conds.length > 0) {
+            urlObj.searchParams.set('where', conds.join(' and '))
+          } else {
+            urlObj.searchParams.delete('where')
+          }
+          const newUrl = urlObj.toString()
+          if (typeof input === 'string') {
+            input = newUrl
+          } else if (typeof Request !== 'undefined' && input instanceof Request) {
+            input = new Request(newUrl, input)
+          }
+        }
+      } catch (e) {
+        console.error('Error transforming m_role filter:', e)
+      }
+    }
+    return originalFetch.call(this, input, init)
+  }
+}
+
 //  @else----------------------- LANDING
 const activeBtn = ref(null)
 
