@@ -34,43 +34,17 @@
         <!-- Form Jam Kerja -->
         <div class="grid grid-cols-2 md:grid-cols-2 text-[14px] gap-10 gap-y-[26px] mt-[36px]" v-if="activeTabIndex === 0">
         <div>
-          <label class="font-semibold">Holding Company<label class="text-red-500 space-x-0 pl-0">*</label></label>
-          <FieldSelect
-            :bind="{ disabled: true, clearable: false }"
-            class="w-full py-2 !mt-0"
-            :value="values.m_comp_id"
-            @input="v=>{
-              values.m_comp_id=v
-              values.m_dir_id=null
-            }"
-            :errorText="formErrors.m_comp_id?'failed':''"
-            :hints="formErrors.m_comp_id"
-            placeholder="Holding Company"
-            label=""
-            displayField="nama"
-            valueField="id"
-            :api="{
-                url: `${store.server.url_backend}/operation/m_comp`,
-                headers: {
-                  'Content-Type': 'Application/json',
-                  Authorization: `${store.user.token_type} ${store.user.token}`
-                },
-                params: {
-                  simplest:true,
-                  where:`this.is_active='true'`,
-                  transform:false,
-                  selectfield: 'this.id, this.nama, this.is_active'
-                }
-            }"
-            fa-icon="search" :check="false" />
-        </div>
-        <div>
           <label class="font-semibold">Company</label>
           <FieldSelect
             :bind="{ disabled: !actionText, clearable: true }"
             class="w-full py-2 !mt-0"
             :value="values.m_dir_id"
             @input="v=>values.m_dir_id=v"
+            @update:valueFull="(objVal)=>{
+              if (objVal && (objVal.m_comp_id || objVal['m_comp.id'])) {
+                values.m_comp_id = objVal.m_comp_id || objVal['m_comp.id']
+              }
+            }"
             :errorText="formErrors.m_dir_id?'failed':''"
             :hints="formErrors.m_dir_id"
             placeholder="Pilih Company"
@@ -99,6 +73,7 @@
               @input="v=>values.kode=v" :hints="formErrors.kode" 
               :check="false"
               label=""
+              placeholder="Auto Generate"
           />
         </div>
           <div>
@@ -168,7 +143,7 @@
               :check="false"
               type="textarea"
               label=""
-              placeholder="Tuliskan Role disini"
+              placeholder="Tuliskan Keterangan Jam Kerja disini"
           />
         </div>
         <div class="flex flex-col gap-2">

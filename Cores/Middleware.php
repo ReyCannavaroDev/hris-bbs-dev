@@ -52,6 +52,24 @@ class Middleware
             $_GET['where'] = $requestData['where'];
         }
 
+        // Normalisasi filter is_hari_berikutnya dan hari_lain agar support 'Ada', 'Tidak Ada', 'true', 'false' via query where
+        if (!empty($requestData['where']) && $modelInstance && in_array('is_hari_berikutnya', $modelInstance->columns ?? [])) {
+            $requestData['where'] = preg_replace_callback(
+                '/(?:this\.)?(?:hari_lain|is_hari_berikutnya)\s*(?:=|ilike|like)\s*[\'"]?%?(ada|tidak ada|yes|no|true|false|1|0)%?[\'"]?/i',
+                function ($m) {
+                    $val = strtolower($m[1]);
+                    $bool = in_array($val, ['ada', 'yes', 'true', '1'], true) ? 'true' : 'false';
+                    return "this.is_hari_berikutnya=$bool";
+                },
+                $requestData['where']
+            );
+            $request->merge(['where' => $requestData['where']]);
+            if ($request->query) {
+                $request->query->set('where', $requestData['where']);
+            }
+            $_GET['where'] = $requestData['where'];
+        }
+
         // Normalisasi filter is_superadmin dan superadmin agar support 'Yes', 'No', 'true', 'false' via query where
         if (!empty($requestData['where']) && $modelInstance && in_array('is_superadmin', $modelInstance->columns ?? [])) {
             $requestData['where'] = preg_replace_callback(
@@ -166,6 +184,75 @@ class Middleware
             }
         }
 
+        // Normalisasi filter_is_hari_berikutnya dan filter_hari_lain
+        if (isset($requestData['filter_is_hari_berikutnya']) || isset($requestData['filter_hari_lain'])) {
+            $rawVal = $requestData['filter_is_hari_berikutnya'] ?? $requestData['filter_hari_lain'];
+            $val = strtolower(trim((string)$rawVal));
+            $boolVal = in_array($val, ['ada', 'yes', 'true', '1'], true) ? 'true' : (in_array($val, ['tidak ada', 'no', 'false', '0'], true) ? 'false' : null);
+            if ($boolVal !== null) {
+                $condition = "this.is_hari_berikutnya=$boolVal";
+                if (!empty($requestData['where'])) {
+                    if (preg_match('/\bthis\.is_hari_berikutnya\s*=\s*(?:true|false|1|0)\b/i', $requestData['where'])) {
+                        $requestData['where'] = preg_replace('/\bthis\.is_hari_berikutnya\s*=\s*(?:true|false|1|0)\b/i', $condition, $requestData['where']);
+                    } else {
+                        $requestData['where'] .= " and $condition";
+                    }
+                } else {
+                    $requestData['where'] = $condition;
+                }
+                $request->merge(['where' => $requestData['where']]);
+                if ($request->query) {
+                    $request->query->set('where', $requestData['where']);
+                    $request->query->remove('filter_is_hari_berikutnya');
+                    $request->query->remove('filter_hari_lain');
+                }
+                if ($request->request) {
+                    $request->request->remove('filter_is_hari_berikutnya');
+                    $request->request->remove('filter_hari_lain');
+                }
+                $request->offsetUnset('filter_is_hari_berikutnya');
+                $request->offsetUnset('filter_hari_lain');
+                $_GET['where'] = $requestData['where'];
+                $_REQUEST['where'] = $requestData['where'];
+                unset($_GET['filter_is_hari_berikutnya'], $_GET['filter_hari_lain']);
+                unset($_REQUEST['filter_is_hari_berikutnya'], $_REQUEST['filter_hari_lain']);
+                unset($requestData['filter_is_hari_berikutnya'], $requestData['filter_hari_lain']);
+            }
+        }
+
+        // Normalisasi filter_jam_kerja
+        if (isset($requestData['filter_jam_kerja']) && $modelInstance && in_array('waktu_mulai', $modelInstance->columns ?? [])) {
+            $val = trim((string)$requestData['filter_jam_kerja']);
+            if ($val !== '') {
+                if (str_contains($val, '-')) {
+                    $parts = explode('-', $val);
+                    $s = trim($parts[0]);
+                    $e = trim($parts[1]);
+                    $condition = "(this.waktu_mulai::text ilike '%$s%' and this.waktu_akhir::text ilike '%$e%')";
+                } else {
+                    $condition = "(this.waktu_mulai::text ilike '%$val%' or this.waktu_akhir::text ilike '%$val%')";
+                }
+                if (!empty($requestData['where'])) {
+                    $requestData['where'] .= " and $condition";
+                } else {
+                    $requestData['where'] = $condition;
+                }
+                $request->merge(['where' => $requestData['where']]);
+                if ($request->query) {
+                    $request->query->set('where', $requestData['where']);
+                    $request->query->remove('filter_jam_kerja');
+                }
+                if ($request->request) {
+                    $request->request->remove('filter_jam_kerja');
+                }
+                $request->offsetUnset('filter_jam_kerja');
+                $_GET['where'] = $requestData['where'];
+                $_REQUEST['where'] = $requestData['where'];
+                unset($_GET['filter_jam_kerja'], $_REQUEST['filter_jam_kerja']);
+                unset($requestData['filter_jam_kerja']);
+            }
+        }
+
         if (isset($requestData['search'])) {
             $searchVal = strtolower(trim((string)$requestData['search']));
             if ($searchVal === 'active' || $searchVal === 'inactive') {
@@ -175,6 +262,28 @@ class Middleware
                     if (!empty($requestData['where'])) {
                         if (preg_match('/\bthis\.is_active\s*=\s*(?:true|false|1|0)\b/i', $requestData['where'])) {
                             $requestData['where'] = preg_replace('/\bthis\.is_active\s*=\s*(?:true|false|1|0)\b/i', $condition, $requestData['where']);
+                        } else {
+                            $requestData['where'] .= " and $condition";
+                        }
+                    } else {
+                        $requestData['where'] = $condition;
+                    }
+                    $request->merge(['where' => $requestData['where']]);
+                    if ($request->query) {
+                        $request->query->set('where', $requestData['where']);
+                        $request->query->remove('search');
+                    }
+                    $_GET['where'] = $requestData['where'];
+                    unset($_GET['search']);
+                    unset($requestData['search']);
+                }
+            } elseif ($searchVal === 'ada' || $searchVal === 'tidak ada') {
+                if ($modelInstance && in_array('is_hari_berikutnya', $modelInstance->columns ?? [])) {
+                    $boolVal = ($searchVal === 'ada') ? 'true' : 'false';
+                    $condition = "this.is_hari_berikutnya=$boolVal";
+                    if (!empty($requestData['where'])) {
+                        if (preg_match('/\bthis\.is_hari_berikutnya\s*=\s*(?:true|false|1|0)\b/i', $requestData['where'])) {
+                            $requestData['where'] = preg_replace('/\bthis\.is_hari_berikutnya\s*=\s*(?:true|false|1|0)\b/i', $condition, $requestData['where']);
                         } else {
                             $requestData['where'] .= " and $condition";
                         }

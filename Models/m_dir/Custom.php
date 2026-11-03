@@ -26,6 +26,13 @@ class m_dir extends \App\Models\BasicModels\m_dir
       ];
     }
 
+
+    public function scopeFilter($model)
+    {
+        return $model->whereIn('m_dir.id', function ($query) {
+            $query->selectRaw('MIN(id)')->from('m_dir')->where('is_active', true)->groupBy('nama');
+        });
+    }
     public function custom_seeder(){
         $data = [
             [

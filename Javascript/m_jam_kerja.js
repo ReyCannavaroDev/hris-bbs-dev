@@ -1,5 +1,5 @@
 import { useRouter, useRoute, RouterLink } from 'vue-router'
-import { ref, readonly, reactive, inject, onMounted, onBeforeMount, watchEffect, onActivated } from 'vue'
+import { ref, readonly, reactive, inject, onMounted, onBeforeMount, watchEffect, onActivated, watch } from 'vue'
 
 const router = useRouter()
 const route = useRoute()
@@ -75,6 +75,9 @@ onBeforeMount(async () => {
 
   for (const key in initialValues) {
     values[key] = initialValues[key]
+  }
+  if (actionText.value === 'Copy') {
+    values.kode = null
   }
   if (values.waktu_mulai && values.waktu_mulai.length > 5) {
     values.waktu_mulai = values.waktu_mulai.slice(0, 5)
@@ -196,6 +199,126 @@ async function onSave() {
 }
 
 //  @else----------------------- LANDING
+// Transform jam kerja query to apply action button concept to table column filters
+function transformJamKerjaUrl(url) {
+  try {
+    if (!url || typeof url !== 'string') return url
+    if (!url.includes('m_jam_kerja')) return url
+    if (!url.includes('filter_is_active') && !url.includes('filter_status') && !url.includes('filter_is_hari_berikutnya') && !url.includes('filter_hari_lain') && !url.includes('filter_jam_kerja')) {
+      return url
+    }
+
+    const isRelative = url.startsWith('/')
+    const base = typeof window !== 'undefined' && window.location ? window.location.origin : 'http://localhost'
+    const urlObj = new URL(url, base)
+    const isActive = urlObj.searchParams.get('filter_is_active') ?? urlObj.searchParams.get('filter_status')
+    const isHariLain = urlObj.searchParams.get('filter_is_hari_berikutnya') ?? urlObj.searchParams.get('filter_hari_lain')
+    const jamKerja = urlObj.searchParams.get('filter_jam_kerja')
+    const currentWhere = urlObj.searchParams.get('where') || ''
+
+    let conds = []
+    if (currentWhere) {
+      conds = currentWhere.split(/\s+and\s+/i).map(c => c.trim()).filter(Boolean)
+    }
+
+    if (isActive !== null) {
+      const val = String(isActive).toLowerCase().trim()
+      const boolVal = (val === 'active' || val === 'true' || val === '1') ? 'true' : ((val === 'inactive' || val === 'false' || val === '0') ? 'false' : null)
+      conds = conds.filter(c => !/\bthis\.is_active\b/i.test(c))
+      if (boolVal !== null) {
+        conds.push('this.is_active=' + boolVal)
+      }
+      urlObj.searchParams.delete('filter_is_active')
+      urlObj.searchParams.delete('filter_status')
+    }
+
+    if (isHariLain !== null) {
+      const val = String(isHariLain).toLowerCase().trim()
+      const boolVal = (val === 'ada' || val === 'yes' || val === 'true' || val === '1') ? 'true' : ((val === 'tidak ada' || val === 'no' || val === 'false' || val === '0') ? 'false' : null)
+      conds = conds.filter(c => !/\bthis\.is_hari_berikutnya\b/i.test(c))
+      if (boolVal !== null) {
+        conds.push('this.is_hari_berikutnya=' + boolVal)
+      }
+      urlObj.searchParams.delete('filter_is_hari_berikutnya')
+      urlObj.searchParams.delete('filter_hari_lain')
+    }
+
+    if (jamKerja !== null) {
+      const val = String(jamKerja).trim()
+      conds = conds.filter(c => !/this\.waktu_mulai::text/i.test(c))
+      if (val !== '') {
+        if (val.includes('-')) {
+          const [s, e] = val.split('-').map(x => x.trim())
+          conds.push(`(this.waktu_mulai::text ilike '%${s}%' and this.waktu_akhir::text ilike '%${e}%')`)
+        } else {
+          conds.push(`(this.waktu_mulai::text ilike '%${val}%' or this.waktu_akhir::text ilike '%${val}%')`)
+        }
+      }
+      urlObj.searchParams.delete('filter_jam_kerja')
+    }
+
+    if (conds.length > 0) {
+      urlObj.searchParams.set('where', conds.join(' and '))
+    } else {
+      urlObj.searchParams.delete('where')
+    }
+
+    const cleanSearch = decodeURIComponent(urlObj.search).replace(/\+/g, ' ')
+    return isRelative ? (urlObj.pathname + cleanSearch) : (urlObj.origin + urlObj.pathname + cleanSearch)
+  } catch (e) {
+    console.error('Error transforming m_jam_kerja filter:', e)
+    return url
+  }
+}
+
+// Intercept fetch & XMLHttpRequest
+if (typeof window !== 'undefined' && !window.__m_jam_kerja_filter_intercepted__) {
+  window.__m_jam_kerja_filter_intercepted__ = true
+
+  if (window.fetch) {
+    const originalFetch = window.fetch
+    window.fetch = async function (input, init) {
+      if (typeof input === 'string') {
+        input = transformJamKerjaUrl(input)
+      } else if (input && input.url) {
+        const newUrl = transformJamKerjaUrl(input.url)
+        if (newUrl !== input.url && typeof Request !== 'undefined') {
+          input = new Request(newUrl, input)
+        }
+      }
+      return originalFetch.call(this, input, init)
+    }
+  }
+
+  if (typeof XMLHttpRequest !== 'undefined' && XMLHttpRequest.prototype && XMLHttpRequest.prototype.open) {
+    const originalXhrOpen = XMLHttpRequest.prototype.open
+    XMLHttpRequest.prototype.open = function (method, url, ...rest) {
+      if (typeof url === 'string') {
+        url = transformJamKerjaUrl(url)
+      }
+      return originalXhrOpen.call(this, method, url, ...rest)
+    }
+  }
+
+  if (window.axios && window.axios.interceptors && window.axios.interceptors.request) {
+    window.axios.interceptors.request.use(function (config) {
+      if (config && config.url) {
+        config.url = transformJamKerjaUrl(config.url)
+      }
+      return config
+    })
+  }
+}
+
+if (store && store.axios && store.axios.interceptors && store.axios.interceptors.request) {
+  store.axios.interceptors.request.use(function (config) {
+    if (config && config.url) {
+      config.url = transformJamKerjaUrl(config.url)
+    }
+    return config
+  })
+}
+
 const activeBtn = ref(null)
 
 function filterShowData(params, noBtn) {
@@ -288,12 +411,23 @@ const landing = reactive({
     params: {
       simplest: true,
       join: true,
-      searchfield: 'this.id, this.kode, m_comp.nama, m_dir.nama, this.waktu_mulai, this.waktu_akhir, this.desc, tipe_jam_kerja.value, this.is_active, this.is_hari_berikutnya',
+      searchfield: 'this.id, this.kode, m_dir.nama, this.waktu_mulai, this.waktu_akhir, this.desc, tipe_jam_kerja.value, this.is_active, this.is_hari_berikutnya',
     },
     onsuccess(response) {
       if (response && response.data) {
         response.data = response.data.map((item) => {
-          item.status = (item.is_active === true || item.is_active === 1 || item.is_active === '1' || item.is_active === 'true' || item.is_active === 't') ? 'Active' : 'Inactive'
+          const isActive = (item.is_active === true || item.is_active === 1 || item.is_active === '1' || item.is_active === 'true' || item.is_active === 't')
+          const isHariLain = (item.is_hari_berikutnya === true || item.is_hari_berikutnya === 1 || item.is_hari_berikutnya === '1' || item.is_hari_berikutnya === 'true' || item.is_hari_berikutnya === 't')
+          const mulai = item.waktu_mulai ? (item.waktu_mulai.length >= 5 ? item.waktu_mulai.slice(0, 5) : item.waktu_mulai) : ''
+          const akhir = item.waktu_akhir ? (item.waktu_akhir.length >= 5 ? item.waktu_akhir.slice(0, 5) : item.waktu_akhir) : ''
+          const jamKerja = (mulai && akhir) ? `${mulai} - ${akhir}` : (mulai || akhir || '-')
+
+          item.is_active = isActive
+          item.status = isActive ? 'Active' : 'Inactive'
+          item.is_hari_berikutnya = isHariLain
+          item.hari_lain = isHariLain ? 'Ada' : 'Tidak Ada'
+          item.jam_kerja = jamKerja
+          item.company = item['m_dir.nama'] || item.m_dir?.nama || item['m_comp.nama'] || '-'
           return item
         })
       }
@@ -313,24 +447,11 @@ const landing = reactive({
     resizable: true,
     filter: true,
     cellClass: ['justify-center', 'bg-gray-50', 'border-r', '!border-gray-200']
-
-  },
-  {
-    headerName: 'Holding Company',
-    field: 'm_comp.nama',
-    valueGetter: (p) => p.data?.['m_comp.nama'] || p.data?.m_comp?.nama || p.data?.['comp.nama'] || p.data?.comp?.nama || '-',
-    wrapText: true,
-    filter: true,
-    sortable: true,
-    flex: 1,
-    filter: 'ColFilter',
-    resizable: true,
-    cellClass: ['border-r', '!border-gray-200', 'justify-start']
   },
   {
     headerName: 'Company',
     field: 'm_dir.nama',
-    valueGetter: (p) => p.data?.['m_dir.nama'] || p.data?.m_dir?.nama || '-',
+    valueGetter: (p) => p.data?.['m_dir.nama'] || p.data?.m_dir?.nama || p.data?.company || p.data?.['m_comp.nama'] || '-',
     wrapText: true,
     filter: true,
     sortable: true,
@@ -362,6 +483,7 @@ const landing = reactive({
   },
   {
     headerName: 'Jam Kerja',
+    field: 'jam_kerja',
     filter: true,
     sortable: true,
     filter: 'ColFilter',
@@ -369,6 +491,7 @@ const landing = reactive({
     flex: 1,
     cellClass: ['border-r', '!border-gray-200', 'justify-start'],
     valueGetter: (params) => {
+      if (params.data?.jam_kerja) return params.data.jam_kerja
       const mulai = params.data?.waktu_mulai ? (params.data.waktu_mulai.length >= 5 ? params.data.waktu_mulai.slice(0, 5) : params.data.waktu_mulai) : ''
       const akhir = params.data?.waktu_akhir ? (params.data.waktu_akhir.length >= 5 ? params.data.waktu_akhir.slice(0, 5) : params.data.waktu_akhir) : ''
       if (mulai && akhir) return `${mulai} - ${akhir}`
@@ -378,17 +501,23 @@ const landing = reactive({
   },
   {
     headerName: 'Hari Lain',
-    field: 'is_hari_berikutnya',
-    filter: true,
-    sortable: true,
+    field: 'hari_lain',
     filter: 'ColFilter',
+    filterParams: {
+      options: ['Ada', 'Tidak Ada']
+    },
+    filterValueGetter: (params) => {
+      const val = params.data ? (params.data.hari_lain !== undefined ? params.data.hari_lain : params.data.is_hari_berikutnya) : params.value
+      return (val === 'Ada' || val === true || val === 1 || val === '1' || val === 'true') ? 'Ada' : 'Tidak Ada'
+    },
+    valueGetter: (params) => {
+      const val = params.data ? (params.data.hari_lain !== undefined ? params.data.hari_lain : params.data.is_hari_berikutnya) : params.value
+      return (val === 'Ada' || val === true || val === 1 || val === '1' || val === 'true') ? 'Ada' : 'Tidak Ada'
+    },
+    sortable: true,
     resizable: true,
     flex: 1,
     cellClass: ['border-r', '!border-gray-200', 'justify-center'],
-    valueGetter: (params) => {
-      const val = params.data?.is_hari_berikutnya
-      return (val === true || val === 1 || val === '1' || val === 'true') ? 'Ada' : 'Tidak Ada'
-    },
     cellRenderer: ({ value }) => {
       return value === 'Ada'
         ? `<span class="text-green-500 rounded-md text-xs font-medium px-4 py-1 inline-block capitalize">Ada</span>`
@@ -408,23 +537,83 @@ const landing = reactive({
   {
     headerName: 'Status',
     field: 'status',
-    sortable: true,
-    flex: 1,
-    resizable: true,
-    cellClass: ['border-r', '!border-gray-200', 'justify-center'],
+    filter: 'ColFilter',
+    filterParams: {
+      options: ['Active', 'Inactive']
+    },
+    filterValueGetter: (params) => {
+      const val = params.data ? (params.data.status !== undefined ? params.data.status : params.data.is_active) : params.value
+      return (val === 'Active' || val === true || val === 1 || val === '1' || val === 'true' || val === 't') ? 'Active' : 'Inactive'
+    },
     valueGetter: (params) => {
       const val = params.data ? (params.data.status !== undefined ? params.data.status : params.data.is_active) : params.value
       return (val === 'Active' || val === true || val === 1 || val === '1' || val === 'true' || val === 't') ? 'Active' : 'Inactive'
     },
+    sortable: true,
+    flex: 1,
+    resizable: true,
+    cellClass: ['border-r', '!border-gray-200', 'justify-center'],
     cellRenderer: ({ value }) => {
       return value === 'Active' || value === true
         ? `<span class="text-green-500 rounded-md text-xs font-medium px-4 py-1 inline-block capitalize">Active</span>`
         : `<span class="text-gray-500 rounded-md text-xs font-medium px-4 py-1 inline-block capitalize">Inactive</span>`
     }
   },
-
   ]
 })
+
+watch(() => ({ ...(landing.api && landing.api.params) }), (newParams) => {
+  if (!newParams || !landing.api || !landing.api.params) return
+  let isActive = newParams.filter_is_active ?? newParams.filter_status
+  let isHariLain = newParams.filter_is_hari_berikutnya ?? newParams.filter_hari_lain
+  let jamKerja = newParams.filter_jam_kerja
+  let modified = false
+  let currentWhere = landing.api.params.where || ''
+  let conds = currentWhere ? currentWhere.split(/\s+and\s+/i).map(c => c.trim()).filter(Boolean) : []
+
+  if (isActive !== undefined) {
+    const val = String(isActive).toLowerCase().trim()
+    const boolVal = (val === 'active' || val === 'true' || val === '1') ? 'true' : ((val === 'inactive' || val === 'false' || val === '0') ? 'false' : null)
+    conds = conds.filter(c => !/\bthis\.is_active\b/i.test(c))
+    if (boolVal !== null) {
+      conds.push('this.is_active=' + boolVal)
+    }
+    delete landing.api.params.filter_is_active
+    delete landing.api.params.filter_status
+    modified = true
+  }
+
+  if (isHariLain !== undefined) {
+    const val = String(isHariLain).toLowerCase().trim()
+    const boolVal = (val === 'ada' || val === 'yes' || val === 'true' || val === '1') ? 'true' : ((val === 'tidak ada' || val === 'no' || val === 'false' || val === '0') ? 'false' : null)
+    conds = conds.filter(c => !/\bthis\.is_hari_berikutnya\b/i.test(c))
+    if (boolVal !== null) {
+      conds.push('this.is_hari_berikutnya=' + boolVal)
+    }
+    delete landing.api.params.filter_is_hari_berikutnya
+    delete landing.api.params.filter_hari_lain
+    modified = true
+  }
+
+  if (jamKerja !== undefined) {
+    const val = String(jamKerja).trim()
+    conds = conds.filter(c => !/this\.waktu_mulai::text/i.test(c))
+    if (val !== '') {
+      if (val.includes('-')) {
+        const [s, e] = val.split('-').map(x => x.trim())
+        conds.push(`(this.waktu_mulai::text ilike '%${s}%' and this.waktu_akhir::text ilike '%${e}%')`)
+      } else {
+        conds.push(`(this.waktu_mulai::text ilike '%${val}%' or this.waktu_akhir::text ilike '%${val}%')`)
+      }
+    }
+    delete landing.api.params.filter_jam_kerja
+    modified = true
+  }
+
+  if (modified) {
+    landing.api.params.where = conds.length > 0 ? conds.join(' and ') : null
+  }
+}, { deep: true })
 
 onActivated(() => {
   //  reload table api landing
