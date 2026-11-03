@@ -1,6 +1,7 @@
 # 📝 NOTULENSI & REKAP HASIL SHOWING HRIS BBS
 **Tanggal Pelaksanaan Showing:** Rabu, 28 Oktober 2026  
 **Tanggal Penyusunan Rekap:** Kamis, 29 Oktober 2026  
+**Pembaruan Status Terakhir:** Selasa, 3 November 2026  
 **Target Rilis / Presentasi Lanjutan:** Jumat, 6 November 2026 (Pukul 13:00 WIB via Zoom)  
 **Narasumber / Pencatat Lapangan:** Mas Duta (On-Site BBS Kupang Indah)  
 **Dukungan Teknis & Remote:** Rey (Dev Lead)
@@ -49,13 +50,17 @@ Terdapat beberapa penyesuaian aturan bisnis (*business logic*) dan permintaan fi
 
 ---
 
-### 4. Siklus & Tanggal Cut-Off Penggajian
+### 4. Siklus & Tanggal Cut-Off Penggajian — ✅ Selesai Dikerjakan (Mas Duta - 3 Nov 2026, Commit `d0ba545`)
 - **Tanggal Cut-off Resmi:**  
   Fix ditetapkan pada **Tanggal 25** setiap bulannya.
-- **Rentang Periode Penggajian Bulanan:**  
-  Berjalan dari **tanggal 26 bulan sebelumnya s/d tanggal 25 bulan berjalan** (contoh: 26 September – 25 Oktober).
-- **Preset Sistem:**  
-  Form filter periode di modul Perhitungan Gaji (`t_perhitungan_gaji`) dan Finalisasi Gaji (`t_final_gaji`) otomatis memberikan default rentang tanggal 26 s/d 25.
+- **Rentang Periode Penggajian Bulanan & Mingguan:**  
+  - Bulanan: Berjalan dari **tanggal 26 bulan sebelumnya s/d tanggal 25 bulan berjalan** (contoh: 26 September – 25 Oktober).
+  - Mingguan: Auto-set durasi 1 minggu di modul perhitungan.
+- **Preset Sistem & Fleksibilitas Penggajian:**  
+  - Form filter periode di modul Perhitungan Gaji (`t_perhitungan_gaji`) dan Finalisasi Gaji (`t_final_gaji`) otomatis memberikan default rentang tanggal 26 s/d 25 untuk bulanan atau 1 minggu untuk mingguan dengan format rapi `DD/MM/YYYY`.
+  - Penambahan opsi tipe penggajian khusus **'LEMBUR SAJA'** yang terintegrasi langsung dengan `t_perhitungan_lembur`.
+  - Filter tipe penggajian (Bulanan/Mingguan) disempurnakan agar presisi, dan auto-set rentang tanggal dibebaskan jika dibutuhkan skenario rangkap gaji.
+  - Perbaikan layout form: mengatasi floating label overlapping dengan placeholder, serta menangani bug blank screen dan `value is not defined`.
 
 ---
 
@@ -99,26 +104,28 @@ Terdapat beberapa penyesuaian aturan bisnis (*business logic*) dan permintaan fi
 
 ---
 
-### 9. Transaksi Lembur & Approval (`t_lembur`) — ✅ Selesai Dikerjakan (Duta - 29 Okt 2026)
-- **Penyelesaian Alur Approval (Commit `11b923f`):**  
-  - Target approver pada workflow persetujuan lembur sudah divalidasi ketat di `Models/t_lembur/Custom.php`: hanya **Superadmin** dan **Atasan Langsung** (`m_kary.atasan_id == auth()->user()->m_kary_id`) yang berhak menyetujui, menolak, atau merevisi (`canApprove`).
+### 9. Transaksi Lembur, Approval & Dokumen SPK (`t_lembur`) — ✅ Selesai Dikerjakan (Mas Duta - 29 Okt & 3 Nov 2026)
+- **Penyelesaian Alur Approval (Commit `11b923f` & `d0ba545`):**  
+  - Target approver pada workflow persetujuan lembur sudah divalidasi ketat di `Models/t_lembur/Custom.php` dan `Models/generate_approval/custom.php`: hanya **Superadmin** dan **Atasan Langsung** (`m_kary.atasan_id == auth()->user()->m_kary_id`) yang berhak menyetujui, menolak, atau merevisi (`canApprove`).
   - Handling form saat status `IN APPROVAL` otomatis terkunci menjadi *Read-Only* (`isReadOnly`) di `Blades/t_lembur.blade.php` dan `Javascript/t_lembur.js`, dan tombol aksi `Approve`/`Reject`/`Revise` hanya muncul jika user memiliki hak akses.
-- **Perbaikan UI Tombol & Format Tanggal (Commit `2dd2e97` & `ec9cf12`):**  
+  - Penyesuaian tampilan dan cetak dokumen SPK Lembur (`l_spl`).
+- **Perbaikan UI Tombol & Format Tanggal (Commit `2dd2e97`, `ec9cf12`, & `d0ba545`):**  
   - Tombol aksi **Send Approval** (`location-arrow`) sudah aktif untuk status `DRAFT`.
-  - Format tanggal transaksi di menu **Notifikasi** dan tabel landing **Lembur** sudah rapi menggunakan helper `formatDate()` (`DD/MM/YYYY`).
+  - Format tanggal transaksi di menu **Notifikasi**, tabel landing **Lembur**, dan **Perhitungan Lembur** sudah rapi menggunakan helper `formatDate()` (`DD/MM/YYYY`).
+  - Modul **Perhitungan Lembur** (`t_perhitungan_lembur`) otomatis mengatur durasi filter ke rentang 1 minggu.
 
 ---
 
-## 📊 Matriks Status Pengerjaan (Update 29 Oktober 2026)
+## 📊 Matriks Status Pengerjaan (Update 3 November 2026)
 
 | No | Modul / Fitur | PIC | Status | Keterangan & Commit |
 |---|---|---|:---:|---|
-| 1 | **Alur Approval Lembur (`t_lembur`)** | Mas Duta | ✅ Selesai | Validasi approver atasan/superadmin & read-only in approval (`11b923f`) |
-| 2 | **Format Tanggal Notifikasi & Lembur** | Mas Duta | ✅ Selesai | Formatter tanggal DD/MM/YYYY rapi (`2dd2e97`, `ec9cf12`) |
-| 3 | **Denda Keterlambatan Pembulatan ke Atas** | Rey | ⏳ To Do | Pembulatan `ceil($menit/30) * 25000` di Cores |
-| 4 | **Gaji Pokok Per-Personal & Field `gaji_acuan` (UMK BPJS)** | Rey / Tim | ⏳ To Do | Master gaji karyawan & dasar pengali BPJS |
-| 5 | **Sinkronisasi Resign & Inactive Karyawan** | Rey / Tim | ⏳ To Do | Two-way trigger `tanggal_berhenti_kerja` $\leftrightarrow$ `is_active` |
-| 6 | **Preset Cut-Off Payroll Tanggal 25** | Rey | ⏳ To Do | Rentang tanggal otomatis 26 s/d 25 di form gaji |
+| 1 | **Alur Approval Lembur & SPK (`t_lembur`)** | Mas Duta | ✅ Selesai | Validasi approver atasan/superadmin, read-only in approval, & format SPK (`11b923f`, `d0ba545`) |
+| 2 | **Format Tanggal Notifikasi & Lembur** | Mas Duta | ✅ Selesai | Formatter tanggal DD/MM/YYYY rapi di Notifikasi, Lembur, & SPL (`2dd2e97`, `ec9cf12`, `d0ba545`) |
+| 3 | **Preset Cut-Off Payroll Tanggal 25 & Fleksibilitas Gaji** | Mas Duta | ✅ Selesai | Auto-set dinamis 26 s/d 25 bulanan, 1 minggu lembur, opsi 'LEMBUR SAJA', & fix label overlapping (`d0ba545`) |
+| 4 | **Denda Keterlambatan Pembulatan ke Atas** | Rey | ⏳ To Do | Pembulatan `ceil($menit/30) * 25000` di Cores |
+| 5 | **Gaji Pokok Per-Personal & Field `gaji_acuan` (UMK BPJS)** | Rey / Tim | ⏳ To Do | Master gaji karyawan & dasar pengali BPJS |
+| 6 | **Sinkronisasi Resign & Inactive Karyawan** | Rey / Tim | ⏳ To Do | Two-way trigger `tanggal_berhenti_kerja` $\leftrightarrow$ `is_active` |
 | 7 | **PPh 21 Disubsidi Perusahaan (Gross-up)** | Rey | ⏳ To Do | Tunjangan pajak agar take home pay utuh |
 | 8 | **Mutasi Karyawan Prorata (Opsi 2)** | Rey | ⏳ To Do | Split perhitungan hari kerja divisi lama vs divisi baru |
 | 9 | **Aturan Cuti 12 Hari & Split Izin Khusus** | Rey / Tim | ⏳ To Do | Batas 3 hari berturut-turut & izin khusus terpisah |
@@ -130,11 +137,14 @@ Terdapat beberapa penyesuaian aturan bisnis (*business logic*) dan permintaan fi
 
 Berikut daftar tugas pengerjaan yang akan diselesaikan secara bertahap menuju presentasi final tanggal 6 November 2026:
 
-### Track 0: Transaksi Lembur & Notifikasi (Dikerjakan Mas Duta)
+### Track 0: Transaksi Lembur, Notifikasi & Finalisasi Gaji (Dikerjakan Mas Duta)
 - [x] **Task 0.1:** Perbaiki visibilitas tombol aksi Send Approval pada data lembur status DRAFT (`Javascript/t_lembur.js`).
 - [x] **Task 0.2:** Kunci form lembur menjadi *Read-Only* saat berstatus `IN APPROVAL` (`isReadOnly = true`).
-- [x] **Task 0.3:** Validasi wewenang approval lembur hanya untuk Superadmin dan Atasan Langsung dari karyawan terkait (`Models/t_lembur/Custom.php`).
-- [x] **Task 0.4:** Rapikan format tanggal pada tabel Notifikasi dan tabel landing Lembur (`formatDate`).
+- [x] **Task 0.3:** Validasi wewenang approval lembur hanya untuk Superadmin dan Atasan Langsung dari karyawan terkait (`Models/t_lembur/Custom.php`, `Models/generate_approval/custom.php`).
+- [x] **Task 0.4:** Rapikan format tanggal pada tabel Notifikasi, tabel landing Lembur, dan Surat Perintah Lembur (`formatDate` `DD/MM/YYYY`).
+- [x] **Task 0.5:** Auto-set rentang durasi 1 minggu pada modul Perhitungan Lembur (`Javascript/t_perhitungan_lembur.js`).
+- [x] **Task 0.6:** Tambahkan opsi tipe penggajian khusus **'LEMBUR SAJA'** pada Finalisasi Gaji terintegrasi dengan perhitungan lembur (`Javascript/t_final_gaji.js`).
+- [x] **Task 0.7:** Selesaikan bug layar blank saat create & 'value is not defined' saat view pada Finalisasi Gaji serta atasi overlapping label form.
 
 ### Track 1: Modul Presensi & Keterlambatan
 - [ ] **Task 1.1:** Update logika denda keterlambatan di `Cores/PerhitunganGaji.php`: ubah formula denda menjadi pembulatan ke atas per kelipatan 30 menit (`ceil($menit / 30) * 25000`).
@@ -146,7 +156,7 @@ Berikut daftar tugas pengerjaan yang akan diselesaikan secara bertahap menuju pr
 - [ ] **Task 2.3:** Buat logika sinkronisasi reaktif di `m_kary` antara toggle `is_active` dan field `tanggal_berhenti_kerja`.
 
 ### Track 3: Engine Perhitungan Gaji & Pajak (`t_perhitungan_gaji` & `Cores`)
-- [ ] **Task 3.1:** Ubah default rentang periode penggajian menjadi siklus cut-off tanggal 25 (tgl 26 bulan lalu s/d tgl 25 bulan berjalan).
+- [x] **Task 3.1:** Ubah default rentang periode penggajian menjadi siklus cut-off tanggal 25 (tgl 26 bulan lalu s/d tgl 25 bulan berjalan) dan mingguan dinamis (`Javascript/t_perhitungan_gaji.js`, `d0ba545`).
 - [ ] **Task 3.2:** Terapkan skema PPh 21 Gross-up (tunjangan pajak ditanggung perusahaan) agar take-home pay karyawan utuh.
 - [ ] **Task 3.3:** Implementasikan kalkulasi prorata mutasi divisi (Opsi 2) untuk karyawan yang mengalami mutasi di tengah periode.
 
