@@ -110,21 +110,14 @@ class m_jam_kerja extends \App\Models\BasicModels\m_jam_kerja
                     $start = trim($parts[0]);
                     $end = trim($parts[1]);
                     if ($start !== '' && $end !== '') {
-                        $q->whereRaw("(m_jam_kerja.waktu_mulai::text ilike ? or to_char(m_jam_kerja.waktu_mulai, 'HH24:MI') ilike ?)", ["%$start%", "%$start%"])
-                          ->whereRaw("(m_jam_kerja.waktu_akhir::text ilike ? or to_char(m_jam_kerja.waktu_akhir, 'HH24:MI') ilike ?)", ["%$end%", "%$end%"]);
+                        $q->whereRaw("m_jam_kerja.waktu_mulai::text ilike ? and m_jam_kerja.waktu_akhir::text ilike ?", ["%$start%", "%$end%"]);
                     } elseif ($start !== '') {
-                        $q->whereRaw("(m_jam_kerja.waktu_mulai::text ilike ? or to_char(m_jam_kerja.waktu_mulai, 'HH24:MI') ilike ?)", ["%$start%", "%$start%"]);
+                        $q->whereRaw("m_jam_kerja.waktu_mulai::text ilike ?", ["%$start%"]);
                     } elseif ($end !== '') {
-                        $q->whereRaw("(m_jam_kerja.waktu_akhir::text ilike ? or to_char(m_jam_kerja.waktu_akhir, 'HH24:MI') ilike ?)", ["%$end%", "%$end%"]);
+                        $q->whereRaw("m_jam_kerja.waktu_akhir::text ilike ?", ["%$end%"]);
                     }
                 } else {
-                    $q->whereRaw("(
-                        m_jam_kerja.waktu_mulai::text ilike ?
-                        or m_jam_kerja.waktu_akhir::text ilike ?
-                        or to_char(m_jam_kerja.waktu_mulai, 'HH24:MI') ilike ?
-                        or to_char(m_jam_kerja.waktu_akhir, 'HH24:MI') ilike ?
-                        or concat(coalesce(to_char(m_jam_kerja.waktu_mulai, 'HH24:MI'), ''), ' - ', coalesce(to_char(m_jam_kerja.waktu_akhir, 'HH24:MI'), '')) ilike ?
-                    )", ["%$val%", "%$val%", "%$val%", "%$val%", "%$val%"]);
+                    $q->whereRaw("(m_jam_kerja.waktu_mulai::text ilike ? or m_jam_kerja.waktu_akhir::text ilike ?)", ["%$val%", "%$val%"]);
                 }
             });
         }
