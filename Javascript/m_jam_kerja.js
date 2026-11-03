@@ -245,16 +245,12 @@ function transformJamKerjaUrl(url) {
 
     if (jamKerja !== null) {
       const val = String(jamKerja).trim()
-      conds = conds.filter(c => !/this\.waktu_mulai::text/i.test(c))
+      conds = conds.filter(c => !/(?:this|m_jam_kerja)\.waktu_mulai/i.test(c))
       if (val !== '') {
-        if (val.includes('-')) {
-          const [s, e] = val.split('-').map(x => x.trim())
-          conds.push(`(this.waktu_mulai::text ilike '%${s}%' and this.waktu_akhir::text ilike '%${e}%')`)
-        } else {
-          conds.push(`(this.waktu_mulai::text ilike '%${val}%' or this.waktu_akhir::text ilike '%${val}%')`)
-        }
+        urlObj.searchParams.set('filter_jam_kerja', val)
+      } else {
+        urlObj.searchParams.delete('filter_jam_kerja')
       }
-      urlObj.searchParams.delete('filter_jam_kerja')
     }
 
     if (conds.length > 0) {
@@ -484,12 +480,18 @@ const landing = reactive({
   {
     headerName: 'Jam Kerja',
     field: 'jam_kerja',
-    filter: true,
     sortable: true,
     filter: 'ColFilter',
     resizable: true,
     flex: 1,
     cellClass: ['border-r', '!border-gray-200', 'justify-start'],
+    filterValueGetter: (params) => {
+      if (params.data?.jam_kerja) return params.data.jam_kerja
+      const mulai = params.data?.waktu_mulai ? (params.data.waktu_mulai.length >= 5 ? params.data.waktu_mulai.slice(0, 5) : params.data.waktu_mulai) : ''
+      const akhir = params.data?.waktu_akhir ? (params.data.waktu_akhir.length >= 5 ? params.data.waktu_akhir.slice(0, 5) : params.data.waktu_akhir) : ''
+      if (mulai && akhir) return `${mulai} - ${akhir}`
+      return mulai || akhir || ''
+    },
     valueGetter: (params) => {
       if (params.data?.jam_kerja) return params.data.jam_kerja
       const mulai = params.data?.waktu_mulai ? (params.data.waktu_mulai.length >= 5 ? params.data.waktu_mulai.slice(0, 5) : params.data.waktu_mulai) : ''
@@ -597,16 +599,10 @@ watch(() => ({ ...(landing.api && landing.api.params) }), (newParams) => {
 
   if (jamKerja !== undefined) {
     const val = String(jamKerja).trim()
-    conds = conds.filter(c => !/this\.waktu_mulai::text/i.test(c))
-    if (val !== '') {
-      if (val.includes('-')) {
-        const [s, e] = val.split('-').map(x => x.trim())
-        conds.push(`(this.waktu_mulai::text ilike '%${s}%' and this.waktu_akhir::text ilike '%${e}%')`)
-      } else {
-        conds.push(`(this.waktu_mulai::text ilike '%${val}%' or this.waktu_akhir::text ilike '%${val}%')`)
-      }
+    conds = conds.filter(c => !/(?:this|m_jam_kerja)\.waktu_mulai/i.test(c))
+    if (val === '') {
+      delete landing.api.params.filter_jam_kerja
     }
-    delete landing.api.params.filter_jam_kerja
     modified = true
   }
 

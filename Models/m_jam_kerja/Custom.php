@@ -101,17 +101,32 @@ class m_jam_kerja extends \App\Models\BasicModels\m_jam_kerja
             }
         }
 
-        $jamKerja = request('filter_jam_kerja');
+        $jamKerja = request('filter_jam_kerja') ?? request('jam_kerja');
         if (!empty($jamKerja)) {
             $val = trim((string)$jamKerja);
-            if (str_contains($val, '-')) {
-                $parts = explode('-', $val);
-                $start = trim($parts[0]);
-                $end = trim($parts[1]);
-                $model = $model->whereRaw("this.waktu_mulai::text ilike ? and this.waktu_akhir::text ilike ?", ["%$start%", "%$end%"]);
-            } else {
-                $model = $model->whereRaw("(this.waktu_mulai::text ilike ? or this.waktu_akhir::text ilike ?)", ["%$val%", "%$val%"]);
-            }
+            $model = $model->where(function ($q) use ($val) {
+                if (str_contains($val, '-')) {
+                    $parts = explode('-', $val);
+                    $start = trim($parts[0]);
+                    $end = trim($parts[1]);
+                    if ($start !== '' && $end !== '') {
+                        $q->whereRaw("(m_jam_kerja.waktu_mulai::text ilike ? or to_char(m_jam_kerja.waktu_mulai, 'HH24:MI') ilike ?)", ["%$start%", "%$start%"])
+                          ->whereRaw("(m_jam_kerja.waktu_akhir::text ilike ? or to_char(m_jam_kerja.waktu_akhir, 'HH24:MI') ilike ?)", ["%$end%", "%$end%"]);
+                    } elseif ($start !== '') {
+                        $q->whereRaw("(m_jam_kerja.waktu_mulai::text ilike ? or to_char(m_jam_kerja.waktu_mulai, 'HH24:MI') ilike ?)", ["%$start%", "%$start%"]);
+                    } elseif ($end !== '') {
+                        $q->whereRaw("(m_jam_kerja.waktu_akhir::text ilike ? or to_char(m_jam_kerja.waktu_akhir, 'HH24:MI') ilike ?)", ["%$end%", "%$end%"]);
+                    }
+                } else {
+                    $q->whereRaw("(
+                        m_jam_kerja.waktu_mulai::text ilike ?
+                        or m_jam_kerja.waktu_akhir::text ilike ?
+                        or to_char(m_jam_kerja.waktu_mulai, 'HH24:MI') ilike ?
+                        or to_char(m_jam_kerja.waktu_akhir, 'HH24:MI') ilike ?
+                        or concat(coalesce(to_char(m_jam_kerja.waktu_mulai, 'HH24:MI'), ''), ' - ', coalesce(to_char(m_jam_kerja.waktu_akhir, 'HH24:MI'), '')) ilike ?
+                    )", ["%$val%", "%$val%", "%$val%", "%$val%", "%$val%"]);
+                }
+            });
         }
 
         return $model;

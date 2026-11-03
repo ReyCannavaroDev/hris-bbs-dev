@@ -224,33 +224,42 @@ class Middleware
         if (isset($requestData['filter_jam_kerja']) && $modelInstance && in_array('waktu_mulai', $modelInstance->columns ?? [])) {
             $val = trim((string)$requestData['filter_jam_kerja']);
             if ($val !== '') {
-                if (str_contains($val, '-')) {
-                    $parts = explode('-', $val);
-                    $s = trim($parts[0]);
-                    $e = trim($parts[1]);
-                    $condition = "(this.waktu_mulai::text ilike '%$s%' and this.waktu_akhir::text ilike '%$e%')";
-                } else {
-                    $condition = "(this.waktu_mulai::text ilike '%$val%' or this.waktu_akhir::text ilike '%$val%')";
-                }
-                if (!empty($requestData['where'])) {
-                    $requestData['where'] .= " and $condition";
-                } else {
-                    $requestData['where'] = $condition;
-                }
-                $request->merge(['where' => $requestData['where']]);
-                if ($request->query) {
-                    $request->query->set('where', $requestData['where']);
-                    $request->query->remove('filter_jam_kerja');
-                }
-                if ($request->request) {
-                    $request->request->remove('filter_jam_kerja');
-                }
-                $request->offsetUnset('filter_jam_kerja');
-                $_GET['where'] = $requestData['where'];
-                $_REQUEST['where'] = $requestData['where'];
-                unset($_GET['filter_jam_kerja'], $_REQUEST['filter_jam_kerja']);
-                unset($requestData['filter_jam_kerja']);
+                $tbl = $modelInstance->getTable();
+                $modelInstance->addGlobalScope('filter_jam_kerja', function (Builder $builder) use ($tbl, $val) {
+                    if (str_contains($val, '-')) {
+                        $parts = explode('-', $val);
+                        $s = trim($parts[0]);
+                        $e = trim($parts[1]);
+                        if ($s !== '' && $e !== '') {
+                            $builder->whereRaw("($tbl.waktu_mulai::text ilike ? or to_char($tbl.waktu_mulai, 'HH24:MI') ilike ?)", ["%$s%", "%$s%"])
+                                    ->whereRaw("($tbl.waktu_akhir::text ilike ? or to_char($tbl.waktu_akhir, 'HH24:MI') ilike ?)", ["%$e%", "%$e%"]);
+                        } elseif ($s !== '') {
+                            $builder->whereRaw("($tbl.waktu_mulai::text ilike ? or to_char($tbl.waktu_mulai, 'HH24:MI') ilike ?)", ["%$s%", "%$s%"]);
+                        } elseif ($e !== '') {
+                            $builder->whereRaw("($tbl.waktu_akhir::text ilike ? or to_char($tbl.waktu_akhir, 'HH24:MI') ilike ?)", ["%$e%", "%$e%"]);
+                        }
+                    } else {
+                        $builder->whereRaw("(
+                            $tbl.waktu_mulai::text ilike ?
+                            or $tbl.waktu_akhir::text ilike ?
+                            or to_char($tbl.waktu_mulai, 'HH24:MI') ilike ?
+                            or to_char($tbl.waktu_akhir, 'HH24:MI') ilike ?
+                            or concat(coalesce(to_char($tbl.waktu_mulai, 'HH24:MI'), ''), ' - ', coalesce(to_char($tbl.waktu_akhir, 'HH24:MI'), '')) ilike ?
+                        )", ["%$val%", "%$val%", "%$val%", "%$val%", "%$val%"]);
+                    }
+                });
             }
+        }
+
+        if (!empty($requestData['where'])) {
+            $requestData['where'] = str_replace('this.waktu_mulai', 'm_jam_kerja.waktu_mulai', $requestData['where']);
+            $requestData['where'] = str_replace('this.waktu_akhir', 'm_jam_kerja.waktu_akhir', $requestData['where']);
+            $request->merge(['where' => $requestData['where']]);
+            if ($request->query) {
+                $request->query->set('where', $requestData['where']);
+            }
+            $_GET['where'] = $requestData['where'];
+            $_REQUEST['where'] = $requestData['where'];
         }
 
         if (isset($requestData['search'])) {
