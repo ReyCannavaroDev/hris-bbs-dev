@@ -21,7 +21,24 @@ class m_kary extends \App\Models\BasicModels\m_kary
 
     public function createBefore($model, $arrayData, $metaData, $id = null)
     {
-        $m_comp_id = $arrayData['m_comp_id'] ?? (auth()->check() ? auth()->user()->m_comp_id : 1) ?? 1;
+        $m_comp_id = $arrayData['m_comp_id'] ?? null;
+        if (empty($m_comp_id) && !empty($arrayData['m_dir_id'])) {
+            $m_comp_id = \DB::table('m_dir')->where('id', $arrayData['m_dir_id'])->value('m_comp_id');
+        }
+        if (empty($m_comp_id)) {
+            $m_comp_id = (auth()->check() ? auth()->user()->m_comp_id : 1) ?? 1;
+        }
+
+        $dateCols = ['tgl_masuk', 'tgl_berhenti', 'tgl_lahir', 'lama_kontrak_awal', 'lama_kontrak_akhir', 'exp_date_cuti', 'npwp_tgl_berlaku'];
+        foreach ($dateCols as $df) {
+            if (!empty($arrayData[$df])) {
+                $val = trim($arrayData[$df]);
+                if (preg_match('/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/', $val, $m)) {
+                    $arrayData[$df] = sprintf('%04d-%02d-%02d', $m[3], $m[2], $m[1]);
+                }
+            }
+        }
+
         $newArrayData = array_merge($arrayData, [
             "kode" => @$arrayData['kode'] ?? $this->helper->generateNomor("KODE KARYAWAN"),
             "m_comp_id" => $m_comp_id,
@@ -51,6 +68,23 @@ class m_kary extends \App\Models\BasicModels\m_kary
     public function updateBefore($model, $arrayData, $metaData, $id = null)
     {
         $newArrayData = $arrayData;
+
+        if (empty($newArrayData['m_comp_id']) && !empty($newArrayData['m_dir_id'])) {
+            $compFromDir = \DB::table('m_dir')->where('id', $newArrayData['m_dir_id'])->value('m_comp_id');
+            if ($compFromDir) {
+                $newArrayData['m_comp_id'] = $compFromDir;
+            }
+        }
+
+        $dateCols = ['tgl_masuk', 'tgl_berhenti', 'tgl_lahir', 'lama_kontrak_awal', 'lama_kontrak_akhir', 'exp_date_cuti', 'npwp_tgl_berlaku'];
+        foreach ($dateCols as $df) {
+            if (!empty($newArrayData[$df])) {
+                $val = trim($newArrayData[$df]);
+                if (preg_match('/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/', $val, $m)) {
+                    $newArrayData[$df] = sprintf('%04d-%02d-%02d', $m[3], $m[2], $m[1]);
+                }
+            }
+        }
 
         // Sinkronisasi Dua Arah (Two-Way Trigger) Status Resign & Inactive Karyawan
         if (!empty($newArrayData['tgl_berhenti'])) {
@@ -185,6 +219,13 @@ class m_kary extends \App\Models\BasicModels\m_kary
         }
         if (empty($row['kode']) && !empty($row['nik'])) {
             $object['kode'] = $row['nik'];
+        }
+        foreach (['tgl_masuk', 'tgl_berhenti', 'tgl_lahir', 'lama_kontrak_awal', 'lama_kontrak_akhir'] as $col) {
+            if (!empty($row[$col])) {
+                try {
+                    $object[$col] = Carbon::parse($row[$col])->format('d/m/Y');
+                } catch (\Exception $e) {}
+            }
         }
         return array_merge( $row, $object );
     }

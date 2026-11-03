@@ -88,12 +88,53 @@ const values = reactive({
 const isInitialLoaded = ref(false)
 let isSyncingStatusResign = false
 
-const getTodayDate = () => {
-  const now = new Date()
-  const year = now.getFullYear()
-  const month = String(now.getMonth() + 1).padStart(2, '0')
-  const day = String(now.getDate()).padStart(2, '0')
+function parseDate(v) {
+  if (!v) return null
+  if (v instanceof Date) return isNaN(v.getTime()) ? null : v
+  if (typeof v !== 'string') return null
+  const raw = v.trim().split(' ')[0]
+  const parts = raw.split(/[-/.]/)
+  if (parts.length !== 3) return null
+
+  let year, month, day
+  if (parts[0].length === 4) {
+    year = parseInt(parts[0], 10)
+    month = parseInt(parts[1], 10) - 1
+    day = parseInt(parts[2], 10)
+  } else if (parts[2].length === 4) {
+    day = parseInt(parts[0], 10)
+    month = parseInt(parts[1], 10) - 1
+    year = parseInt(parts[2], 10)
+  } else {
+    return null
+  }
+
+  const d = new Date(year, month, day)
+  return isNaN(d.getTime()) ? null : d
+}
+
+function formatDateDisplay(d) {
+  if (!d) return ''
+  const dateObj = (d instanceof Date) ? d : parseDate(d)
+  if (!dateObj) return d
+  const day = String(dateObj.getDate()).padStart(2, '0')
+  const month = String(dateObj.getMonth() + 1).padStart(2, '0')
+  const year = dateObj.getFullYear()
+  return `${day}/${month}/${year}`
+}
+
+function formatDateApi(d) {
+  if (!d) return ''
+  const dateObj = (d instanceof Date) ? d : parseDate(d)
+  if (!dateObj) return d
+  const day = String(dateObj.getDate()).padStart(2, '0')
+  const month = String(dateObj.getMonth() + 1).padStart(2, '0')
+  const year = dateObj.getFullYear()
   return `${year}-${month}-${day}`
+}
+
+const getTodayDate = () => {
+  return formatDateDisplay(new Date())
 }
 
 const onChangeStatusKaryawan = (val) => {
@@ -114,10 +155,10 @@ const onChangeStatusKaryawan = (val) => {
 }
 
 const onChangeTanggalBerhenti = (val) => {
-  values.tgl_berhenti = val
+  values.tgl_berhenti = val ? formatDateDisplay(val) : null
   if (!isInitialLoaded.value || isSyncingStatusResign) return
   isSyncingStatusResign = true
-  if (val) {
+  if (values.tgl_berhenti) {
     values.is_active = 0
   } else {
     values.is_active = 1
@@ -421,6 +462,14 @@ onBeforeMount(async () => {
   for (const key in initialValues) {
     values[key] = initialValues[key]
   }
+
+  // Format all date values to DD/MM/YYYY for UI display
+  if (values.tgl_masuk) values.tgl_masuk = formatDateDisplay(values.tgl_masuk)
+  if (values.tgl_berhenti) values.tgl_berhenti = formatDateDisplay(values.tgl_berhenti)
+  if (values.tgl_lahir) values.tgl_lahir = formatDateDisplay(values.tgl_lahir)
+  if (values.npwp_tgl_berlaku) values.npwp_tgl_berlaku = formatDateDisplay(values.npwp_tgl_berlaku)
+  if (values.lama_kontrak_awal) values.lama_kontrak_awal = formatDateDisplay(values.lama_kontrak_awal)
+  if (values.lama_kontrak_akhir) values.lama_kontrak_akhir = formatDateDisplay(values.lama_kontrak_akhir)
 
   if (!isRead) {
     values.m_comp_id = store.user.data?.m_comp_id ?? 1
@@ -1107,6 +1156,14 @@ async function onSave() {
       values.m_kary_det_kartu[0].desc_file = values.desc_file
     }
 
+    const payload = { ...values }
+    if (payload.tgl_masuk) payload.tgl_masuk = formatDateApi(payload.tgl_masuk)
+    if (payload.tgl_berhenti) payload.tgl_berhenti = formatDateApi(payload.tgl_berhenti)
+    if (payload.tgl_lahir) payload.tgl_lahir = formatDateApi(payload.tgl_lahir)
+    if (payload.npwp_tgl_berlaku) payload.npwp_tgl_berlaku = formatDateApi(payload.npwp_tgl_berlaku)
+    if (payload.lama_kontrak_awal) payload.lama_kontrak_awal = formatDateApi(payload.lama_kontrak_awal)
+    if (payload.lama_kontrak_akhir) payload.lama_kontrak_akhir = formatDateApi(payload.lama_kontrak_akhir)
+
     const dataURL = `${store.server.url_backend}/operation${endpointApi}${isCreating ? '' : ('/' + route.params.id)}`
     isRequesting.value = true
 
@@ -1116,7 +1173,7 @@ async function onSave() {
         'Content-Type': 'Application/json',
         Authorization: `${store.user.token_type} ${store.user.token}`
       },
-      body: JSON.stringify(values)
+      body: JSON.stringify(payload)
     })
 
     if (!res.ok) {
@@ -1295,7 +1352,7 @@ const landing = reactive({
     cellClass: ['border-r', '!border-gray-200', 'justify-start']
   },
   {
-    headerName: 'Company / Cabang',
+    headerName: 'Company',
     field: 'm_dir.nama',
     filter: true,
     sortable: true,
@@ -1332,7 +1389,8 @@ const landing = reactive({
     filter: 'ColFilter',
     resizable: true,
     flex: 1,
-    cellClass: ['border-r', '!border-gray-200', 'justify-center']
+    cellClass: ['border-r', '!border-gray-200', 'justify-center'],
+    valueGetter: (params) => formatDateDisplay(params.data?.tgl_masuk)
   },
   {
     headerName: 'Can Outscope',

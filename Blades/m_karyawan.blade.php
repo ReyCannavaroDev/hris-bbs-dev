@@ -107,36 +107,26 @@
         <!-- NOT PROFILE -->
         <div v-if="!isProfile" class="col-span-8 md:col-span-6">
           <div class="grid grid-cols-12 items-center">
-            <label class="col-span-12">Holding Company<label class="text-red-500 space-x-0 pl-0">*</label></label>
-            <FieldSelect :bind="{ disabled: true, clearable:false }"
-              class="col-span-12 !mt-0 w-full" :value="values.m_comp_id" @input="v=>values.m_comp_id=v"
-              :errorText="formErrors.m_comp_id?'failed':''" label="" placeholder="Holding Company" :hints="formErrors.m_comp_id" :api="{
-                  url: `${store.server.url_backend}/operation/m_comp`,
-                  headers: { 'Content-Type': 'Application/json', Authorization: `${store.user.token_type} ${store.user.token}`},
-                  params: {
-                    simplest:true,
-                    where: `this.is_active = 'true'`
-                  }
-              }" valueField="id" displayField="nama" :check="false" />
-          </div>
-        </div>
-        <div v-if="!isProfile" class="col-span-8 md:col-span-6">
-          <div class="grid grid-cols-12 items-center">
-            <label class="col-span-12">Company / Cabang<label class="text-red-500 space-x-0 pl-0">*</label></label>
+            <label class="col-span-12">Company<label class="text-red-500 space-x-0 pl-0">*</label></label>
             <FieldSelect :bind="{ disabled: !actionText && !isProfile, clearable:true }"
               class="col-span-12 !mt-0 w-full" :value="values.m_dir_id" @input="(v)=>{
                 values.m_dir_id = v
                 values.m_divisi_id = null
                 values.m_dept_id = null
               }"
-              :errorText="formErrors.m_dir_id?'failed':''" label="" placeholder="Pilih Company / Cabang" :hints="formErrors.m_dir_id" :api="{
+              @update:valueFull="(objVal)=>{
+                if (objVal && objVal.m_comp_id) {
+                  values.m_comp_id = objVal.m_comp_id
+                }
+              }"
+              :errorText="formErrors.m_dir_id?'failed':''" label="" placeholder="Pilih Company" :hints="formErrors.m_dir_id" :api="{
                   url: `${store.server.url_backend}/operation/m_dir`,
                   headers: { 'Content-Type': 'Application/json', Authorization: `${store.user.token_type} ${store.user.token}`},
                   params: {
                     simplest:true,
                     where: `this.is_active = 'true'`,
                     transform:false,
-                    selectfield: 'this.id, this.nama, this.is_active'
+                    selectfield: 'this.id, this.nama, this.m_comp_id, this.is_active'
                   }
               }" valueField="id" displayField="nama" fa-icon="search" :check="true" />
           </div>
@@ -341,11 +331,6 @@
               displayField="key" :check="false" />
           </div>
         </div>
-        <!-- <div class="col-span-8 md:col-span-6">
-          </div> -->
-        <!-- NOT PROFILE -->
-        <div class="col-span-8 md:col-span-6">
-        </div>
         <h2 class="font-bold text-[18px] col-span-8 md:col-span-6">Data Karyawan</h2>
              <div class="col-span-8 md:col-span-6">
         </div>
@@ -407,7 +392,7 @@
                 flex: 1,
                 wrapText:true,
                 field: 'm_dir.nama',
-                headerName: 'Company / Cabang',
+                headerName: 'Company',
                 sortable: false, resizable: true, filter: 'ColFilter',
                 cellClass: ['border-r', '!border-gray-200', 'justify-start']
               },
@@ -514,7 +499,7 @@
                     }
                   }" :check="false" />
             <FieldX :bind="{ readonly: !actionText && !isProfile }" type="date" class="col-span-6 !mt-0 w-full"
-              :value="values.tgl_lahir" label="" placeholder="Pilih Tanggal"
+              :value="values.tgl_lahir" label="" placeholder="DD/MM/YYYY"
               :errorText="formErrors.tgl_lahir?'failed':''" @input="v=>values.tgl_lahir=v" :hints="formErrors.tgl_lahir"
               :check="false" />
           </div>
@@ -837,14 +822,14 @@
             <div class="grid grid-cols-12 col-span-6">
               <label class="col-span-12">Tanggal Masuk Kerja<label class="text-red-500 space-x-0 pl-0">*</label></label>
               <FieldX :bind="{ readonly: !actionText && !isProfile, disabled: !actionText && !isProfile }" type="date" class="col-span-12 !mt-0 w-full"
-                :value="values.tgl_masuk" label="" :errorText="formErrors.tgl_masuk?'failed':''"
+                :value="values.tgl_masuk" label="" placeholder="DD/MM/YYYY" :errorText="formErrors.tgl_masuk?'failed':''"
                 @input="v=>values.tgl_masuk=v" :hints="formErrors.tgl_masuk" :check="false"
               />
             </div>
             <div class="grid grid-cols-12 col-span-6">
               <label class="col-span-12">Tanggal Berhenti Kerja<label class="text-red-500 space-x-0 pl-0"></label></label>
               <FieldX :bind="{ readonly: !actionText && !isProfile, disabled: !actionText && !isProfile }" type="date" class="col-span-12 !mt-0 w-full"
-                :value="values.tgl_berhenti" label="" :errorText="formErrors.tgl_berhenti?'failed':''"
+                :value="values.tgl_berhenti" label="" placeholder="DD/MM/YYYY" :errorText="formErrors.tgl_berhenti?'failed':''"
                 @input="v=>{ values.tgl_berhenti=v; onChangeTanggalBerhenti(v) }" :hints="formErrors.tgl_berhenti" :check="false"
               />
             </div>
@@ -955,7 +940,7 @@
           <div class="grid grid-cols-12 items-center">
             <label class="col-span-12">Tanggal Berlaku NPWP<label class="text-red-500 space-x-0 pl-0">*</label></label>
             <FieldX :bind="{ readonly: !actionText && !isProfile }" type="date" class="col-span-12 !mt-0 w-full"
-              :value="values.npwp_tgl_berlaku" label="" placeholder="Masukan Tanggal Berlaku NPWP"
+              :value="values.npwp_tgl_berlaku" label="" placeholder="DD/MM/YYYY"
               :errorText="formErrors.npwp_tgl_berlaku?'failed':''" @input="v=>values.npwp_tgl_berlaku=v"
               :hints="formErrors.npwp_tgl_berlaku" :check="false" />
           </div>
