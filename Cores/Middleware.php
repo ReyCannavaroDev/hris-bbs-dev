@@ -9,9 +9,29 @@ class Middleware
 {
     public function handle( Request $request, Closure $next ) 
     {
-        @$modelName = $request->route()[2]['modelname'];
+        @$modelName = (is_array($request->route()) && isset($request->route()[2]))
+            ? ($request->route()[2]['modelname'] ?? $request->route()[2]['model'] ?? $request->route()[2]['name'] ?? $request->route()[2]['table'] ?? null)
+            : ((is_object($request->route()) && method_exists($request->route(), 'parameter'))
+                ? ($request->route()->parameter('modelname') ?? $request->route()->parameter('model') ?? $request->route()->parameter('name'))
+                : null);
+
+        if (!$modelName && preg_match('#/operation/([^/?]+)#', $request->getRequestUri(), $m)) {
+            $modelName = $m[1];
+        }
+
         if(!$modelName) return $next($request);
-        $modelInstance = @app("App\\Models\\CustomModels\\$modelName");
+
+        $modelInstance = null;
+        $customClass = "\\App\\Models\\CustomModels\\$modelName";
+        $basicClass = "\\App\\Models\\BasicModels\\$modelName";
+        if (class_exists($customClass)) {
+            $modelInstance = new $customClass();
+        } elseif (class_exists($basicClass)) {
+            $modelInstance = new $basicClass();
+        } else {
+            $modelInstance = @app("App\\Models\\CustomModels\\$modelName") ?: @app("App\\Models\\BasicModels\\$modelName");
+        }
+
         $user = auth()->user();
         $requestData = $request->all();
 
@@ -25,6 +45,7 @@ class Middleware
                 },
                 $requestData['where']
             );
+            $request->merge(['where' => $requestData['where']]);
             if ($request->query) {
                 $request->query->set('where', $requestData['where']);
             }
@@ -42,6 +63,7 @@ class Middleware
                 },
                 $requestData['where']
             );
+            $request->merge(['where' => $requestData['where']]);
             if ($request->query) {
                 $request->query->set('where', $requestData['where']);
             }
@@ -63,6 +85,7 @@ class Middleware
                 } else {
                     $requestData['where'] = $condition;
                 }
+                $request->merge(['where' => $requestData['where']]);
                 if ($request->query) {
                     $request->query->set('where', $requestData['where']);
                     $request->query->remove('filter_is_active');
@@ -86,6 +109,7 @@ class Middleware
                 } else {
                     $requestData['where'] = $condition;
                 }
+                $request->merge(['where' => $requestData['where']]);
                 if ($request->query) {
                     $request->query->set('where', $requestData['where']);
                     $request->query->remove('filter_status');
@@ -112,6 +136,7 @@ class Middleware
                 } else {
                     $requestData['where'] = $condition;
                 }
+                $request->merge(['where' => $requestData['where']]);
                 if ($request->query) {
                     $request->query->set('where', $requestData['where']);
                     $request->query->remove('filter_is_superadmin');
@@ -138,6 +163,7 @@ class Middleware
                     } else {
                         $requestData['where'] = $condition;
                     }
+                    $request->merge(['where' => $requestData['where']]);
                     if ($request->query) {
                         $request->query->set('where', $requestData['where']);
                         $request->query->remove('search');
@@ -159,6 +185,7 @@ class Middleware
                     } else {
                         $requestData['where'] = $condition;
                     }
+                    $request->merge(['where' => $requestData['where']]);
                     if ($request->query) {
                         $request->query->set('where', $requestData['where']);
                         $request->query->remove('search');
