@@ -57,7 +57,7 @@
               @input="v=>values.kode=v" :hints="formErrors.kode" 
               :check="false"
               label=""
-              placeholder=""
+              placeholder="Auto Generate"
           />
         </div>
         <div>

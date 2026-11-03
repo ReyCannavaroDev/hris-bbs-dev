@@ -71,6 +71,9 @@ onBeforeMount(async () => {
   for (const key in initialValues) {
     values[key] = initialValues[key]
   }
+  if (route.query.action === 'Copy') {
+    values.kode = null
+  }
   // if(values['m_dir.nama']){
   //   values.direktorat = values['m_dir.nama']
   // }
@@ -254,7 +257,7 @@ const landing = reactive({
     },
     params: {
       simplest: true,
-      searchfield:'this.id, m_dir.nama, this.nama, this.desc, this.is_active',
+      searchfield:'this.id, this.kode, m_dir.nama, this.nama, this.desc, this.is_active',
     },
     onsuccess(response) {
       response.page = response.current_page
@@ -274,6 +277,16 @@ const landing = reactive({
   {
     headerName: 'Company',
     field: 'm_dir.nama',
+    filter: true,
+    sortable: true,
+    flex:1,
+    filter: 'ColFilter',
+    resizable: true,
+    cellClass: [ 'border-r', '!border-gray-200']
+  },
+  {
+    headerName: 'Kode',
+    field: 'kode',
     filter: true,
     sortable: true,
     flex:1,
