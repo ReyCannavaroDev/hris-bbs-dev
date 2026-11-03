@@ -90,8 +90,13 @@ class Middleware
                     $request->query->set('where', $requestData['where']);
                     $request->query->remove('filter_is_active');
                 }
+                if ($request->request) {
+                    $request->request->remove('filter_is_active');
+                }
+                $request->offsetUnset('filter_is_active');
                 $_GET['where'] = $requestData['where'];
-                unset($_GET['filter_is_active']);
+                $_REQUEST['where'] = $requestData['where'];
+                unset($_GET['filter_is_active'], $_REQUEST['filter_is_active']);
                 unset($requestData['filter_is_active']);
             }
         }
@@ -114,8 +119,13 @@ class Middleware
                     $request->query->set('where', $requestData['where']);
                     $request->query->remove('filter_status');
                 }
+                if ($request->request) {
+                    $request->request->remove('filter_status');
+                }
+                $request->offsetUnset('filter_status');
                 $_GET['where'] = $requestData['where'];
-                unset($_GET['filter_status']);
+                $_REQUEST['where'] = $requestData['where'];
+                unset($_GET['filter_status'], $_REQUEST['filter_status']);
                 unset($requestData['filter_status']);
             }
         }
@@ -142,8 +152,16 @@ class Middleware
                     $request->query->remove('filter_is_superadmin');
                     $request->query->remove('filter_superadmin');
                 }
+                if ($request->request) {
+                    $request->request->remove('filter_is_superadmin');
+                    $request->request->remove('filter_superadmin');
+                }
+                $request->offsetUnset('filter_is_superadmin');
+                $request->offsetUnset('filter_superadmin');
                 $_GET['where'] = $requestData['where'];
+                $_REQUEST['where'] = $requestData['where'];
                 unset($_GET['filter_is_superadmin'], $_GET['filter_superadmin']);
+                unset($_REQUEST['filter_is_superadmin'], $_REQUEST['filter_superadmin']);
                 unset($requestData['filter_is_superadmin'], $requestData['filter_superadmin']);
             }
         }

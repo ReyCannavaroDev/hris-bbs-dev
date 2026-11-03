@@ -14,32 +14,6 @@ class m_role extends \App\Models\BasicModels\m_role
     public $createAdditionalData = ["creator_id"=>"auth:id"];
     public $updateAdditionalData = ["last_editor_id"=>"auth:id"];
 
-    protected static function booted()
-    {
-        static::addGlobalScope('m_role_filter_scope', function (\Illuminate\Database\Eloquent\Builder $builder) {
-            $request = app()->request;
-            if (!$request) return;
-
-            if ($request->has('filter_is_superadmin') || $request->has('filter_superadmin')) {
-                $raw = $request->filter_is_superadmin ?? $request->filter_superadmin;
-                $val = strtolower(trim((string)$raw));
-                $boolVal = in_array($val, ['yes', 'true', '1'], true) ? true : (in_array($val, ['no', 'false', '0'], true) ? false : null);
-                if ($boolVal !== null) {
-                    $builder->where('m_role.is_superadmin', $boolVal);
-                }
-            }
-
-            if ($request->has('filter_is_active') || $request->has('filter_status')) {
-                $raw = $request->filter_is_active ?? $request->filter_status;
-                $val = strtolower(trim((string)$raw));
-                $boolVal = in_array($val, ['active', 'true', '1'], true) ? true : (in_array($val, ['inactive', 'false', '0'], true) ? false : null);
-                if ($boolVal !== null) {
-                    $builder->where('m_role.is_active', $boolVal);
-                }
-            }
-        });
-    }
-
     public function listRoleCheck()
     {
         $request = app()->request;
@@ -47,13 +21,13 @@ class m_role extends \App\Models\BasicModels\m_role
             return true;
         }
 
-        if ($request->has('filter_is_superadmin') || $request->has('filter_superadmin')) {
-            $raw = $request->filter_is_superadmin ?? $request->filter_superadmin;
+        if ($request->has('filter_is_superadmin') || $request->has('filter_superadmin') || isset($_GET['filter_is_superadmin']) || isset($_GET['filter_superadmin'])) {
+            $raw = $request->filter_is_superadmin ?? $request->filter_superadmin ?? $_GET['filter_is_superadmin'] ?? $_GET['filter_superadmin'] ?? null;
             $val = strtolower(trim((string)$raw));
             $boolVal = in_array($val, ['yes', 'true', '1'], true) ? 'true' : (in_array($val, ['no', 'false', '0'], true) ? 'false' : null);
             if ($boolVal !== null) {
                 $condition = "this.is_superadmin=$boolVal";
-                $where = $request->where;
+                $where = $request->where ?? $_GET['where'] ?? '';
                 if (!empty($where)) {
                     if (preg_match('/\bthis\.is_superadmin\s*=\s*(?:true|false|1|0)\b/i', $where)) {
                         $where = preg_replace('/\bthis\.is_superadmin\s*=\s*(?:true|false|1|0)\b/i', $condition, $where);
@@ -69,18 +43,26 @@ class m_role extends \App\Models\BasicModels\m_role
                     $request->query->remove('filter_is_superadmin');
                     $request->query->remove('filter_superadmin');
                 }
+                if ($request->request) {
+                    $request->request->remove('filter_is_superadmin');
+                    $request->request->remove('filter_superadmin');
+                }
+                $request->offsetUnset('filter_is_superadmin');
+                $request->offsetUnset('filter_superadmin');
                 $_GET['where'] = $where;
+                $_REQUEST['where'] = $where;
                 unset($_GET['filter_is_superadmin'], $_GET['filter_superadmin']);
+                unset($_REQUEST['filter_is_superadmin'], $_REQUEST['filter_superadmin']);
             }
         }
 
-        if ($request->has('filter_is_active') || $request->has('filter_status')) {
-            $raw = $request->filter_is_active ?? $request->filter_status;
+        if ($request->has('filter_is_active') || $request->has('filter_status') || isset($_GET['filter_is_active']) || isset($_GET['filter_status'])) {
+            $raw = $request->filter_is_active ?? $request->filter_status ?? $_GET['filter_is_active'] ?? $_GET['filter_status'] ?? null;
             $val = strtolower(trim((string)$raw));
             $boolVal = in_array($val, ['active', 'true', '1'], true) ? 'true' : (in_array($val, ['inactive', 'false', '0'], true) ? 'false' : null);
             if ($boolVal !== null) {
                 $condition = "this.is_active=$boolVal";
-                $where = $request->where;
+                $where = $request->where ?? $_GET['where'] ?? '';
                 if (!empty($where)) {
                     if (preg_match('/\bthis\.is_active\s*=\s*(?:true|false|1|0)\b/i', $where)) {
                         $where = preg_replace('/\bthis\.is_active\s*=\s*(?:true|false|1|0)\b/i', $condition, $where);
@@ -96,8 +78,16 @@ class m_role extends \App\Models\BasicModels\m_role
                     $request->query->remove('filter_is_active');
                     $request->query->remove('filter_status');
                 }
+                if ($request->request) {
+                    $request->request->remove('filter_is_active');
+                    $request->request->remove('filter_status');
+                }
+                $request->offsetUnset('filter_is_active');
+                $request->offsetUnset('filter_status');
                 $_GET['where'] = $where;
+                $_REQUEST['where'] = $where;
                 unset($_GET['filter_is_active'], $_GET['filter_status']);
+                unset($_REQUEST['filter_is_active'], $_REQUEST['filter_status']);
             }
         }
 
@@ -125,6 +115,7 @@ class m_role extends \App\Models\BasicModels\m_role
                 $request->query->set('where', $where);
             }
             $_GET['where'] = $where;
+            $_REQUEST['where'] = $where;
         }
 
         if ($request->has('search')) {
@@ -132,27 +123,37 @@ class m_role extends \App\Models\BasicModels\m_role
             if ($searchVal === 'active' || $searchVal === 'inactive') {
                 $boolVal = ($searchVal === 'active') ? 'true' : 'false';
                 $condition = "this.is_active=$boolVal";
-                $where = $request->where;
+                $where = $request->where ?? $_GET['where'] ?? '';
                 $where = !empty($where) ? "$where and $condition" : $condition;
                 $request->merge(['where' => $where]);
                 if ($request->query) {
                     $request->query->set('where', $where);
                     $request->query->remove('search');
                 }
+                if ($request->request) {
+                    $request->request->remove('search');
+                }
+                $request->offsetUnset('search');
                 $_GET['where'] = $where;
-                unset($_GET['search']);
+                $_REQUEST['where'] = $where;
+                unset($_GET['search'], $_REQUEST['search']);
             } elseif ($searchVal === 'yes' || $searchVal === 'no') {
                 $boolVal = ($searchVal === 'yes') ? 'true' : 'false';
                 $condition = "this.is_superadmin=$boolVal";
-                $where = $request->where;
+                $where = $request->where ?? $_GET['where'] ?? '';
                 $where = !empty($where) ? "$where and $condition" : $condition;
                 $request->merge(['where' => $where]);
                 if ($request->query) {
                     $request->query->set('where', $where);
                     $request->query->remove('search');
                 }
+                if ($request->request) {
+                    $request->request->remove('search');
+                }
+                $request->offsetUnset('search');
                 $_GET['where'] = $where;
-                unset($_GET['search']);
+                $_REQUEST['where'] = $where;
+                unset($_GET['search'], $_REQUEST['search']);
             }
         }
 
