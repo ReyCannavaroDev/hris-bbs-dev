@@ -64,6 +64,7 @@ const setStandartGaji = async () => {
 
 const values = reactive({
   is_active: 1,
+  can_outscope: false,
   m_comp_id: null,
   m_dir_id: null,
   direktorat: store.user.data?.direktorat,
@@ -138,10 +139,10 @@ const getTodayDate = () => {
 }
 
 const onChangeStatusKaryawan = (val) => {
-  values.is_active = val
+  values.is_active = (val === 1 || val === true || val === '1' || val === 'true') ? 1 : 0
   if (!isInitialLoaded.value || isSyncingStatusResign) return
   isSyncingStatusResign = true
-  const isActive = (val === 1 || val === true || val === '1' || val === 'true')
+  const isActive = (values.is_active === 1)
   if (!isActive) {
     if (!values.tgl_berhenti) {
       values.tgl_berhenti = getTodayDate()

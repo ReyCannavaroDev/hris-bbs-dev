@@ -112,7 +112,7 @@ Terdapat beberapa penyesuaian aturan bisnis (*business logic*) dan permintaan fi
 - **Penyederhanaan Form & Standardisasi Format Tanggal (`DD/MM/YYYY`):**
   1. **Holding Company dihapus:** Kolom *Holding Company* dihilangkan dari form karena sudah terwakili oleh pilihan *Company* (otomatis mengambil `m_comp_id` dari relasi `m_dir`).
   2. **Penyederhanaan Label:** Label diubah dari `Company / Cabang` menjadi cukup `Company` (baik pada form informasi, popup atasan, maupun kolom tabel landing).
-  3. **Penataan Layout Grid:** Menghapus div dummy spacer sehingga 12 field pada Tab Informasi tersusun rapi menjadi 6 pasang baris simetris tanpa rongga kosong.
+  3. **Penataan Layout Grid & Switch Toggle:** Menghapus div dummy spacer serta menyelaraskan field `Can Outscope` (kiri) dan `Status` (kanan) ke dalam grid simetris 2 kolom (`col-span-8 md:col-span-6`) dengan komponen *toggle switch* yang seragam (Tidak/Ya dan Inactive/Active).
   4. **Standardisasi Format Tanggal (`DD/MM/YYYY`):** Semua input tanggal (`tgl_masuk`, `tgl_berhenti`, `tgl_lahir`, `npwp_tgl_berlaku`) dan kolom landing table diseragamkan dengan format tampilan `DD/MM/YYYY`, serta disinkronkan secara aman dengan format `YYYY-MM-DD` saat komunikasi database/API.
 - **Detail Implementasi:**
   - Penambahan helper `onChangeStatusKaryawan`, `onChangeTanggalBerhenti`, `parseDate`, `formatDateDisplay`, dan `formatDateApi` serta reactive `watch` dua arah di `Javascript/m_karyawan.js` dan `Blades/m_karyawan.blade.php`.
