@@ -20,6 +20,7 @@ const titleOpen = ref('')
 const formErrors = ref({})
 const modalOpen = ref(false)
 const detailArrOpen = reactive({items: []})
+const openedRincian = ref([])
 const tsId = `ts=`+(Date.parse(new Date()))
 
 // ------------------------------ PERSIAPAN
@@ -30,13 +31,33 @@ onBeforeMount(()=>{
 
 function openDetailFromLanding(row) {
   titleOpen.value = row['m_kary.nama_lengkap'] + ' - ' +row['m_kary.nik']
+  openedRincian.value = []
   let dataFormat =  row?.detail_gaji ?? []
+  if (typeof dataFormat === 'string') {
+    try { dataFormat = JSON.parse(dataFormat) } catch (e) {}
+  }
+  if (Array.isArray(dataFormat)) {
+    dataFormat.forEach(item => {
+      if (typeof item.rincian === 'string') {
+        try { item.rincian = JSON.parse(item.rincian) } catch (e) {}
+      }
+    })
+  }
 
   detailArrOpen.items = dataFormat
   modalOpen.value = true
 }
 
+function toggleRincian(idx) {
+  if (openedRincian.value.includes(idx)) {
+    openedRincian.value = openedRincian.value.filter(i => i !== idx)
+  } else {
+    openedRincian.value.push(idx)
+  }
+}
+
 function closeModal(i) {
+  openedRincian.value = []
   modalOpen.value = false
 }
 
@@ -259,7 +280,18 @@ const values = reactive({
 
 function openDetail(i) {
   titleOpen.value = detailArr.value[i]?.nama_lengkap ?? '-' +' - ' +detailArr.value[i]?.nama_lengkap ?? ''
+  openedRincian.value = []
   let dataFormat =  detailArr.value[i]?.detail_gaji ?? []
+  if (typeof dataFormat === 'string') {
+    try { dataFormat = JSON.parse(dataFormat) } catch (e) {}
+  }
+  if (Array.isArray(dataFormat)) {
+    dataFormat.forEach(item => {
+      if (typeof item.rincian === 'string') {
+        try { item.rincian = JSON.parse(item.rincian) } catch (e) {}
+      }
+    })
+  }
 
   detailArrOpen.items = dataFormat
   modalOpen.value = true

@@ -136,7 +136,7 @@ class PerhitunganGaji
 
     /**
      * 2. Hitung Denda Keterlambatan
-     * Rumus MoM 3.B: Denda Rp 25.000 per kelipatan 30 menit keterlambatan.
+     * Rumus: Denda Rp 25.000 per kelipatan 30 menit keterlambatan (ceil/pembulatan tier ke atas: 1-30 mnt = 1x, 31-60 mnt = 2x).
      *
      * @param int $m_kary_id
      * @param string $startDate (Format: Y-m-d)
@@ -257,8 +257,9 @@ class PerhitunganGaji
             if ($checkin->gt($jadwalMulai)) {
                 $menit = (int) $jadwalMulai->diffInMinutes($checkin);
                 if ($menit > 0) {
-                    // Formula MoM 3.B: Kelipatan 30 menit x Rp 25.000
-                    $kelipatan = (int) floor($menit / 30);
+                    // Formula: Pembulatan ke atas per kelipatan 30 menit (ceil($menit / 30) x Rp 25.000)
+                    // Telat 1 - 30 menit => Tier 1 (Rp 25.000), Telat 31 - 60 menit => Tier 2 (Rp 50.000)
+                    $kelipatan = (int) ceil($menit / 30);
                     $dendaHariIni = $kelipatan * $this->tarifDendaTelatPer30Menit;
 
                     $totalMenitTelat += $menit;

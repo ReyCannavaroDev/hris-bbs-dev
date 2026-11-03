@@ -20,6 +20,7 @@ const titleOpen = ref('')
 const formErrors = ref({})
 const modalOpen = ref(false)
 const detailArrOpen = reactive({ items: [] })
+const openedRincian = ref([])
 const detailArrAdjOpen = reactive({ items: [] })
 let objectOpen = reactive({ items: 0 })
 let idxOpen = reactive({ value: null })
@@ -192,6 +193,7 @@ function onTipePeriodeChange(objVal) {
 
 function openDetail(i) {
   idxOpen.value = i
+  openedRincian.value = []
   detailArrAdjOpen.items = []
   objectOpen.items = detailArr.value[i]
   titleOpen.value = (detailArr.value[i]['m_kary.nama_lengkap'] || detailArr.value[i].m_kary?.nama_lengkap || detailArr.value[i].karyawan || '-') + ' - ' + (detailArr.value[i]['m_kary.nik'] || detailArr.value[i].m_kary?.nik || '')
@@ -266,8 +268,18 @@ function summaryPengeluaranGaji() {
   }, 0)
 }
 
+function toggleRincian(idx) {
+  if (openedRincian.value.includes(idx)) {
+    openedRincian.value = openedRincian.value.filter(i => i !== idx)
+  } else {
+    openedRincian.value.push(idx)
+  }
+}
+
 function closeModal() {
+  openedRincian.value = []
   detailArrOpen.items = []
+  openedRincian.value = []
   detailArrAdjOpen.items = []
   modalOpen.value = false
 }

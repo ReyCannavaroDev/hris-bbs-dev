@@ -346,10 +346,62 @@
                     </tr>
                   </thead>
                   <tbody>
-                    <tr class="border" v-for="(a,i) in detailArrOpen.items" :key="i">
-                      <td class="text-left border border-gray-300 p-1" :class="a.factor == '=' ? 'font-bold bg-gray-200' : ''">{{ a.label }}</td>
-                      <td class="text-right border border-gray-300 p-1" :class="a.factor == '=' ? 'font-bold bg-gray-200' : ''">{{ (a.factor == '-' ? '(-) ' : '') + formatRupiah(a.value) }}</td>
-                    </tr>
+                    <template v-for="(a,i) in detailArrOpen.items" :key="i">
+                      <tr class="border" :class="{'bg-blue-50/20': a.rincian && a.rincian.length > 0 && openedRincian.includes(i)}">
+                        <td class="text-left border border-gray-300 p-1.5" :class="a.factor == '=' ? 'font-bold bg-gray-200' : ''">
+                          <div>{{ a.label }}</div>
+                          <div v-if="a.rincian && a.rincian.length > 0" class="mt-0.5">
+                            <button 
+                              type="button" 
+                              @click="toggleRincian(i)" 
+                              class="text-[11px] text-blue-600 hover:text-blue-800 underline inline-flex items-center gap-1 cursor-pointer focus:outline-none">
+                              <span>rincian keterlambatan</span>
+                              <svg 
+                                :class="{'rotate-180': openedRincian.includes(i)}" 
+                                class="w-3 h-3 transition-transform duration-200 inline" 
+                                fill="none" 
+                                stroke="currentColor" 
+                                viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path>
+                              </svg>
+                            </button>
+                          </div>
+                        </td>
+                        <td class="text-right border border-gray-300 p-1.5 align-top" :class="a.factor == '=' ? 'font-bold bg-gray-200' : ''">{{ (a.factor == '-' ? '(-) ' : '') + formatRupiah(a.value) }}</td>
+                      </tr>
+                      <tr v-if="a.rincian && a.rincian.length > 0 && openedRincian.includes(i)" class="bg-gray-50 border border-gray-300">
+                        <td colspan="2" class="p-2 border border-gray-300">
+                          <div class="bg-white border border-gray-200 rounded p-2 shadow-sm">
+                            <div class="text-xs font-semibold text-gray-700 mb-1.5 flex items-center justify-between">
+                              <span>History Keterlambatan ({{ a.rincian.length }} Kejadian):</span>
+                              <span class="text-gray-500 font-normal">Tarif Denda: Rp 25.000 / 30 Menit</span>
+                            </div>
+                            <table class="w-full text-xs border border-gray-200">
+                              <thead>
+                                <tr class="bg-gray-100 text-gray-700 font-semibold border-b border-gray-200">
+                                  <th class="p-1 text-left border-r border-gray-200 w-8">No</th>
+                                  <th class="p-1 text-left border-r border-gray-200">Tanggal</th>
+                                  <th class="p-1 text-center border-r border-gray-200">Jadwal Masuk</th>
+                                  <th class="p-1 text-center border-r border-gray-200">Jam Masuk</th>
+                                  <th class="p-1 text-center border-r border-gray-200">Terlambat</th>
+                                  <th class="p-1 text-right">Denda</th>
+                                </tr>
+                              </thead>
+                              <tbody>
+                                <tr v-for="(r, rIdx) in a.rincian" :key="rIdx" class="border-b border-gray-200 hover:bg-gray-50">
+                                  <td class="p-1 text-left border-r border-gray-200">{{ rIdx + 1 }}</td>
+                                  <td class="p-1 text-left border-r border-gray-200 font-medium text-gray-800">{{ r.tanggal }}</td>
+                                  <td class="p-1 text-center border-r border-gray-200 text-gray-600">{{ r.jadwal_masuk }}</td>
+                                  <td class="p-1 text-center border-r border-gray-200 text-red-600 font-semibold">{{ r.checkin_time }}</td>
+                                  <td class="p-1 text-center border-r border-gray-200 text-red-600">{{ r.menit_telat }} Menit</td>
+                                  <td class="p-1 text-right font-medium text-red-700">{{ formatRupiah(r.denda) }}</td>
+                                </tr>
+                              </tbody>
+                            </table>
+                          </div>
+                        </td>
+                      </tr>
+                    </template>
                 </tbody>
             </table>
             </div>

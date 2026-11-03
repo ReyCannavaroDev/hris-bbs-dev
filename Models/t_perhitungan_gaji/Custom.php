@@ -279,6 +279,7 @@ class t_perhitungan_gaji extends \App\Models\BasicModels\t_perhitungan_gaji
             if (!empty($dendaTelat['total_denda']) && $dendaTelat['total_denda'] > 0) {
                 $defaultColumns[] = [
                     'label'      => "Denda Keterlambatan ({$dendaTelat['total_menit_telat']} Menit)",
+                    'rincian'    => $dendaTelat['rincian'] ?? [],
                     'factor'     => '-',
                     'value'      => (float) $dendaTelat['total_denda'],
                     'type'       => $tipePeriodeKolom,

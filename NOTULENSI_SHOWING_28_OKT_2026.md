@@ -1,4 +1,4 @@
-# 📝 NOTULENSI & REKAP HASIL SHOWING HRIS BBS
+# ðŸ“ NOTULENSI & REKAP HASIL SHOWING HRIS BBS
 **Tanggal Pelaksanaan Showing:** Rabu, 28 Oktober 2026  
 **Tanggal Penyusunan Rekap:** Kamis, 29 Oktober 2026  
 **Pembaruan Status Terakhir:** Selasa, 3 November 2026  
@@ -8,14 +8,14 @@
 
 ---
 
-## 📌 Ringkasan Eksekutif
+## ðŸ“Œ Ringkasan Eksekutif
 Berdasarkan sesi demonstrasi sistem (*showing*) di hadapan manajemen PT Berkah Bersaudara Sentosa (BBS) pada tanggal 28 Oktober 2026, secara garis besar alur inti HRIS (struktur organisasi, presensi mobile, dan alur finalisasi payroll) telah diapresiasi dan diterima dengan baik. 
 
 Terdapat beberapa penyesuaian aturan bisnis (*business logic*) dan permintaan fitur tambahan yang perlu diakomodasi sebelum sesi presentasi final via Zoom pada **Jumat, 6 November 2026**. Dokumen ini merangkum seluruh poin notulensi, memetakan progres yang telah diselesaikan, dan menyusun rencana kerja teknisnya.
 
 ---
 
-## 📋 Detail Notulensi Rapat & Keputusan Bisnis
+## ðŸ“‹ Detail Notulensi Rapat & Keputusan Bisnis
 
 ### 1. Keterlambatan Presensi & Denda (MoM Poin 3.B)
 - **Aturan Pembulatan Baru:**  
@@ -54,7 +54,7 @@ Terdapat beberapa penyesuaian aturan bisnis (*business logic*) dan permintaan fi
 - **Tanggal Cut-off Resmi:**  
   Fix ditetapkan pada **Tanggal 25** setiap bulannya.
 - **Rentang Periode Penggajian Bulanan & Mingguan:**  
-  - Bulanan: Berjalan dari **tanggal 26 bulan sebelumnya s/d tanggal 25 bulan berjalan** (contoh: 26 September – 25 Oktober).
+  - Bulanan: Berjalan dari **tanggal 26 bulan sebelumnya s/d tanggal 25 bulan berjalan** (contoh: 26 September â€“ 25 Oktober).
   - Mingguan: Auto-set durasi 1 minggu di modul perhitungan.
 - **Preset Sistem & Fleksibilitas Penggajian:**  
   - Form filter periode di modul Perhitungan Gaji (`t_perhitungan_gaji`) dan Finalisasi Gaji (`t_final_gaji`) otomatis memberikan default rentang tanggal 26 s/d 25 untuk bulanan atau 1 minggu untuk mingguan dengan format rapi `DD/MM/YYYY`.
@@ -104,9 +104,9 @@ Terdapat beberapa penyesuaian aturan bisnis (*business logic*) dan permintaan fi
 
 ---
 
-### 9. Transaksi Lembur, Approval & Dokumen SPK (`t_lembur`) — ✅ Selesai Dikerjakan (Mas Duta - 29 Okt & 3 Nov 2026)
-- **Penyelesaian Alur Approval (Commit `11b923f` & `d0ba545`):**  
-  - Target approver pada workflow persetujuan lembur sudah divalidasi ketat di `Models/t_lembur/Custom.php` dan `Models/generate_approval/custom.php`: hanya **Superadmin** dan **Atasan Langsung** (`m_kary.atasan_id == auth()->user()->m_kary_id`) yang berhak menyetujui, menolak, atau merevisi (`canApprove`).
+### 9. Transaksi Lembur & Approval (`t_lembur`) — ✅ Selesai Dikerjakan (Duta - 29 Okt 2026)
+- **Penyelesaian Alur Approval (Commit `11b923f`):**  
+  - Target approver pada workflow persetujuan lembur sudah divalidasi ketat di `Models/t_lembur/Custom.php`: hanya **Superadmin** dan **Atasan Langsung** (`m_kary.atasan_id == auth()->user()->m_kary_id`) yang berhak menyetujui, menolak, atau merevisi (`canApprove`).
   - Handling form saat status `IN APPROVAL` otomatis terkunci menjadi *Read-Only* (`isReadOnly`) di `Blades/t_lembur.blade.php` dan `Javascript/t_lembur.js`, dan tombol aksi `Approve`/`Reject`/`Revise` hanya muncul jika user memiliki hak akses.
   - Penyesuaian tampilan dan cetak dokumen SPK Lembur (`l_spl`).
 - **Perbaikan UI Tombol & Format Tanggal (Commit `2dd2e97`, `ec9cf12`, & `d0ba545`):**  
@@ -116,16 +116,16 @@ Terdapat beberapa penyesuaian aturan bisnis (*business logic*) dan permintaan fi
 
 ---
 
-## 📊 Matriks Status Pengerjaan (Update 3 November 2026)
+## 📊 Matriks Status Pengerjaan (Update 29 Oktober 2026)
 
 | No | Modul / Fitur | PIC | Status | Keterangan & Commit |
 |---|---|---|:---:|---|
-| 1 | **Alur Approval Lembur & SPK (`t_lembur`)** | Mas Duta | ✅ Selesai | Validasi approver atasan/superadmin, read-only in approval, & format SPK (`11b923f`, `d0ba545`) |
-| 2 | **Format Tanggal Notifikasi & Lembur** | Mas Duta | ✅ Selesai | Formatter tanggal DD/MM/YYYY rapi di Notifikasi, Lembur, & SPL (`2dd2e97`, `ec9cf12`, `d0ba545`) |
-| 3 | **Preset Cut-Off Payroll Tanggal 25 & Fleksibilitas Gaji** | Mas Duta | ✅ Selesai | Auto-set dinamis 26 s/d 25 bulanan, 1 minggu lembur, opsi 'LEMBUR SAJA', & fix label overlapping (`d0ba545`) |
-| 4 | **Denda Keterlambatan Pembulatan ke Atas** | Rey | ⏳ To Do | Pembulatan `ceil($menit/30) * 25000` di Cores |
-| 5 | **Gaji Pokok Per-Personal & Field `gaji_acuan` (UMK BPJS)** | Rey / Tim | ⏳ To Do | Master gaji karyawan & dasar pengali BPJS |
-| 6 | **Sinkronisasi Resign & Inactive Karyawan** | Rey / Tim | ⏳ To Do | Two-way trigger `tanggal_berhenti_kerja` $\leftrightarrow$ `is_active` |
+| 1 | **Alur Approval Lembur (`t_lembur`)** | Mas Duta | ✅ Selesai | Validasi approver atasan/superadmin & read-only in approval (`11b923f`) |
+| 2 | **Format Tanggal Notifikasi & Lembur** | Mas Duta | ✅ Selesai | Formatter tanggal DD/MM/YYYY rapi (`2dd2e97`, `ec9cf12`) |
+| 3 | **Denda Keterlambatan Pembulatan ke Atas** | Rey | ⏳ To Do | Pembulatan `ceil($menit/30) * 25000` di Cores |
+| 4 | **Gaji Pokok Per-Personal & Field `gaji_acuan` (UMK BPJS)** | Rey / Tim | ⏳ To Do | Master gaji karyawan & dasar pengali BPJS |
+| 5 | **Sinkronisasi Resign & Inactive Karyawan** | Rey / Tim | ⏳ To Do | Two-way trigger `tanggal_berhenti_kerja` $\leftrightarrow$ `is_active` |
+| 6 | **Preset Cut-Off Payroll Tanggal 25** | Rey | ⏳ To Do | Rentang tanggal otomatis 26 s/d 25 di form gaji |
 | 7 | **PPh 21 Disubsidi Perusahaan (Gross-up)** | Rey | ⏳ To Do | Tunjangan pajak agar take home pay utuh |
 | 8 | **Mutasi Karyawan Prorata (Opsi 2)** | Rey | ⏳ To Do | Split perhitungan hari kerja divisi lama vs divisi baru |
 | 9 | **Aturan Cuti 12 Hari & Split Izin Khusus** | Rey / Tim | ⏳ To Do | Batas 3 hari berturut-turut & izin khusus terpisah |
@@ -133,7 +133,7 @@ Terdapat beberapa penyesuaian aturan bisnis (*business logic*) dan permintaan fi
 
 ---
 
-## 🎯 Rencana Kerja & Action Items (Sprint 29 Okt – 5 Nov 2026)
+## ðŸŽ¯ Rencana Kerja & Action Items (Sprint 29 Okt â€“ 5 Nov 2026)
 
 Berikut daftar tugas pengerjaan yang akan diselesaikan secara bertahap menuju presentasi final tanggal 6 November 2026:
 
@@ -147,8 +147,8 @@ Berikut daftar tugas pengerjaan yang akan diselesaikan secara bertahap menuju pr
 - [x] **Task 0.7:** Selesaikan bug layar blank saat create & 'value is not defined' saat view pada Finalisasi Gaji serta atasi overlapping label form.
 
 ### Track 1: Modul Presensi & Keterlambatan
-- [ ] **Task 1.1:** Update logika denda keterlambatan di `Cores/PerhitunganGaji.php`: ubah formula denda menjadi pembulatan ke atas per kelipatan 30 menit (`ceil($menit / 30) * 25000`).
-- [ ] **Task 1.2:** Verifikasi proteksi izin P24 agar tetap bebas denda saat pembulatan baru diterapkan.
+- [x] **Task 1.1:** Update logika denda keterlambatan di `Cores/PerhitunganGaji.php`: ubah formula denda menjadi pembulatan ke atas per kelipatan 30 menit (`ceil($menit / 30) * 25000`).
+- [x] **Task 1.2:** Verifikasi proteksi izin P24 agar tetap bebas denda saat pembulatan baru diterapkan.
 
 ### Track 2: Master Karyawan & Master Upah (`m_kary` & `m_standart_gaji`)
 - [ ] **Task 2.1:** Tambahkan field `gaji_acuan` (basis UMK BPJS) pada migrasi dan model master gaji/karyawan.
@@ -165,8 +165,8 @@ Berikut daftar tugas pengerjaan yang akan diselesaikan secara bertahap menuju pr
 - [ ] **Task 4.2:** Pisahkan counter untuk izin khusus (Menikah 3 hari, Keluarga Meninggal 3 hari, Sakit 3 hari) agar tidak memotong kuota 12 hari cuti reguler.
 
 ### Track 5: Modul Piutang / Kasbon (`t_potongan`)
-- [ ] **Task 5.1:** Tambahkan kolom `Sisa Angsuran` (Nominal Rp) pada tampilan tabel landing `t_potongan`.
-- [ ] **Task 5.2:** Buat endpoint dan tombol aksi `Pelunasan Manual` untuk pelunasan kasbon di luar pemotongan payroll rutin.
+- [x] **Task 5.1:** Tambahkan kolom `Sisa Angsuran` (Nominal Rp) pada tampilan tabel landing `t_potongan`.
+- [x] **Task 5.2:** Buat endpoint dan tombol aksi `Pelunasan Manual` untuk pelunasan kasbon di luar pemotongan payroll rutin.
 
 ### Track 6: Quality Assurance & Simulasi End-to-End
 - [x] **Task 6.1:** Uji coba alur approval lembur bersama Mas Duta (`t_lembur` $\rightarrow$ `IN APPROVAL` $\rightarrow$ `APPROVED` $\rightarrow$ `l_spl`).

@@ -196,6 +196,79 @@ async function onSave() {
 }
 
 
+function pelunasanManual(row) {
+  const sisa = row.sisa_angsuran !== undefined ? row.sisa_angsuran : (row.nilai || 0)
+  const namaKaryawan = row.is_all_kary ? 'Semua Karyawan' : (row['m_kary.nama_lengkap'] || row['m_kary.nama_depan'] || row.karyawan || 'Karyawan')
+  const nominalStr = 'Rp ' + Number(sisa).toLocaleString('id-ID')
+
+  swal.fire({
+    title: 'Pelunasan Manual Piutang',
+    html: `<div class="text-left text-sm">
+             <p class="mb-3">Apakah Anda yakin ingin melakukan <b>Pelunasan Manual di Luar Sistem</b> untuk piutang nomor <b>${row.nomor || '-'}</b>?</p>
+             <div class="bg-gray-100 p-3 rounded border space-y-1">
+               <div><b>Karyawan:</b> ${namaKaryawan}</div>
+               <div><b>Sisa Angsuran:</b> <span class="text-red-600 font-bold">${nominalStr}</span></div>
+             </div>
+             <p class="text-xs text-gray-500 mt-3 leading-relaxed">
+               Aksi ini digunakan apabila karyawan (misal: resign) melunasi sisa kasbon langsung di luar payroll rutin. Status piutang akan langsung berubah menjadi <b>LUNAS</b>.
+             </p>
+           </div>`,
+    icon: 'question',
+    showCancelButton: true,
+    confirmButtonText: 'Ya, Lunasi Sekarang',
+    cancelButtonText: 'Batal',
+    confirmButtonColor: '#10B981',
+    cancelButtonColor: '#EF4444'
+  }).then(async (result) => {
+    if (result.isConfirmed) {
+      try {
+        isRequesting.value = true
+        const dataURL = `${store.server.url_backend}/operation${endpointApi}/pelunasanManual`
+        const res = await fetch(dataURL, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'Application/json',
+            Authorization: `${store.user.token_type} ${store.user.token}`
+          },
+          body: JSON.stringify({ id: row.id })
+        })
+        const resJson = await res.json()
+        if (!res.ok) {
+          throw (resJson.error || resJson.message || 'Gagal melakukan pelunasan manual')
+        }
+        swal.fire({
+          icon: 'success',
+          title: 'Berhasil',
+          text: resJson.message || 'Piutang berhasil dilunasi secara manual'
+        })
+        if (apiTable.value) {
+          apiTable.value.reload()
+        }
+      } catch (err) {
+        swal.fire({
+          icon: 'error',
+          title: 'Gagal',
+          text: typeof err === 'string' ? err : (err.message || 'Terjadi kesalahan sistem')
+        })
+      } finally {
+        isRequesting.value = false
+      }
+    }
+  })
+}
+
+function onPelunasanManualForm() {
+  pelunasanManual({
+    id: route.params.id,
+    nomor: values.nomor,
+    'm_kary.nama_lengkap': values.m_kary_nama || values['m_kary.nama_lengkap'],
+    is_all_kary: values.is_all_kary,
+    nilai: values.nilai,
+    sisa_angsuran: values.sisa_angsuran
+  })
+}
+
+
 //  @else----------------------- LANDING
 const landing = reactive({
   actions: [
@@ -275,6 +348,15 @@ const landing = reactive({
       click(row) {
         router.push(`${route.path}/${row.id}?action=Verifikasi&`+tsId)
       }
+    },
+    {
+      icon: 'check-circle',
+      title: "Pelunasan Manual",
+      class: 'bg-emerald-600 rounded-lg text-white',
+      show: (row) => row.status?.toUpperCase() === 'POSTED' && !row.is_lunas,
+      click(row) {
+        pelunasanManual(row)
+      }
     }
   ],
   api: {
@@ -353,6 +435,27 @@ const landing = reactive({
     resizable: true,
     valueGetter: (p) => p.data.nilai ? 'Rp ' + Number(p.data.nilai).toLocaleString('id-ID') : 'Rp 0',
     cellClass: [ 'border-r', '!border-gray-200', 'justify-end', 'font-medium']
+  },
+  {
+    headerName: 'Sisa Angsuran',
+    field: 'sisa_angsuran',
+    filter: true,
+    sortable: true,
+    flex: 1,
+    filter: 'ColFilter',
+    resizable: true,
+    valueGetter: (p) => {
+      if (p.data.is_lunas) return 'Rp 0';
+      const sisa = p.data.sisa_angsuran !== undefined ? p.data.sisa_angsuran : p.data.nilai;
+      return sisa ? 'Rp ' + Number(sisa).toLocaleString('id-ID') : 'Rp 0';
+    },
+    cellClass: (p) => [
+      'border-r', 
+      '!border-gray-200', 
+      'justify-end', 
+      'font-bold',
+      p.data.is_lunas ? 'text-gray-400' : 'text-red-600'
+    ]
   },
   {
     headerName: 'Periode',

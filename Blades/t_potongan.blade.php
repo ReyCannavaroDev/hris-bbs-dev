@@ -321,6 +321,10 @@
           <button v-show="route.query.action?.toLowerCase() === 'verifikasi'" @click="posted" class="bg-orange-500 hover:bg-orange-600 text-white px-[36.5px] py-[12px] rounded-[6px] ">
             Posted
           </button>
+          <button v-show="isRead && values.status === 'POSTED' && !values.is_lunas" @click="onPelunasanManualForm" class="bg-emerald-600 hover:bg-emerald-700 text-white px-[24px] py-[12px] rounded-[6px] flex items-center gap-2">
+            <icon fa="check-circle" />
+            Pelunasan Manual
+          </button>
           <button v-show="actionText" @click="onSave" class="bg-[#10B981] hover:bg-[#0ea774] text-white px-[36.5px] py-[12px] rounded-[6px] ">
             Simpan
           </button>
