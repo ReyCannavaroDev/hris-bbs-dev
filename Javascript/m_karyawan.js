@@ -31,6 +31,51 @@ onBeforeMount(() => {
   document.title = 'Master Karyawan'
 })
 
+function parseDate(v) {
+  if (!v) return null
+  if (v instanceof Date) return isNaN(v.getTime()) ? null : v
+  if (typeof v !== 'string') return null
+  const raw = v.trim().split(' ')[0]
+  const parts = raw.split(/[-/.]/)
+  if (parts.length !== 3) return null
+
+  let year, month, day
+  if (parts[0].length === 4) {
+    year = parseInt(parts[0], 10)
+    month = parseInt(parts[1], 10) - 1
+    day = parseInt(parts[2], 10)
+  } else if (parts[2].length === 4) {
+    day = parseInt(parts[0], 10)
+    month = parseInt(parts[1], 10) - 1
+    year = parseInt(parts[2], 10)
+  } else {
+    return null
+  }
+
+  const d = new Date(year, month, day)
+  return isNaN(d.getTime()) ? null : d
+}
+
+function formatDateDisplay(d) {
+  if (!d) return ''
+  const dateObj = (d instanceof Date) ? d : parseDate(d)
+  if (!dateObj) return d
+  const day = String(dateObj.getDate()).padStart(2, '0')
+  const month = String(dateObj.getMonth() + 1).padStart(2, '0')
+  const year = dateObj.getFullYear()
+  return `${day}/${month}/${year}`
+}
+
+function formatDateApi(d) {
+  if (!d) return ''
+  const dateObj = (d instanceof Date) ? d : parseDate(d)
+  if (!dateObj) return d
+  const day = String(dateObj.getDate()).padStart(2, '0')
+  const month = String(dateObj.getMonth() + 1).padStart(2, '0')
+  const year = dateObj.getFullYear()
+  return `${year}-${month}-${day}`
+}
+
 //  @if( $id )------------------- VALUES FORM ! PENTING JANGAN DIHAPUS
 let initialValues = {}
 const changedValues = []
@@ -88,51 +133,6 @@ const values = reactive({
 // --- SINKRONISASI REAKTIF DUA ARAH (TWO-WAY TRIGGER) RESIGN & INACTIVE ---
 const isInitialLoaded = ref(false)
 let isSyncingStatusResign = false
-
-function parseDate(v) {
-  if (!v) return null
-  if (v instanceof Date) return isNaN(v.getTime()) ? null : v
-  if (typeof v !== 'string') return null
-  const raw = v.trim().split(' ')[0]
-  const parts = raw.split(/[-/.]/)
-  if (parts.length !== 3) return null
-
-  let year, month, day
-  if (parts[0].length === 4) {
-    year = parseInt(parts[0], 10)
-    month = parseInt(parts[1], 10) - 1
-    day = parseInt(parts[2], 10)
-  } else if (parts[2].length === 4) {
-    day = parseInt(parts[0], 10)
-    month = parseInt(parts[1], 10) - 1
-    year = parseInt(parts[2], 10)
-  } else {
-    return null
-  }
-
-  const d = new Date(year, month, day)
-  return isNaN(d.getTime()) ? null : d
-}
-
-function formatDateDisplay(d) {
-  if (!d) return ''
-  const dateObj = (d instanceof Date) ? d : parseDate(d)
-  if (!dateObj) return d
-  const day = String(dateObj.getDate()).padStart(2, '0')
-  const month = String(dateObj.getMonth() + 1).padStart(2, '0')
-  const year = dateObj.getFullYear()
-  return `${day}/${month}/${year}`
-}
-
-function formatDateApi(d) {
-  if (!d) return ''
-  const dateObj = (d instanceof Date) ? d : parseDate(d)
-  if (!dateObj) return d
-  const day = String(dateObj.getDate()).padStart(2, '0')
-  const month = String(dateObj.getMonth() + 1).padStart(2, '0')
-  const year = dateObj.getFullYear()
-  return `${year}-${month}-${day}`
-}
 
 const getTodayDate = () => {
   return formatDateDisplay(new Date())
@@ -1197,6 +1197,13 @@ async function onSave() {
   isRequesting.value = false
 }
 
+watchEffect(() => {
+  // ✅ fallback: kalau username kosong tapi NIK (kode) ada, auto isi username
+  if (typeof values !== 'undefined' && !values.username && values.kode) {
+    values.username = values.kode
+  }
+})
+
 //  @else----------------------- LANDING
 const activeBtn = ref(null)
 
@@ -1289,7 +1296,7 @@ const landing = reactive({
     },
     params: {
       simplest: true,
-      searchfield: 'this.id, this.nik, this.kode, atasan.nama_lengkap, this.nama_lengkap, m_dir.nama, m_divisi.nama, m_dept.nama, this.alamat_domisili, this.no_tlp, this.tgl_masuk, this.tgl_berhenti, this.is_active',
+      searchfield: 'this.id, this.nik, this.kode, atasan.nama_lengkap, this.nama_lengkap, m_dir.nama, m_divisi.nama, m_dept.nama, this.alamat_domisili, this.no_tlp, this.tgl_masuk, this.tgl_berhenti, this.can_outscope, this.is_active',
     },
     onsuccess(response) {
       if (response && response.data) {
@@ -1391,7 +1398,7 @@ const landing = reactive({
     resizable: true,
     flex: 1,
     cellClass: ['border-r', '!border-gray-200', 'justify-center'],
-    valueGetter: (params) => formatDateDisplay(params.data?.tgl_masuk)
+    valueGetter: (params) => formatDateDisplay(params?.data?.tgl_masuk)
   },
   {
     headerName: 'Can Outscope',
@@ -1402,7 +1409,7 @@ const landing = reactive({
     resizable: true,
     flex: 1,
     cellClass: ['border-r', '!border-gray-200', 'justify-start'],
-    valueGetter: (params) => params.data.can_outscope ? 'Ya' : 'Tidak'
+    valueGetter: (params) => (params?.data?.can_outscope === true || params?.data?.can_outscope === 1 || params?.data?.can_outscope === '1' || params?.data?.can_outscope === 'true' || params?.data?.can_outscope === 't') ? 'Ya' : 'Tidak'
   },
   {
     headerName: 'Status',
@@ -1412,7 +1419,7 @@ const landing = reactive({
     flex: 1,
     cellClass: ['border-r', '!border-gray-200', 'justify-center'],
     valueGetter: (params) => {
-      const val = params.data ? (params.data.status !== undefined ? params.data.status : params.data.is_active) : params.value
+      const val = params?.data ? (params.data.status !== undefined ? params.data.status : params.data.is_active) : params?.value
       return (val === 'Active' || val === true || val === 1 || val === '1' || val === 'true' || val === 't') ? 'Active' : 'Inactive'
     },
     cellRenderer: ({ value }) => {
@@ -1435,9 +1442,3 @@ onActivated(() => {
 
 //  @endif -------------------------------------------------END
 watchEffect(() => store.commit('set', ['isRequesting', isRequesting.value]))
-watchEffect(() => {
-  // ✅ fallback: kalau username kosong tapi NIK (kode) ada, auto isi username
-  if (!values.username && values.kode) {
-    values.username = values.kode
-  }
-})
