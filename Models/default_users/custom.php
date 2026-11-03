@@ -152,11 +152,34 @@ class default_users extends \App\Models\BasicModels\default_users
             return ["errors" => ["Email sudah dipakai"]];
         }
 
-        if (req("password") && req("password") != req("password_confirm")) {
-            return ["errors" => ["Konfirmasi password salah"]];
+        if (req("password") && !req("password_confirm")) {
+            return response([
+                "status" => "error",
+                "message" => "Masukkan password Konfirmasi",
+                "errors" => ["password_confirm" => ["Masukkan password Konfirmasi"]]
+            ], 422);
         }
 
-       
+        if (req("password") && req("password") != req("password_confirm")) {
+            return response([
+                "status" => "error",
+                "message" => "Konfirmasi password salah",
+                "errors" => ["password_confirm" => ["Konfirmasi password salah"]]
+            ], 422);
+        }
+
+        if (!empty($arrayData['m_kary_id'])) {
+            $kary = \DB::table('m_kary')->where('id', $arrayData['m_kary_id'])->first();
+            if ($kary) {
+                if (empty($arrayData['m_dir_id']) && !empty($kary->m_dir_id)) {
+                    $arrayData['m_dir_id'] = $kary->m_dir_id;
+                }
+                if (empty($arrayData['m_comp_id']) && !empty($kary->m_comp_id)) {
+                    $arrayData['m_comp_id'] = $kary->m_comp_id;
+                }
+            }
+        }
+
         $hasher = app()->make("hash");
         return [
             "model" => $model,
@@ -255,33 +278,52 @@ class default_users extends \App\Models\BasicModels\default_users
 
     public function custom_reset_password($req)
     {
-         if (req("password") && !req("password_confirm")) {
-            return ["errors" => "Masukkan password Konfirmasi"];
+        if (req("password") && !req("password_confirm")) {
+            return response([
+                "status" => "error",
+                "message" => "Masukkan password Konfirmasi",
+                "errors" => ["password_confirm" => ["Masukkan password Konfirmasi"]]
+            ], 422);
         }
 
         if (req("password") && req("password") != req("password_confirm")) {
-            return ["errors" => "Konfirmasi password salah"];
+            return response([
+                "status" => "error",
+                "message" => "Konfirmasi password salah",
+                "errors" => ["password_confirm" => ["Konfirmasi password salah"]]
+            ], 422);
         }
 
         $hasher = app()->make("hash");
+        $userId = $req->id_user ?? auth()->user()->id;
 
-        if($req->email && $req->username){
-            \DB::table('default_users')->where('id',$req->id_user ?? auth()->user()->id)->update([
-                'username' => $req->username,
-                'email' => $req->email,
-            ]);
+        $updateData = [];
+        if ($req->email && $req->username) {
+            $updateData['username'] = $req->username;
+            $updateData['email'] = $req->email;
         }
-        
-        if(req("password")){
-            \DB::table('default_users')->where('id',$req->id_user ?? auth()->user()->id)->update([
+        if (isset($req->is_active)) {
+            $updateData['is_active'] = $req->is_active ? 1 : 0;
+        }
+        if (!empty($req->m_dir_id)) {
+            $updateData['m_dir_id'] = $req->m_dir_id;
+        }
+        if (!empty($req->m_comp_id)) {
+            $updateData['m_comp_id'] = $req->m_comp_id;
+        }
+        if (!empty($updateData)) {
+            \DB::table('default_users')->where('id', $userId)->update($updateData);
+        }
+
+        if (req("password")) {
+            \DB::table('default_users')->where('id', $userId)->update([
                 'password' => $hasher->make(req("password"))
             ]);
         }
 
         return response([
-            'message' => 'Update password berhasil'
+            'message' => 'Update pengguna berhasil'
         ]);
-
     }
 
 

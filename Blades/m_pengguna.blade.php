@@ -32,14 +32,15 @@
       </div>
       <div class="grid grid-cols-2 gap-2">
         <!-- START COLUMN -->
-        <!-- <div>
-          <label class="font-semibold">Direktorat <label class="text-red-500 space-x-0 pl-0"></label></label>
+        <div>
+          <label class="font-semibold">Company <label class="text-red-500 space-x-0 pl-0"></label></label>
           <FieldX :bind="{ readonly: true }" class="w-full py-2 !mt-0"
-              :value="values.direktorat" :errorname="formErrors.direktorat?'failed':''"
-              @input="v=>values.direktorat=v" :hints="formErrors.direktorat" 
+              :value="values.company" :errorname="formErrors.company?'failed':''"
+              @input="v=>values.company=v" :hints="formErrors.company" 
+              placeholder="(Pilih Karyawan)"
               :check="false"
           />
-        </div> -->
+        </div>
         <div>
           <label class="font-semibold">Divisi <label class="text-red-500 space-x-0 pl-0"></label></label>
           <FieldX :bind="{ readonly: true }" class="w-full py-2 !mt-0"
@@ -69,6 +70,7 @@
         <div>
           <label class="font-semibold">NIK <label class="text-red-500 space-x-0 pl-0"></label></label>
           <FieldPopup 
+              :bind="{ readonly: !actionText, disabled: !actionText }"
               class="p-0 m-0 !mt-[9px]"
               valueField="id" displayField="kode"
               @input="nikChange"

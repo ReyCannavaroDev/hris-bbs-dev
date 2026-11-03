@@ -34,8 +34,7 @@ const values = reactive({
 })
 
 onBeforeMount(async () => {
-  // tampilkan default direktorat dengan store user comp.nama
-  values.direktorat = store.user.data?.direktorat
+  values.company = null
   if (isRead) {
     //  READ DATA
     try {
@@ -74,6 +73,7 @@ onBeforeMount(async () => {
   for (const key in initialValues) {
     values[key] = initialValues[key]
   }
+  values.is_active = (values.is_active === true || values.is_active === 1 || values.is_active === '1' || values.is_active === 'true' || values.is_active === 't')
 })
 
 async function nikChange(id) {
@@ -87,6 +87,9 @@ async function nikChange(id) {
     })
     if (!res.ok) throw new Error("Gagal memuat data karyawan, coba lagi nanti")
     const result = await res.json()
+    values.company = result.data['m_dir.nama'] || result.data['m_comp.nama'] || ''
+    values.m_dir_id = result.data.m_dir_id
+    values.m_comp_id = result.data.m_comp_id
     values.divisi = result.data['m_divisi.nama']
     values.departemen = result.data['m_dept.nama']
     values.name = result.data?.nama_lengkap
@@ -98,6 +101,9 @@ async function nikChange(id) {
       values.default_password = "12345"
     }
   }else{
+    values.company = null
+    values.m_dir_id = null
+    values.m_comp_id = null
     values.divisi = null
     values.departemen = null
     values.name = null
@@ -140,46 +146,85 @@ function onReset() {
 }
 
 async function onSave() {
-  if(route.params.id == 'create') {
-    var dataURL = `${store.server.url_backend}/operation${endpointApi}`
-  } else {
-    var dataURL = `${store.server.url_backend}/operation${endpointApi}/reset_password?id_user=${route.params.id}`
-  }
-  //values.tags = JSON.stringify(values.tags)
-      try {
+  formErrors.value = {}
 
-        const isCreating = ['Create','Copy','Tambah'].includes(actionText.value)
-
-        // const dataURL = `${store.server.url_backend}/operation${endpointApi}/reset_password?id_user=${route.params.id}`
-        isRequesting.value = true
-        delete values.atasan
-        values.is_active = values.is_active ? 1 : 0
-        const res = await fetch(dataURL, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'Application/json',
-            Authorization: `${store.user.token_type} ${store.user.token}`
-          },
-          body: JSON.stringify(values)
-        })
-        if (!res.ok) {
-          if ([400, 422].includes(res.status)) {
-            const responseJson = await res.json();
-            formErrors.value = responseJson.errors || {};
-            throw (responseJson.errors.length ? responseJson.errors[0] : responseJson.message || "Failed when trying to post data");
-          } else {
-            throw ("Failed when trying to post data");
-          }
-        }
-        router.replace('/' + modulPath + '?reload='+(Date.parse(new Date())))
-      } catch (err) {
-        isBadForm.value = true
-        swal.fire({
-          icon: 'error',
-          text: err
-        })
+  if (isRead) {
+    if (values.password || values.password_confirm) {
+      if (!values.password) {
+        formErrors.value.password = ['Password wajib diisi jika ingin mereset password']
       }
-      isRequesting.value = false
+      if (!values.password_confirm) {
+        formErrors.value.password_confirm = ['Konfirmasi Password wajib diisi']
+      }
+      if (values.password && values.password_confirm && values.password !== values.password_confirm) {
+        formErrors.value.password_confirm = ['Konfirmasi Password tidak sesuai dengan Password']
+      }
+    }
+  } else {
+    if (!values.m_kary_id) {
+      formErrors.value.m_kary_id = ['Karyawan (NIK) wajib dipilih']
+    }
+    if (!values.username || String(values.username).trim() === '') {
+      formErrors.value.username = ['Username wajib diisi']
+    }
+    if (!values.password) {
+      formErrors.value.password = ['Password wajib diisi']
+    }
+    if (!values.password_confirm) {
+      formErrors.value.password_confirm = ['Konfirmasi Password wajib diisi']
+    }
+    if (values.password && values.password_confirm && values.password !== values.password_confirm) {
+      formErrors.value.password_confirm = ['Konfirmasi Password tidak sesuai dengan Password']
+    }
+  }
+
+  if (Object.keys(formErrors.value).length > 0) {
+    const errorMsg = formErrors.value.password_confirm?.[0] || formErrors.value.password?.[0] || formErrors.value.m_kary_id?.[0] || formErrors.value.username?.[0] || 'Harap lengkapi semua kolom yang wajib diisi'
+    return swal.fire({
+      icon: 'error',
+      text: errorMsg
+    })
+  }
+
+  const dataURL = (route.params.id === 'create')
+    ? `${store.server.url_backend}/operation${endpointApi}`
+    : `${store.server.url_backend}/operation${endpointApi}/reset_password?id_user=${route.params.id}`
+
+  try {
+    isRequesting.value = true
+    delete values.atasan
+
+    const payload = Object.assign({}, values, {
+      is_active: values.is_active ? 1 : 0
+    })
+
+    const res = await fetch(dataURL, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'Application/json',
+        Authorization: `${store.user.token_type} ${store.user.token}`
+      },
+      body: JSON.stringify(payload)
+    })
+    if (!res.ok) {
+      if ([400, 422].includes(res.status)) {
+        const responseJson = await res.json();
+        formErrors.value = responseJson.errors || {};
+        const errMsg = (Array.isArray(responseJson.errors) ? responseJson.errors[0] : (typeof responseJson.errors === 'string' ? responseJson.errors : responseJson.message)) || "Failed when trying to post data";
+        throw errMsg;
+      } else {
+        throw "Failed when trying to post data";
+      }
+    }
+    router.replace('/' + modulPath + '?reload=' + (Date.parse(new Date())))
+  } catch (err) {
+    isBadForm.value = true
+    swal.fire({
+      icon: 'error',
+      text: err
+    })
+  }
+  isRequesting.value = false
 }
 
 //  @else----------------------- LANDING
@@ -259,14 +304,6 @@ const landing = reactive({
       click(row) {
         router.push(`${route.path}/${row.id}?action=Edit&`+tsId)
       }
-    },
-    {
-      icon: 'copy',
-      title: "Copy",
-      class: 'bg-gray-600 text-light-100',
-      click(row) {
-        router.push(`${route.path}/${row.id}?action=Copy&`+tsId)
-      }
     }
   ],
   api: {
@@ -341,7 +378,7 @@ const landing = reactive({
     cellClass: [ 'border-r', '!border-gray-200']
   },
   {
-    headerName: 'Direktorat',
+    headerName: 'Company',
     field: 'm_dir.nama',
     filter: true,
     sortable: true,
