@@ -433,7 +433,25 @@ class t_perhitungan_gaji extends \App\Models\BasicModels\t_perhitungan_gaji
         // Pendapatan Kena Pajak (PKP):	
         // PKP setahun Rp112.800.000 – Rp54.000.000	            = Rp58.800.000
 
-        $tanggungan = m_general::find($kary->tanggungan_id);
+        $tanggungan = null;
+        if (!empty($kary->tanggungan_id)) {
+            $tanggungan = m_general::find($kary->tanggungan_id);
+        }
+        if (!$tanggungan || empty($tanggungan->value_2)) {
+            // Fallback default PTKP TK/0 (Rp 54.000.000) jika status tanggungan karyawan belum diisi / 0
+            $tanggungan = m_general::where('m_general.group', 'TANGGUNGAN')
+                ->where(function ($q) {
+                    $q->where('key', 'TK/0')
+                      ->orWhere('code', 'TK/0')
+                      ->orWhere('value', 'TK/0');
+                })->first();
+            if (!$tanggungan || empty($tanggungan->value_2)) {
+                $tanggungan = (object) [
+                    'value'   => 'TK/0',
+                    'value_2' => 54000000
+                ];
+            }
+        }
         if($tanggungan){
 
             // persentase pajak <= Rp50.000.000                 = 5%
