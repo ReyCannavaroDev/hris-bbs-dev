@@ -362,6 +362,19 @@ class t_lembur extends \App\Models\BasicModels\t_lembur
                 }
             }
 
+            // Pastikan jika ada tiket approval yang lebih baru untuk transaksi ini, gunakan tiket terbaru
+            if ($generateApproval) {
+                $latestGenApp = \DB::table('generate_approval')
+                    ->where('trx_table', $this->getTable())
+                    ->where('trx_id', $generateApproval->trx_id)
+                    ->orderBy('id', 'desc')
+                    ->first();
+                if ($latestGenApp && $latestGenApp->id != $generateApproval->id) {
+                    $generateApproval = $latestGenApp;
+                    $appId = $latestGenApp->id;
+                }
+            }
+
             if (!$generateApproval) {
                 return $this->helper->customResponse("Data approval tidak ditemukan", 404);
             }
@@ -376,6 +389,17 @@ class t_lembur extends \App\Models\BasicModels\t_lembur
 
             $appType = $req->type ?? 'APPROVED';
             $appNote = $req->note ?? '-';
+
+            if ($appType === 'REVISED') {
+                $cleanedNote = trim(strval($req->note ?? ''));
+                if (empty($cleanedNote) || $cleanedNote === '-' || strtolower($cleanedNote) === 'revised') {
+                    return response()->json([
+                        'status'  => false,
+                        'message' => 'Catatan approval wajib diisi saat memilih revisi',
+                        'errors'  => ['catatan' => ['Catatan approval wajib diisi saat memilih revisi']]
+                    ], 422);
+                }
+            }
 
             // Dapatkan seluruh slot approval yang belum selesai (is_done = false)
             $undoneDetails = \DB::table('generate_approval_det')
@@ -411,7 +435,7 @@ class t_lembur extends \App\Models\BasicModels\t_lembur
             // Identifikasi HRD: via ROLE ATAU JABATAN (m_posisi) ATAU DIVISI (m_divisi)
             $isHrd = false;
             foreach ($userRoleNames as $rn) {
-                if (stripos($rn, 'hr') !== false || stripos($rn, 'personalia') !== false) {
+                if (stripos($rn, 'hr') !== false || stripos($rn, 'personalia') !== false || stripos($rn, 'sdm') !== false || stripos($rn, 'human capital') !== false) {
                     $isHrd = true;
                     break;
                 }
@@ -428,8 +452,8 @@ class t_lembur extends \App\Models\BasicModels\t_lembur
                 if ($userKary) {
                     $posNama = strtolower($userKary->posisi_nama ?? '');
                     $divNama = strtolower($userKary->divisi_nama ?? '');
-                    if (stripos($posNama, 'hr') !== false || stripos($posNama, 'personalia') !== false ||
-                        stripos($divNama, 'hr') !== false || stripos($divNama, 'personalia') !== false) {
+                    if (stripos($posNama, 'hr') !== false || stripos($posNama, 'personalia') !== false || stripos($posNama, 'sdm') !== false || stripos($posNama, 'human capital') !== false ||
+                        stripos($divNama, 'hr') !== false || stripos($divNama, 'personalia') !== false || stripos($divNama, 'sdm') !== false || stripos($divNama, 'human capital') !== false) {
                         $isHrd = true;
                     }
                 }
@@ -439,6 +463,7 @@ class t_lembur extends \App\Models\BasicModels\t_lembur
             $alreadyApprovedByMe = \DB::table('generate_approval_det')
                 ->where('generate_approval_id', $generateApproval->id)
                 ->where('action_user_id', $userAuth->id)
+                ->where('action_type', 'APPROVED')
                 ->where('is_done', true)
                 ->exists();
 
@@ -449,24 +474,36 @@ class t_lembur extends \App\Models\BasicModels\t_lembur
             // Tentukan target slot yang diproses oleh user secara fleksibel / paralel
             $targetSlot = null;
 
+            // 0. Cek jika slot ditugaskan spesifik ke default_user_id
+            $targetSlot = $undoneDetails->first(function($d) use ($userAuth) {
+                return !empty($d->default_user_id) && $d->default_user_id == $userAuth->id;
+            });
+
             // 1. Jika Atasan langsung, cari slot Atasan (urutan_level 1 atau nama role atasan)
-            if ($isAtasan) {
+            if (!$targetSlot && $isAtasan) {
                 $targetSlot = $undoneDetails->first(function($d) {
                     return $d->urutan_level == 1 || stripos(strtolower($d->role_name ?? ''), 'atasan') !== false;
                 });
             }
 
-            // 2. Jika HRD, cari slot HRD (urutan_level 2 atau nama role hr/personalia)
+            // 2. Jika HRD atau role cocok, cari slot HRD / urutan_level >= 2
             if (!$targetSlot && ($isHrd || !empty(array_intersect($userRoleIds, $undoneDetails->pluck('m_role_id')->toArray())))) {
                 $targetSlot = $undoneDetails->first(function($d) use ($userRoleIds) {
                     $rnLower = strtolower($d->role_name ?? '');
-                    $nameMatch = (stripos($rnLower, 'hr') !== false) || (stripos($rnLower, 'personalia') !== false);
+                    $nameMatch = (stripos($rnLower, 'hr') !== false) || (stripos($rnLower, 'personalia') !== false) || (stripos($rnLower, 'sdm') !== false);
                     $roleIdMatch = in_array($d->m_role_id, $userRoleIds);
                     return $nameMatch || $roleIdMatch || $d->urutan_level >= 2;
                 });
             }
 
-            // 3. Jika Superadmin atau approver umum yang cocok dengan m_role_id slot
+            // 3. Jika status HALF APPROVED dan user bukan approver tahap 1, ambil slot level >= 2
+            if (!$targetSlot && $trx->status === 'HALF APPROVED' && ($isHrd || !empty($userRoleIds))) {
+                $targetSlot = $undoneDetails->first(function($d) {
+                    return $d->urutan_level >= 2;
+                });
+            }
+
+            // 4. Jika approver umum yang cocok dengan m_role_id slot
             if (!$targetSlot) {
                 foreach ($undoneDetails as $d) {
                     if (in_array($d->m_role_id, $userRoleIds)) {
@@ -476,7 +513,7 @@ class t_lembur extends \App\Models\BasicModels\t_lembur
                 }
             }
 
-            // 4. Fallback Superadmin: ambil slot pertama yang tersedia
+            // 5. Fallback Superadmin: ambil slot pertama yang tersedia
             if (!$targetSlot && $isSuperadmin) {
                 $targetSlot = $undoneDetails->first();
             }
@@ -603,6 +640,19 @@ class t_lembur extends \App\Models\BasicModels\t_lembur
                 }
             }
 
+            // Jika tiket ditemukan tapi ada tiket approval yang lebih baru untuk transaksi ini (misalnya setelah revisi & diajukan kembali)
+            if ($app) {
+                $latestApp = \DB::table('generate_approval')
+                    ->where('trx_table', $this->getTable())
+                    ->where('trx_id', $app->trx_id)
+                    ->orderBy('id', 'desc')
+                    ->first();
+                if ($latestApp && $latestApp->id != $app->id) {
+                    $app = $latestApp;
+                    $id = $latestApp->id;
+                }
+            }
+
             if (!$app) {
                 $dummyApp = (object)[
                     'id' => $id,
@@ -663,6 +713,7 @@ class t_lembur extends \App\Models\BasicModels\t_lembur
                 $alreadyApprovedByMe = \DB::table('generate_approval_det')
                     ->where('generate_approval_id', $app->id)
                     ->where('action_user_id', $userId)
+                    ->where('action_type', 'APPROVED')
                     ->where('is_done', true)
                     ->exists();
             }
@@ -687,7 +738,7 @@ class t_lembur extends \App\Models\BasicModels\t_lembur
             // Identifikasi HRD: via Role ATAU Jabatan/Divisi
             $isHrd = false;
             foreach ($userRoleNames as $rn) {
-                if (stripos($rn, 'hr') !== false || stripos($rn, 'personalia') !== false) {
+                if (stripos($rn, 'hr') !== false || stripos($rn, 'personalia') !== false || stripos($rn, 'sdm') !== false || stripos($rn, 'human capital') !== false) {
                     $isHrd = true;
                     break;
                 }
@@ -702,8 +753,8 @@ class t_lembur extends \App\Models\BasicModels\t_lembur
                 if ($userKary) {
                     $posNama = strtolower($userKary->posisi_nama ?? '');
                     $divNama = strtolower($userKary->divisi_nama ?? '');
-                    if (stripos($posNama, 'hr') !== false || stripos($posNama, 'personalia') !== false ||
-                        stripos($divNama, 'hr') !== false || stripos($divNama, 'personalia') !== false) {
+                    if (stripos($posNama, 'hr') !== false || stripos($posNama, 'personalia') !== false || stripos($posNama, 'sdm') !== false || stripos($posNama, 'human capital') !== false ||
+                        stripos($divNama, 'hr') !== false || stripos($divNama, 'personalia') !== false || stripos($divNama, 'sdm') !== false || stripos($divNama, 'human capital') !== false) {
                         $isHrd = true;
                     }
                 }
@@ -714,9 +765,32 @@ class t_lembur extends \App\Models\BasicModels\t_lembur
                 if ($isSuperadmin) {
                     $canApprove = true;
                 } elseif (!$alreadyApprovedByMe) {
-                    if ($isAtasan && $undoneDetails->contains(function($d) { return stripos(strtolower($d->role_name ?? ''), 'atasan') !== false; })) {
+                    // 1. Cek jika slot ditugaskan secara spesifik ke default_user_id
+                    $hasAssignedSlot = $undoneDetails->contains(function($d) use ($userId) {
+                        return !empty($d->default_user_id) && $d->default_user_id == $userId;
+                    });
+
+                    // 2. Cek jika slot Atasan masih belum selesai dan user adalah Atasan
+                    $hasAtasanSlot = $undoneDetails->contains(function($d) {
+                        return $d->urutan_level == 1 || stripos(strtolower($d->role_name ?? ''), 'atasan') !== false;
+                    });
+
+                    // 3. Cek jika role user cocok dengan salah satu slot yang belum selesai
+                    $hasRoleMatch = !empty(array_intersect($userRoleIds, $undoneDetails->pluck('m_role_id')->toArray()));
+
+                    // 4. Cek jika slot HRD / Level 2+ belum selesai dan user adalah HRD
+                    $hasHrdSlot = $undoneDetails->contains(function($d) {
+                        $rn = strtolower($d->role_name ?? '');
+                        return $d->urutan_level >= 2 || stripos($rn, 'hr') !== false || stripos($rn, 'personalia') !== false || stripos($rn, 'sdm') !== false;
+                    });
+
+                    if ($hasAssignedSlot) {
                         $canApprove = true;
-                    } elseif ($isHrd || !empty(array_intersect($userRoleIds, $undoneDetails->pluck('m_role_id')->toArray()))) {
+                    } elseif ($isAtasan && $hasAtasanSlot) {
+                        $canApprove = true;
+                    } elseif (($isHrd || $hasRoleMatch) && $hasHrdSlot) {
+                        $canApprove = true;
+                    } elseif ($trx && in_array($trx->status, ['HALF APPROVED', 'IN APPROVAL']) && ($isHrd || $hasRoleMatch || !empty($userRoleIds))) {
                         $canApprove = true;
                     }
                 }

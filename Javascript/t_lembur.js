@@ -41,7 +41,8 @@ const canApprove = computed(() => {
   if (store.user.data?.is_superadmin) return true
   const userKaryId = store.user.data?.m_kary_id
   const atasanKaryId = values['m_kary.atasan_id'] || values.m_kary?.atasan_id || values.atasan_id
-  if (userKaryId && atasanKaryId && userKaryId == atasanKaryId) return true
+  if (values.status === 'IN APPROVAL' && userKaryId && atasanKaryId && userKaryId == atasanKaryId) return true
+  if (values.is_hrd || values.is_atasan) return true
   return false
 })
 
@@ -124,6 +125,9 @@ onBeforeMount(async () => {
         for (const key in initialValues) {
           values[key] = initialValues[key]
         }
+        values.can_approve = appPayload?.can_approve ?? resultJson?.can_approve
+        values.is_atasan = appPayload?.is_atasan ?? resultJson?.is_atasan
+        values.is_hrd = appPayload?.is_hrd ?? resultJson?.is_hrd
 
         // logic finish & Approved data
         isApproved.value = resultTrxJson?.data?.lembur_status == 'APPROVED' ? true : false
@@ -167,8 +171,9 @@ onBeforeMount(async () => {
               }
               values.trx = resAppJson.data?.trx
               values.datalog = resAppJson.data?.approval_log
-              values.can_approve = resAppJson.data?.can_approve
-              values.is_atasan = resAppJson.data?.is_atasan
+              values.can_approve = resAppJson.data?.can_approve ?? resAppJson?.can_approve
+              values.is_atasan = resAppJson.data?.is_atasan ?? resAppJson?.is_atasan
+              values.is_hrd = resAppJson.data?.is_hrd ?? resAppJson?.is_hrd
             }
           } catch (e) {
             console.error('Failed to load approval detail for IN APPROVAL status', e)
@@ -389,6 +394,24 @@ function onSave() {
 
 
 function onProcess(typePar) {
+  if (typePar === 'revise') {
+    const noteVal = values.catatan ? String(values.catatan).trim() : ''
+    if (!noteVal) {
+      formErrors.value = { ...formErrors.value, catatan: 'Catatan approval wajib diisi saat memilih revisi' }
+      swal.fire({
+        icon: 'warning',
+        text: 'Catatan approval wajib diisi saat memilih revisi',
+      })
+      return
+    }
+  }
+
+  if (formErrors.value?.catatan) {
+    const newErrors = { ...formErrors.value }
+    delete newErrors.catatan
+    formErrors.value = newErrors
+  }
+
   const payload = {
     id: values.approval?.id || route.params.id,
     type: typePar === 'revise' ? 'REVISED' : (typePar === 'reject' ? 'REJECTED' : 'APPROVED'),

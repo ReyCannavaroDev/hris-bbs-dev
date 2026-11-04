@@ -377,7 +377,7 @@
         </div>
       </div>
       <div v-show="canApprove" class="w-1/2 mt-6">
-        <label class="col-span-12 font-semibold">Catatan Approval<label class="text-red-500 space-x-0 pl-0"></label></label>
+        <label class="col-span-12 font-semibold">Catatan Approval<span class="text-xs text-red-500 font-normal ml-1">(Wajib diisi jika Revisi)</span></label>
         <FieldX :bind="{ readonly: false }" class="w-full py-2 !mt-0" :value="values.catatan"
           :errorText="formErrors.catatan?'failed':''" @input="v=>values.catatan=v" :hints="formErrors.catatan"
           :check="false" label="" placeholder="Tuliskan catatan" />

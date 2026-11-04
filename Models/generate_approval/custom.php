@@ -88,7 +88,7 @@ class generate_approval extends \App\Models\BasicModels\generate_approval
         // Tiket yang sudah pernah disetujui oleh user bersangkutan tidak boleh muncul lagi di inbox outstanding miliknya
         $query->whereRaw("generate_approval.id not in (
             select d_done.generate_approval_id from generate_approval_det d_done 
-            where d_done.action_user_id = " . intval($userAuth->id) . " and d_done.is_done = true
+            where d_done.action_user_id = " . intval($userAuth->id) . " and d_done.action_type = 'APPROVED' and d_done.is_done = true
         )");
 
         if ($isSuperadmin) {
@@ -314,6 +314,17 @@ class generate_approval extends \App\Models\BasicModels\generate_approval
             $cek = \DB::table($datas->trx_table)->where('id', $datas->trx_id)->first();
             if ($cek && ($cek->status === 'REJECTED' || $cek->status === 'REVISED')) {
                 return $this->helper->customResponse('Data Sudah Dalam Status Rejected atau Revised , Harap Ulangi atau Perbaiki Pengajuan', 422);
+            }
+
+            if ($req->type === 'REVISED') {
+                $cleanedNote = trim(strval($req->note ?? ''));
+                if (empty($cleanedNote) || $cleanedNote === '-' || strtolower($cleanedNote) === 'revised') {
+                    return response()->json([
+                        'status'  => false,
+                        'message' => 'Catatan approval wajib diisi saat memilih revisi',
+                        'errors'  => ['catatan' => ['Catatan approval wajib diisi saat memilih revisi']]
+                    ], 422);
+                }
             }
 
             // Identifikasi peran user (Atasan / HRD / Superadmin)
