@@ -45,9 +45,12 @@ class m_kary extends \App\Models\BasicModels\m_kary
             }
         }
 
-        $nik = !empty($arrayData['nik']) ? $arrayData['nik'] : (!empty($arrayData['ktp_no']) ? $arrayData['ktp_no'] : null);
-        if (empty($nik) && !empty($arrayData['m_kary_det_kartu']) && is_array($arrayData['m_kary_det_kartu'])) {
-            $nik = $arrayData['m_kary_det_kartu'][0]['ktp_no'] ?? null;
+        $ktp = !empty($arrayData['ktp_no']) ? trim((string)$arrayData['ktp_no']) : null;
+        if (empty($ktp) && !empty($arrayData['m_kary_det_kartu']) && is_array($arrayData['m_kary_det_kartu']) && !empty($arrayData['m_kary_det_kartu'][0]['ktp_no'])) {
+            $ktp = trim((string)$arrayData['m_kary_det_kartu'][0]['ktp_no']);
+        }
+        if (empty($ktp) && !empty($arrayData['nik']) && $arrayData['nik'] !== ($arrayData['kode'] ?? null)) {
+            $ktp = trim((string)$arrayData['nik']);
         }
 
         $kode = !empty($arrayData['kode']) ? trim((string)$arrayData['kode']) : null;
@@ -57,7 +60,7 @@ class m_kary extends \App\Models\BasicModels\m_kary
 
         $newArrayData = array_merge($arrayData, [
             "kode" => $kode,
-            "nik" => $nik ?? @$arrayData['nik'],
+            "nik" => $ktp ?: null,
             "m_comp_id" => $m_comp_id,
             "cuti_jatah_reguler" => $arrayData['cuti_jatah_reguler'] ?? ((!empty($arrayData['tgl_masuk']) && Carbon::parse($arrayData['tgl_masuk'])->diffInYears(Carbon::now()) >= 1) ? 12 : 0),
             "cuti_sisa_reguler" => $arrayData['cuti_sisa_reguler'] ?? ((!empty($arrayData['tgl_masuk']) && Carbon::parse($arrayData['tgl_masuk'])->diffInYears(Carbon::now()) >= 1) ? 12 : 0),
@@ -82,17 +85,46 @@ class m_kary extends \App\Models\BasicModels\m_kary
         ];
     }
 
+    public function createAfter($model, $arrayData, $metaData, $id = null)
+    {
+        $id = $id ?? ($model->id ?? null);
+        if (!$id) return;
+
+        $ktp = !empty($arrayData['ktp_no']) ? trim((string)$arrayData['ktp_no']) : (!empty($arrayData['nik']) && $arrayData['nik'] !== ($arrayData['kode'] ?? null) ? trim((string)$arrayData['nik']) : null);
+        if (empty($ktp) && !empty($arrayData['m_kary_det_kartu']) && is_array($arrayData['m_kary_det_kartu']) && !empty($arrayData['m_kary_det_kartu'][0]['ktp_no'])) {
+            $ktp = trim((string)$arrayData['m_kary_det_kartu'][0]['ktp_no']);
+        }
+
+        if ($ktp) {
+            $existing = \DB::table('m_kary_det_kartu')->where('m_kary_id', $id)->first();
+            if ($existing) {
+                \DB::table('m_kary_det_kartu')->where('m_kary_id', $id)->update(['ktp_no' => $ktp]);
+            } else {
+                \DB::table('m_kary_det_kartu')->insert([
+                    'm_kary_id' => $id,
+                    'm_comp_id' => $arrayData['m_comp_id'] ?? 1,
+                    'm_dir_id' => $arrayData['m_dir_id'] ?? null,
+                    'ktp_no' => $ktp,
+                    'created_at' => Carbon::now(),
+                    'updated_at' => Carbon::now(),
+                ]);
+            }
+        }
+    }
+
     public function updateBefore($model, $arrayData, $metaData, $id = null)
     {
         $newArrayData = $arrayData;
 
-        if (empty($newArrayData['nik'])) {
-            if (!empty($newArrayData['ktp_no'])) {
-                $newArrayData['nik'] = $newArrayData['ktp_no'];
-            } elseif (!empty($newArrayData['m_kary_det_kartu']) && is_array($newArrayData['m_kary_det_kartu'])) {
-                $newArrayData['nik'] = $newArrayData['m_kary_det_kartu'][0]['ktp_no'] ?? null;
-            }
+        $ktp = null;
+        if (!empty($newArrayData['ktp_no'])) {
+            $ktp = trim((string)$newArrayData['ktp_no']);
+        } elseif (!empty($newArrayData['m_kary_det_kartu']) && is_array($newArrayData['m_kary_det_kartu']) && !empty($newArrayData['m_kary_det_kartu'][0]['ktp_no'])) {
+            $ktp = trim((string)$newArrayData['m_kary_det_kartu'][0]['ktp_no']);
+        } elseif (!empty($newArrayData['nik']) && $newArrayData['nik'] !== ($newArrayData['kode'] ?? null)) {
+            $ktp = trim((string)$newArrayData['nik']);
         }
+        $newArrayData['nik'] = $ktp ?: null;
 
         if (empty($newArrayData['m_comp_id']) && !empty($newArrayData['m_dir_id'])) {
             $compFromDir = \DB::table('m_dir')->where('id', $newArrayData['m_dir_id'])->value('m_comp_id');
@@ -144,6 +176,27 @@ class m_kary extends \App\Models\BasicModels\m_kary
             $isActive = filter_var($arrayData['is_active'], FILTER_VALIDATE_BOOLEAN, FILTER_NULL_ON_FAILURE);
             $boolVal = ($isActive === true || $arrayData['is_active'] === 1 || $arrayData['is_active'] === '1' || $arrayData['is_active'] === 'true');
             default_users::where('m_kary_id', $id)->update(['is_active' => $boolVal ? 1 : 0]);
+        }
+
+        $ktp = !empty($arrayData['ktp_no']) ? trim((string)$arrayData['ktp_no']) : (!empty($arrayData['nik']) && $arrayData['nik'] !== ($arrayData['kode'] ?? null) ? trim((string)$arrayData['nik']) : null);
+        if (empty($ktp) && !empty($arrayData['m_kary_det_kartu']) && is_array($arrayData['m_kary_det_kartu']) && !empty($arrayData['m_kary_det_kartu'][0]['ktp_no'])) {
+            $ktp = trim((string)$arrayData['m_kary_det_kartu'][0]['ktp_no']);
+        }
+
+        if ($ktp) {
+            $existing = \DB::table('m_kary_det_kartu')->where('m_kary_id', $id)->first();
+            if ($existing) {
+                \DB::table('m_kary_det_kartu')->where('m_kary_id', $id)->update(['ktp_no' => $ktp]);
+            } else {
+                \DB::table('m_kary_det_kartu')->insert([
+                    'm_kary_id' => $id,
+                    'm_comp_id' => $arrayData['m_comp_id'] ?? 1,
+                    'm_dir_id' => $arrayData['m_dir_id'] ?? null,
+                    'ktp_no' => $ktp,
+                    'created_at' => Carbon::now(),
+                    'updated_at' => Carbon::now(),
+                ]);
+            }
         }
     }
     
@@ -267,12 +320,12 @@ class m_kary extends \App\Models\BasicModels\m_kary
                 ->where('status','POSTED')->first();
             $object['jadwal_kerja'] = $jadwal_kerja;
         }
-        $object['nomor_ktp'] = \DB::table('m_kary_det_kartu')->where('m_kary_id', $row['id'] ?? 0)->value('ktp_no') ?? null ;
-        if (empty($row['nik']) && !empty($row['kode'])) {
-            $object['nik'] = $row['kode'];
-        }
-        if (empty($row['kode']) && !empty($row['nik'])) {
-            $object['kode'] = $row['nik'];
+        $ktpNo = \DB::table('m_kary_det_kartu')->where('m_kary_id', $row['id'] ?? 0)->value('ktp_no') ?? null;
+        $object['nomor_ktp'] = $ktpNo;
+        if (!empty($ktpNo)) {
+            $object['nik'] = $ktpNo;
+        } elseif (!empty($row['nik']) && $row['nik'] === ($row['kode'] ?? null)) {
+            $object['nik'] = null;
         }
         foreach (['tgl_masuk', 'tgl_berhenti', 'tgl_lahir', 'lama_kontrak_awal', 'lama_kontrak_akhir'] as $col) {
             if (!empty($row[$col])) {

@@ -512,9 +512,11 @@ onBeforeMount(async () => {
     values.no_rek = values.m_kary_det_pemb[0].no_rek
   }
 
+  const realKtp = values.m_kary_det_kartu?.[0]?.ktp_no || initialValues.nomor_ktp || (initialValues.nik && initialValues.nik !== initialValues.kode ? initialValues.nik : '') || ''
+  values.ktp_no = realKtp
+  values.nik = realKtp
+
   if (values.m_kary_det_kartu?.length > 0) {
-    values.ktp_no = values.m_kary_det_kartu[0].ktp_no
-    values.nik = values.ktp_no || initialValues.nik || ''
     values.kk_no = values.m_kary_det_kartu[0].kk_no
     values.npwp_no = values.m_kary_det_kartu[0].npwp_no
     values.npwp_tgl_berlaku = values.m_kary_det_kartu[0].npwp_tgl_berlaku
@@ -1404,7 +1406,7 @@ async function onSave() {
       return
     }
 
-    values.nik = values.ktp_no || values.nik || ''
+    values.nik = values.ktp_no || (values.nik && values.nik !== values.kode ? values.nik : null)
     values.nama_lengkap = (values.nama_depan ?? '') + ' ' + (values.nama_belakang ?? '')
     values.m_kary_det_pres = detailPrestasi.value
 
@@ -1438,9 +1440,9 @@ async function onSave() {
       if (tempNPWP && (tempNPWP.startsWith('http://') || tempNPWP.startsWith('https://'))) tempNPWP = null
     }
 
-    if (isCreating || values.m_kary_det_kartu?.length === 0) {
+    if (isCreating || !values.m_kary_det_kartu || values.m_kary_det_kartu.length === 0) {
       values.m_kary_det_kartu = [{
-        ktp_no: values.ktp_no,
+        ktp_no: values.ktp_no || null,
         ktp_foto: tempKTP,
         pas_foto: tempPasfoto,
         kk_no: values.kk_no,
@@ -1457,7 +1459,7 @@ async function onSave() {
       }]
     } else {
       console.log(values.m_kary_det_kartu)
-      values.m_kary_det_kartu[0].ktp_no = values.ktp_no
+      values.m_kary_det_kartu[0].ktp_no = values.ktp_no || null
       if (initialValues.m_kary_det_kartu[0]?.ktp_foto !== tempKTP) {
         values.m_kary_det_kartu[0].ktp_foto = tempKTP
       }
@@ -1661,7 +1663,12 @@ const landing = reactive({
     filter: 'ColFilter',
     resizable: true,
     cellClass: ['border-r', '!border-gray-200', 'justify-start'],
-    valueGetter: (params) => params.data?.nik || params.data?.['m_kary_det_kartu.0.ktp_no'] || '-'
+    valueGetter: (params) => {
+      const nik = params.data?.nik || params.data?.nomor_ktp || params.data?.['m_kary_det_kartu.0.ktp_no']
+      const kode = params.data?.kode
+      if (!nik || nik === kode) return '-'
+      return nik
+    }
   },
   {
     headerName: 'Nama',
