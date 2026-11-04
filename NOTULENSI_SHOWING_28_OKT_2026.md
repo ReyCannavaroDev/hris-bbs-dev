@@ -34,7 +34,7 @@ Terdapat beberapa penyesuaian aturan bisnis (*business logic*) dan permintaan fi
 
 ---
 
-### 2. Standar Upah & Master Gaji Karyawan
+### 2. Standar Upah & Master Gaji Karyawan — ✅ Selesai Dikerjakan (Rey Cannavaro - 4 Nov 2026)
 - **Gaji Pokok Per-Personal:**  
   Nilai gaji pokok karyawan diatur **langsung per-personal** pada data masing-masing karyawan (`m_kary`), bukan diseragamkan kaku berdasarkan tabel grading/zona upah.
 - **Fungsi Grading & Zona Gaji:**  
@@ -168,7 +168,7 @@ Berikut daftar tugas pengerjaan yang akan diselesaikan secara bertahap menuju pr
 - [x] **Task 1.2:** Verifikasi proteksi izin P24 agar tetap bebas denda saat pembulatan baru diterapkan.
 
 ### Track 2: Master Karyawan & Master Upah (`m_kary` & `m_standart_gaji`) — ✅ Selesai Dikerjakan (Rey Cannavaro - 4 Nov 2026)
-- [x] **Task 2.1:** Tambahkan field `gaji_acuan` (basis UMK BPJS) pada migrasi dan model master gaji/karyawan.
+- [x] **Task 2.1:** Tambahkan field `gaji_acuan` (basis UMK BPJS) pada migrasi, model master, dan kalkulasi potongan resmi BPJS (Kesehatan 1%, JHT 2%, JP 1%).
 - [x] **Task 2.2:** Sesuaikan input `m_kary` agar gaji pokok per-personal menjadi prioritas utama kalkulasi gaji.
 - [x] **Task 2.3:** Buat logika sinkronisasi reaktif di `m_kary` antara toggle `is_active` dan field `tanggal_berhenti_kerja`.
 

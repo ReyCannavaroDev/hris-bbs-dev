@@ -520,6 +520,119 @@ class PerhitunganGaji
     }
 
     /**
+     * 4.B Hitung Potongan BPJS Karyawan Resmi Pemerintah (Pekerja)
+     * - BPJS Kesehatan: 1% (Plafon Rp 12.000.000, Perpres 64/2020)
+     * - BPJS Ketenagakerjaan JHT: 2% (Tanpa Plafon, PP 46/2015)
+     * - BPJS Ketenagakerjaan JP: 1% (Plafon Rp 11.086.300, PP 45/2015)
+     *
+     * @param int $m_kary_id
+     * @param float|null $gajiAcuan
+     * @return array
+     */
+    public function hitungPotonganBPJS($m_kary_id, $gajiAcuan = null)
+    {
+        $kary = DB::table('m_kary')->where('id', $m_kary_id)->first();
+        if (!$kary) {
+            return [
+                'total_potongan_bpjs' => 0,
+                'bpjs_kesehatan'      => 0,
+                'bpjs_tk_jht'         => 0,
+                'bpjs_tk_jp'          => 0,
+                'rincian'             => []
+            ];
+        }
+
+        $basisGaji = 0;
+        if (!empty($gajiAcuan) && (float)$gajiAcuan > 0) {
+            $basisGaji = (float)$gajiAcuan;
+        } elseif (!empty($kary->gaji_acuan) && (float)$kary->gaji_acuan > 0) {
+            $basisGaji = (float)$kary->gaji_acuan;
+        } elseif (!empty($kary->gaji_pokok) && (float)$kary->gaji_pokok > 0) {
+            $basisGaji = (float)$kary->gaji_pokok;
+        } else {
+            $standar = DB::table('m_standart_gaji')->where('id', $kary->m_standart_gaji_id ?? 0)->first();
+            $basisGaji = (float)($standar->gaji_pokok ?? 0);
+        }
+
+        if ($basisGaji <= 0) {
+            return [
+                'total_potongan_bpjs' => 0,
+                'bpjs_kesehatan'      => 0,
+                'bpjs_tk_jht'         => 0,
+                'bpjs_tk_jp'          => 0,
+                'rincian'             => []
+            ];
+        }
+
+        // Cek data kepesertaan di kartu
+        $kartu = DB::table('m_kary_det_kartu')
+            ->where('m_kary_id', $kary->id)
+            ->where('is_active', true)
+            ->first();
+
+        // Karyawan dipotong BPJS jika punya nomor kartu ATAU jika gaji_acuan terisi > 0
+        $ikutKesehatan = (!empty($kary->gaji_acuan) && (float)$kary->gaji_acuan > 0) || !empty($kartu->bpjs_no_kesehatan);
+        $ikutTK = (!empty($kary->gaji_acuan) && (float)$kary->gaji_acuan > 0) || !empty($kartu->bpjs_no_ketenagakerjaan) || !empty($kartu->bpjs_no);
+
+        $kesehatan = 0;
+        $jht = 0;
+        $jp = 0;
+        $rincian = [];
+
+        // 1. BPJS Kesehatan (1% Pekerja, Plafon Maksimal Upah Rp 12.000.000)
+        if ($ikutKesehatan) {
+            $basisKesehatan = min($basisGaji, 12000000);
+            $kesehatan = round($basisKesehatan * 0.01);
+            if ($kesehatan > 0) {
+                $rincian[] = [
+                    'label'      => 'Potongan BPJS Kesehatan (1%)',
+                    'factor'     => '-',
+                    'value'      => (float) $kesehatan,
+                    'type'       => 'Bulanan',
+                    'can_adjust' => 1
+                ];
+            }
+        }
+
+        // 2. BPJS Ketenagakerjaan - JHT (2% Pekerja, Tanpa Plafon)
+        if ($ikutTK) {
+            $jht = round($basisGaji * 0.02);
+            if ($jht > 0) {
+                $rincian[] = [
+                    'label'      => 'Potongan BPJS TK - JHT (2%)',
+                    'factor'     => '-',
+                    'value'      => (float) $jht,
+                    'type'       => 'Bulanan',
+                    'can_adjust' => 1
+                ];
+            }
+
+            // 3. BPJS Ketenagakerjaan - JP (1% Pekerja, Plafon Maksimal Upah Rp 11.086.300)
+            $basisJP = min($basisGaji, 11086300);
+            $jp = round($basisJP * 0.01);
+            if ($jp > 0) {
+                $rincian[] = [
+                    'label'      => 'Potongan BPJS TK - JP (1%)',
+                    'factor'     => '-',
+                    'value'      => (float) $jp,
+                    'type'       => 'Bulanan',
+                    'can_adjust' => 1
+                ];
+            }
+        }
+
+        $totalBPJS = $kesehatan + $jht + $jp;
+
+        return [
+            'total_potongan_bpjs' => $totalBPJS,
+            'bpjs_kesehatan'      => $kesehatan,
+            'bpjs_tk_jht'         => $jht,
+            'bpjs_tk_jp'          => $jp,
+            'rincian'             => $rincian
+        ];
+    }
+
+    /**
      * 5. Hitung Keseluruhan Gaji Karyawan (Single Employee Payroll Run)
      * Menggabungkan Hak Upah, Denda Telat, Potongan Izin, dan Kasbon.
      *
@@ -551,17 +664,21 @@ class PerhitunganGaji
         // 4. Potongan Kasbon / Piutang (MoM 3.E)
         $potonganKasbon = $this->tarikPotonganKasbon($m_kary_id, $startDate, $endDate);
 
-        // 5. Total Pendapatan Kotor (Gross)
+        // 5. Potongan BPJS Resmi Pemerintah (Pekerja)
+        $potonganBPJS = $this->hitungPotonganBPJS($m_kary_id, $gajiDasar['gaji_acuan'] ?? null);
+
+        // 6. Total Pendapatan Kotor (Gross)
         $totalPendapatanKotor = $gajiDasar['total_pendapatan_tetap'];
 
-        // 6. Total Potongan
+        // 7. Total Potongan
         $totalPotongan = 
             $dendaTelat['total_denda'] + 
             $potonganIzin['nominal_potongan_proporsional'] + 
             $potonganKasbon['total_potongan_kasbon'] + 
+            $potonganBPJS['total_potongan_bpjs'] + 
             $gajiDasar['total_potongan_standar'];
 
-        // 7. Take Home Pay (Net Salary)
+        // 8. Take Home Pay (Net Salary)
         $thp = max(0, $totalPendapatanKotor - $totalPotongan);
 
         return [
@@ -573,6 +690,7 @@ class PerhitunganGaji
                 'hari_kerja' => $hariKerja,
             ],
             'gaji_dasar'            => $gajiDasar,
+            'potongan_bpjs'         => $potonganBPJS,
             'denda_keterlambatan'   => $dendaTelat,
             'potongan_izin_cuti'    => $potonganIzin,
             'potongan_kasbon'       => $potonganKasbon,

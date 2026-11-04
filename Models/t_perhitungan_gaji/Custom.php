@@ -171,6 +171,21 @@ class t_perhitungan_gaji extends \App\Models\BasicModels\t_perhitungan_gaji
             }
         }
 
+        // Potongan BPJS Resmi Pemerintah (Pekerja: Kesehatan 1%, JHT 2%, JP 1%) berbasis gaji_acuan
+        try {
+            $coreGajiBPJS = new \App\Cores\PerhitunganGaji();
+            $bpjsData = $coreGajiBPJS->hitungPotonganBPJS($kary->id, $kary->gaji_acuan ?? null);
+            if (!empty($bpjsData['rincian'])) {
+                foreach ($bpjsData['rincian'] as $bpjsItem) {
+                    if ($bpjsItem['value'] > 0) {
+                        $defaultColumns[] = $bpjsItem;
+                    }
+                }
+            }
+        } catch (\Throwable $e) {
+            // Safe fallback jika data belum lengkap
+        }
+
         // check kehadiran & denda/potongan presensi karyawan (MoM BBS 7 Oktober 2026)
         $gaji_pokok = (!empty($kary->gaji_pokok) && (float)$kary->gaji_pokok > 0)
             ? (float)$kary->gaji_pokok
