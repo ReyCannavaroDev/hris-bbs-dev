@@ -16,6 +16,8 @@ const currentUser = store.user.data
 const apiTable = ref(null)
 const formErrors = ref({})
 const tsId = `ts=` + (Date.parse(new Date()))
+const detail = ref(null)
+const detailKey = ref(0)
 // ------------------------------ PERSIAPAN
 
 const endpointApi = '/m_approval'
@@ -39,31 +41,99 @@ function clearDetailArr() {
     showDenyButton: true
   }).then((res) => {
     if (res.isConfirmed) {
-      detailArr.value = []
-      detailArr.value.push({ tipe: 'MENGAJUKAN', level: 1 })
+      detailArr.value = [{ tipe: 'MENGAJUKAN', level: 1, is_full_approve: false, is_skippable: false }]
+      detailKey.value++
+      if (detail.value?.key !== undefined) {
+        detail.value.key++
+      }
     }
   })
 }
-
 
 function onDetailAdd() {
   const data = [...detailArr.value]
   const row = {
     level: data.length + 1,
+    tipe: 'MENGETAHUI',
     is_full_approve: false,
     is_skippable: false
   }
   data.push(row)
   detailArr.value = data
+  detailKey.value++
+  if (detail.value?.key !== undefined) {
+    detail.value.key++
+  }
+}
+
+function onDetailDelete(index) {
+  if (index === 0) {
+    swal.fire({
+      icon: 'warning',
+      text: 'Data level 1 tipe MENGAJUKAN tidak dapat dihapus',
+    })
+    return
+  }
+  const data = [...detailArr.value]
+  data.splice(index, 1)
+  data.forEach((item, idx) => {
+    item.level = idx + 1
+  })
+  detailArr.value = data
+  detailKey.value++
+  if (detail.value?.key !== undefined) {
+    detail.value.key++
+  }
+}
+
+function populateFromInitial() {
+  const initialData = JSON.parse(JSON.stringify(initialValues || {}))
+  if (actionText.value === 'Create') {
+    values.nama = ''
+    values.m_menu_id = null
+    values.desc = ''
+    values.is_active = true
+    detailArr.value = [{ tipe: 'MENGAJUKAN', level: 1, is_full_approve: false, is_skippable: false }]
+  } else {
+    values.nama = actionText.value === 'Copy' ? (initialData.nama ? `${initialData.nama} - Copy` : '') : (initialData.nama || '')
+    values.m_menu_id = initialData.m_menu_id || null
+    values.desc = initialData.desc || ''
+    values.m_comp_id = initialData.m_comp_id || null
+    values.m_dir_id = initialData.m_dir_id || null
+    values.is_active = (initialData.is_active === true || initialData.is_active === 1 || initialData.is_active === '1' || initialData.is_active === 'true' || initialData.is_active === 't')
+
+    const rawDetails = initialData.m_approval_det || []
+    detailArr.value = rawDetails.map((item, idx) => {
+      const clean = {
+        level: idx + 1,
+        tipe: item.tipe || (idx === 0 ? 'MENGAJUKAN' : 'MENGETAHUI'),
+        m_role_id: item.m_role_id || null,
+        default_user_id: item.default_user_id || null,
+        is_full_approve: Boolean(item.is_full_approve),
+        is_skippable: Boolean(item.is_skippable),
+        'm_role.name': item['m_role.name'] || item.m_role?.name || null,
+        'default_user.username': item['default_user.username'] || item.default_user?.username || null,
+      }
+      if (actionText.value !== 'Copy' && item.id) {
+        clean.id = item.id
+        if (item.m_approval_id) {
+          clean.m_approval_id = item.m_approval_id
+        }
+      }
+      return clean
+    })
+  }
+
+  if (!detailArr.value.length) {
+    detailArr.value = [{ tipe: 'MENGAJUKAN', level: 1, is_full_approve: false, is_skippable: false }]
+  }
 }
 
 onBeforeMount(async () => {
   if (route.params.id === 'create') {
-    // index pertama tambahkan data default dengan tipe MENGAJUKAN
-    detailArr.value.push({ tipe: 'MENGAJUKAN', level: 1 })
+    detailArr.value.push({ tipe: 'MENGAJUKAN', level: 1, is_full_approve: false, is_skippable: false })
   }
   if (isRead) {
-    //  READ DATA KE SERVER
     try {
       const editedId = route.params.id
       const dataURL = `${store.server.url_backend}/operation${endpointApi}/${editedId}`
@@ -79,7 +149,7 @@ onBeforeMount(async () => {
       })
       if (!res.ok) throw new Error("Failed when trying to read data")
       const resultJson = await res.json()
-      resultJson.data.m_approval_det = (resultJson.data?.m_approval_det || []).sort((a, b) => a.level - b.level);
+      resultJson.data.m_approval_det = (resultJson.data?.m_approval_det || []).sort((a, b) => a.level - b.level)
 
       initialValues = resultJson.data
     } catch (err) {
@@ -93,39 +163,11 @@ onBeforeMount(async () => {
         router.back()
       })
     }
-    // const details = [...detailArr.value]
-    // details.forEach( (dt,idx)=>{
-    //   dt.default_user_id = parseInt(dt.default_user_id);
-    // })
 
     isRequesting.value = false
   }
 
-  //  PENGISIAN DATA KE FORM DAN DETAILS
-  const initialData = JSON.parse(JSON.stringify(initialValues))
-  for (const key in initialData) {
-    if (actionText.value === 'Create') continue;
-    if (actionText.value === 'Copy' && key === 'id') continue;
-    if (key === 'm_approval_det') {
-      if (actionText.value === 'Copy') {
-        detailArr.value = (initialData[key] || []).map(item => {
-          const copyItem = { ...item }
-          delete copyItem.id
-          delete copyItem.m_approval_id
-          return copyItem
-        })
-      } else {
-        detailArr.value = [...(initialData[key] || [])]
-      }
-      continue;
-    }
-    values[key] = initialData[key]
-  }
-  if (!detailArr.value.length) {
-    detailArr.value = []
-    detailArr.value.push({ tipe: 'MENGAJUKAN', level: 1 })
-  }
-  values.is_active = (values.is_active === true || values.is_active === 1 || values.is_active === '1' || values.is_active === 'true' || values.is_active === 't')
+  populateFromInitial()
 })
 
 function onBack() {
@@ -164,15 +206,11 @@ function onReset() {
     showDenyButton: true
   }).then((res) => {
     if (res.isConfirmed) {
-      const initialData = JSON.parse(JSON.stringify(initialValues))
-      for (const key in initialData) {
-        if (key === 'm_approval_det') {
-          detailArr.value = [...(initialData[key] || [])]
-          continue;
-        }
-        values[key] = initialData[key]
+      populateFromInitial()
+      detailKey.value++
+      if (detail.value?.key !== undefined) {
+        detail.value.key++
       }
-      values.is_active = (values.is_active === true || values.is_active === 1 || values.is_active === '1' || values.is_active === 'true' || values.is_active === 't')
     }
   })
 }
@@ -235,13 +273,33 @@ function onSave() {
         const dataURL = `${store.server.url_backend}/operation${endpointApi}${isCreating ? '' : ('/' + route.params.id)}`
         isRequesting.value = true
 
-        const payload = Object.assign({}, values, {
-          is_active: values.is_active ? 1 : 0,
-          m_approval_det: detailArr.value
+        const cleanDetails = details.map((dt, idx) => {
+          const row = {
+            level: idx + 1,
+            tipe: idx === 0 ? 'MENGAJUKAN' : dt.tipe,
+            m_role_id: dt.m_role_id ? parseInt(dt.m_role_id) : null,
+            default_user_id: dt.default_user_id ? parseInt(dt.default_user_id) : null,
+            is_full_approve: dt.is_full_approve ? 1 : 0,
+            is_skippable: dt.is_skippable ? 1 : 0
+          }
+          if (!isCreating && dt.id) {
+            row.id = dt.id
+            if (dt.m_approval_id) {
+              row.m_approval_id = dt.m_approval_id
+            }
+          }
+          return row
         })
-        if (isCreating && payload.id) {
-          delete payload.id
+
+        const payload = {
+          nama: values.nama,
+          m_menu_id: values.m_menu_id,
+          desc: values.desc || null,
+          is_active: values.is_active ? 1 : 0,
+          m_approval_det: cleanDetails
         }
+        if (values.m_comp_id) payload.m_comp_id = values.m_comp_id
+        if (values.m_dir_id) payload.m_dir_id = values.m_dir_id
 
         const res = await fetch(dataURL, {
           method: isCreating ? 'POST' : 'PUT',
@@ -450,7 +508,6 @@ onActivated(() => {
     }
   }
 })
-
 
 //  @endif -------------------------------------------------END
 watchEffect(() => store.commit('set', ['isRequesting', isRequesting.value]))

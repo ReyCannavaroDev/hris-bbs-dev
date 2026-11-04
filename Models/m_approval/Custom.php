@@ -47,6 +47,35 @@ class m_approval extends \App\Models\BasicModels\m_approval
             ];
         }
 
+        // Sanitize detail rows: ensure only valid columns for m_approval_det
+        $cleanedDetails = [];
+        foreach ($details as $idx => $d) {
+            $row = is_array($d) ? $d : (array)$d;
+            $cleanedDetails[] = [
+                'level' => (int)($row['level'] ?? ($idx + 1)),
+                'tipe' => $idx === 0 ? 'MENGAJUKAN' : ($row['tipe'] ?? 'MENGETAHUI'),
+                'm_role_id' => !empty($row['m_role_id']) ? (int)$row['m_role_id'] : null,
+                'default_user_id' => !empty($row['default_user_id']) ? (int)$row['default_user_id'] : null,
+                'is_full_approve' => !empty($row['is_full_approve']) ? 1 : 0,
+                'is_skippable' => !empty($row['is_skippable']) ? 1 : 0,
+            ];
+        }
+        $arrayData['m_approval_det'] = $cleanedDetails;
+
+        // Strip joined relation objects and auto-created keys
+        unset(
+            $arrayData['id'],
+            $arrayData['created_at'],
+            $arrayData['updated_at'],
+            $arrayData['creator_id'],
+            $arrayData['last_editor_id'],
+            $arrayData['m_menu'],
+            $arrayData['m_comp'],
+            $arrayData['m_dir'],
+            $arrayData['creator'],
+            $arrayData['last_editor']
+        );
+
         return [
             "model" => $model,
             "data"  => $arrayData,
@@ -86,7 +115,33 @@ class m_approval extends \App\Models\BasicModels\m_approval
                     "errors" => ["m_approval_det" => ["Detail Approval wajib diisi minimal 1 level persetujuan (Mengetahui / Menyetujui)"]]
                 ];
             }
+
+            $cleanedDetails = [];
+            foreach ($details as $idx => $d) {
+                $row = is_array($d) ? $d : (array)$d;
+                $item = [
+                    'level' => (int)($row['level'] ?? ($idx + 1)),
+                    'tipe' => $idx === 0 ? 'MENGAJUKAN' : ($row['tipe'] ?? 'MENGETAHUI'),
+                    'm_role_id' => !empty($row['m_role_id']) ? (int)$row['m_role_id'] : null,
+                    'default_user_id' => !empty($row['default_user_id']) ? (int)$row['default_user_id'] : null,
+                    'is_full_approve' => !empty($row['is_full_approve']) ? 1 : 0,
+                    'is_skippable' => !empty($row['is_skippable']) ? 1 : 0,
+                ];
+                if (!empty($row['id'])) {
+                    $item['id'] = (int)$row['id'];
+                }
+                $cleanedDetails[] = $item;
+            }
+            $arrayData['m_approval_det'] = $cleanedDetails;
         }
+
+        unset(
+            $arrayData['m_menu'],
+            $arrayData['m_comp'],
+            $arrayData['m_dir'],
+            $arrayData['creator'],
+            $arrayData['last_editor']
+        );
 
         return [
             "model" => $model,

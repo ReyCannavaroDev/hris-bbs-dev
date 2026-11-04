@@ -111,7 +111,7 @@
   <!-- DETAIL -->
   <div class="flex gap-x-4 px-2">
     <div class="flex flex-col border rounded shadow-sm px-4 py-3 w-full bg-white">
-      <TableStatic customClass="h-50vh" ref="detail" :value="detailArr" @input="v=>detailArr=v" :columns="[{
+      <TableStatic customClass="h-50vh" :key="detailKey" ref="detail" :value="detailArr" @input="v=>detailArr=v" :columns="[{
                 pinned:true,
                 headerName: 'No',
                 cellRenderer: !actionText?null:'ButtonGrid',
@@ -129,14 +129,13 @@
                         })
                       return
                       }
-                      const row = app.params.node.data
                       swal.fire({
                         icon: 'warning',
-                        text: `Hapus Baris ${app.params.node.rowIndex-(-1)}?`,
+                        text: `Hapus Baris ${app.params.node.rowIndex + 1}?`,
                         showDenyButton: true
                       }).then((res) => {
                         if (res.isConfirmed) {
-                          app.params.api.applyTransaction({ remove: [app.params.node.data] })
+                          onDetailDelete(app.params.node.rowIndex)
                         }
                       })
                     }
@@ -164,20 +163,21 @@
                 cellEditorParams: {
                   options:['MENGETAHUI','MENYETUJUI'],
                   bind: { clearable:true },
-                  input(v){
-                    values.tipe=v
+                  input(v, api){
+                    if (api && api.data) {
+                      api.data.tipe = v
+                    }
                   }
                 },
                 editable(params) {
-                  if((params.node.rowIndex == 0 || params.data.level) == 1){
+                  if (params.node.rowIndex === 0 || params.data?.level === 1) {
                     swal.fire({
                       icon: 'warning',
                       text: `Data level 1 tipe MENGAJUKAN tidak dapat diubah`,
                     })
-                    return actionText ? actionText :false
-                  }else{
-                    return actionText ? actionText :false
+                    return false
                   }
+                  return Boolean(actionText)
                 } 
               },
               {
@@ -210,7 +210,7 @@
                     api.data['m_role.name']=val.name
                   }
                 },
-                editable: actionText?true:false,
+                editable: Boolean(actionText),
               },
               {
                 field:'default_user_id',
@@ -242,7 +242,7 @@
                     api.data['default_user_id']=val.id
                   }
                 },
-                editable: actionText?true:false,
+                editable: Boolean(actionText),
               },
               {
                 width:100,
@@ -256,11 +256,8 @@
                 cellRendererParams: !actionText?null:{
                   readonly: !actionText,
                   change:(app, isChecked)=>{
-                    if(isChecked){
-                      app.params.node.data['is_full_approve'] = isChecked
-                      app.params.api.applyTransaction({ update: [app.params.node.data] })
-                    }else{
-                      app.params.node.data['is_full_approve'] = false
+                    if (app && app.params && app.params.node && app.params.node.data) {
+                      app.params.node.data['is_full_approve'] = Boolean(isChecked)
                       app.params.api.applyTransaction({ update: [app.params.node.data] })
                     }
                   }
