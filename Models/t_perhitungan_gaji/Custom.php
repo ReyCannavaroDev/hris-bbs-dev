@@ -528,10 +528,23 @@ class t_perhitungan_gaji extends \App\Models\BasicModels\t_perhitungan_gaji
             ];
         }
 
+        // Skema Gross-up / Subsidi Pajak: Perusahaan memberikan Tunjangan PPh 21 sebesar potongan PPh 21
+        // sehingga nilai take-home pay karyawan utuh (tidak terpotong oleh PPh 21)
+        $taxMonthly = round($total_tax / 12, 2);
+
         $mergingArr[] = [
-            'label'    => "PTKP $tanggungan->value (perbulan)",
+            'label'    => "Tunjangan PPh 21 (Ditanggung Perusahaan)",
+            'factor'   => '+',
+            'value'    => $taxMonthly,
+            'type'     => 'Bulanan',
+            'can_adjust' => 0,
+            'detail'   => $detail
+        ];
+
+        $mergingArr[] = [
+            'label'    => "Potongan PPh 21 (PTKP $tanggungan->value)",
             'factor'   => '-',
-            'value'    => $total_tax/12,
+            'value'    => $taxMonthly,
             'type'     => 'Bulanan',
             'can_adjust' => 0,
             'detail'   => $detail
@@ -606,15 +619,16 @@ class t_perhitungan_gaji extends \App\Models\BasicModels\t_perhitungan_gaji
 
             $nettoFinish    = $this->summarySubSalary($getBasicSalary);
 
-            // default summary tax
+            // default summary tax (Skema Gross-Up Subsidi Perusahaan)
             $arrPPH         = $this->countPPH21($kary, $netto);
-            $totalTax = @$arrPPH[0]['value'];
+            $taxItem        = collect($arrPPH)->firstWhere('factor', '-') ?? @$arrPPH[0];
+            $totalTax       = (float) (@$taxItem['value'] ?? 0);
             if(count($arrPPH)){
                 $getBasicSalary = array_merge($getBasicSalary, $arrPPH);
                 $nettoFinish    = $this->summarySubSalary($getBasicSalary);
-                $getBasicSalary    = array_merge($getBasicSalary, [
+                $getBasicSalary = array_merge($getBasicSalary, [
                     [
-                        'label'    => 'Total Gaji (Setelah PPH 21)',
+                        'label'    => 'Total Gaji Bersih (Take Home Pay)',
                         'factor'   => '=',
                         'value'    => $nettoFinish,
                         'type'     => '-'

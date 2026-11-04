@@ -433,12 +433,12 @@
                   </td>
                 </tr>
                 <tr class="border">
-                  <td class="text-left border border-gray-300 p-1 ">PPH 21 {{ totalAdjPPHOpen.value.length ?
-                    totalAdjPPHOpen.value[0].label : '' }}</td>
+                  <td class="text-left border border-gray-300 p-1 ">PPH 21 (Ditanggung Perusahaan) {{ totalAdjPPHOpen.value.length ?
+                    (totalAdjPPHOpen.value.find(x => x.factor === '-') || totalAdjPPHOpen.value[0]).label : '' }}</td>
                   <td class="text-right border border-gray-300 p-0 ">
                     <button v-if="!totalAdjPPHOpen.value.length" @click="generatePPH" class="bg-blue-600 px-3 py-1 w-full text-white cursor-pointer" title="klik untuk menentukan perhitungan pph">Hitung PPH</button>
                     <FieldNumber v-else :bind="{ readonly: true}" class="!mt-0 flex justify-end !p-0"
-                      :value="totalAdjPPHOpen.value[0].value" @input="totalAdjPPHOpen.value[0].value" type="number"
+                      :value="(totalAdjPPHOpen.value.find(x => x.factor === '-') || totalAdjPPHOpen.value[0])?.value" type="number"
                       label="" :check="false" />
                   </td>
                 </tr>

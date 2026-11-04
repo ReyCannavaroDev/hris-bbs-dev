@@ -46,7 +46,7 @@ Terdapat beberapa penyesuaian aturan bisnis (*business logic*) dan permintaan fi
 
 ---
 
-### 3. Kebijakan Pajak Penghasilan (PPh 21)
+### 3. Kebijakan Pajak Penghasilan (PPh 21) — ✅ Selesai Dikerjakan (Rey Cannavaro - 4 Nov 2026)
 - **Keputusan:**  
   Pajak PPh 21 karyawan **disubsidi / ditanggung penuh oleh perusahaan**.
 - **Implementasi Sistem:**  
@@ -144,7 +144,7 @@ Terdapat beberapa penyesuaian aturan bisnis (*business logic*) dan permintaan fi
 | 5 | **Kolom Sisa Angsuran & Pelunasan Manual Kasbon (`t_potongan`)** | Mas Duta | ✅ Selesai | Kolom Sisa Angsuran di landing table & tombol/endpoint Pelunasan Manual (`482ea06`) |
 | 6 | **Gaji Pokok Per-Personal & Field `gaji_acuan` (UMK BPJS)** | Rey / Tim | ⏳ To Do | Master gaji karyawan & dasar pengali BPJS |
 | 7 | **Sinkronisasi Resign & Inactive Karyawan** | Rey / Tim | ✅ Selesai | Two-way reactive trigger `tgl_berhenti` $\leftrightarrow$ `is_active` & auto-deactivate `default_users` |
-| 8 | **PPh 21 Disubsidi Perusahaan (Gross-up)** | Rey | ⏳ To Do | Tunjangan pajak agar take home pay utuh |
+| 8 | **PPh 21 Disubsidi Perusahaan (Gross-up)** | Rey | ✅ Selesai | Tunjangan PPh 21 subsidi perusahaan penyeimbang potongan pajak agar take home pay utuh |
 | 9 | **Mutasi Karyawan Prorata (Opsi 2)** | Rey | ⏳ To Do | Split perhitungan hari kerja divisi lama vs divisi baru |
 | 10 | **Aturan Cuti 12 Hari & Split Izin Khusus** | Rey Cannavaro | ✅ Selesai | Batas 3 hari berturut-turut, SKD wajib lampiran, & izin khusus (Menikah/Meninggal/Sakit) bebas kuota 12 hari |
 
@@ -174,7 +174,7 @@ Berikut daftar tugas pengerjaan yang akan diselesaikan secara bertahap menuju pr
 
 ### Track 3: Engine Perhitungan Gaji & Pajak (`t_perhitungan_gaji` & `Cores`)
 - [x] **Task 3.1:** Ubah default rentang periode penggajian menjadi siklus cut-off tanggal 25 (tgl 26 bulan lalu s/d tgl 25 bulan berjalan) dan mingguan dinamis (`Javascript/t_perhitungan_gaji.js`, `d0ba545`).
-- [ ] **Task 3.2:** Terapkan skema PPh 21 Gross-up (tunjangan pajak ditanggung perusahaan) agar take-home pay karyawan utuh.
+- [x] **Task 3.2:** Terapkan skema PPh 21 Gross-up (tunjangan pajak ditanggung perusahaan) agar take-home pay karyawan utuh (`Models/t_perhitungan_gaji/Custom.php`, `Javascript/t_final_gaji.js`, `Blades/t_final_gaji.blade.php`).
 - [ ] **Task 3.3:** Implementasikan kalkulasi prorata mutasi divisi (Opsi 2) untuk karyawan yang mengalami mutasi di tengah periode.
 
 ### Track 4: Modul Cuti & Aturan 12 Hari (`t_cuti`) — ✅ Selesai Dikerjakan (Rey Cannavaro - 3 Nov 2026)

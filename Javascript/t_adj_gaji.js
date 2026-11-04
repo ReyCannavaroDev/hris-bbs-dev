@@ -253,7 +253,12 @@ async function generatePPH(popup = true) {
         const result = await res.json()
         if(result.length){
           totalAdjPPHOpen.value = result
-          totalAdjFinalOpen.value = totalAdjOpen.value - totalAdjPPHOpen.value[0]?.value ?? 0
+          let taxDeduction = 0
+          result.forEach(item => {
+            if (item.factor === '+') taxDeduction -= Number(item.value ?? 0)
+            else if (item.factor === '-') taxDeduction += Number(item.value ?? 0)
+          })
+          totalAdjFinalOpen.value = totalAdjOpen.value - taxDeduction
         }else{
           totalAdjPPHOpen.value = 0;
           if(!popup) return
@@ -352,7 +357,8 @@ function saveModal() {
   // assign for subdetail
   detailArr.value[idxOpen.value]['detail_adj'] = detailArrAdjOpen.items
 
-  detailArr.value[idxOpen.value]['total_tax'] = totalAdjPPHOpen.value.length ? totalAdjPPHOpen.value[0].value : 0
+  const taxItem = totalAdjPPHOpen.value.length ? (totalAdjPPHOpen.value.find(x => x.factor === '-') || totalAdjPPHOpen.value[0]) : null
+  detailArr.value[idxOpen.value]['total_tax'] = taxItem ? Number(taxItem.value ?? 0) : 0
   detailArr.value[idxOpen.value]['netto'] = totalAdjFinalOpen.value
   generatePPH(false) 
   summaryPengeluaranGaji()
