@@ -220,6 +220,40 @@ class Middleware
             }
         }
 
+        // Normalisasi filter jam_kerja via query where agar support pencarian waktu mulai & waktu akhir
+        if (!empty($requestData['where']) && $modelInstance && in_array('waktu_mulai', $modelInstance->columns ?? [])) {
+            $requestData['where'] = preg_replace_callback(
+                '/(?:this\.|m_jam_kerja\.)?jam_kerja\s*(?:=|ilike|like)\s*[\'\"]?%?([^%\'\"]*?)%?[\'\"]?/i',
+                function ($m) {
+                    $raw = trim($m[1]);
+                    $raw = str_replace('.', ':', $raw);
+                    if ($raw === '') {
+                        return "1=1";
+                    }
+                    if (str_contains($raw, '-')) {
+                        $parts = explode('-', $raw);
+                        $start = trim($parts[0]);
+                        $end = trim($parts[1]);
+                        if ($start !== '' && $end !== '') {
+                            return "(m_jam_kerja.waktu_mulai::text ilike '%$start%' and m_jam_kerja.waktu_akhir::text ilike '%$end%')";
+                        } elseif ($start !== '') {
+                            return "m_jam_kerja.waktu_mulai::text ilike '%$start%'";
+                        } elseif ($end !== '') {
+                            return "m_jam_kerja.waktu_akhir::text ilike '%$end%'";
+                        }
+                    }
+                    return "(m_jam_kerja.waktu_mulai::text ilike '%$raw%' or m_jam_kerja.waktu_akhir::text ilike '%$raw%')";
+                },
+                $requestData['where']
+            );
+            $request->merge(['where' => $requestData['where']]);
+            if ($request->query) {
+                $request->query->set('where', $requestData['where']);
+            }
+            $_GET['where'] = $requestData['where'];
+            $_REQUEST['where'] = $requestData['where'];
+        }
+
         // Normalisasi filter_jam_kerja: pertahankan parameter agar diproses oleh scopeFilter di Custom.php
         if (isset($requestData['filter_jam_kerja']) && $modelInstance && in_array('waktu_mulai', $modelInstance->columns ?? [])) {
             $val = trim((string)$requestData['filter_jam_kerja']);
@@ -237,6 +271,7 @@ class Middleware
         if (!empty($requestData['where'])) {
             $requestData['where'] = str_replace('this.waktu_mulai', 'm_jam_kerja.waktu_mulai', $requestData['where']);
             $requestData['where'] = str_replace('this.waktu_akhir', 'm_jam_kerja.waktu_akhir', $requestData['where']);
+            $requestData['where'] = str_replace('this.jam_kerja', 'm_jam_kerja.waktu_mulai', $requestData['where']);
             $request->merge(['where' => $requestData['where']]);
             if ($request->query) {
                 $request->query->set('where', $requestData['where']);

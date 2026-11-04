@@ -204,7 +204,7 @@ function transformJamKerjaUrl(url) {
   try {
     if (!url || typeof url !== 'string') return url
     if (!url.includes('m_jam_kerja')) return url
-    if (!url.includes('filter_is_active') && !url.includes('filter_status') && !url.includes('filter_is_hari_berikutnya') && !url.includes('filter_hari_lain') && !url.includes('filter_jam_kerja')) {
+    if (!url.includes('where') && !url.includes('filter_is_active') && !url.includes('filter_status') && !url.includes('filter_is_hari_berikutnya') && !url.includes('filter_hari_lain') && !url.includes('filter_jam_kerja')) {
       return url
     }
 
@@ -243,14 +243,44 @@ function transformJamKerjaUrl(url) {
       urlObj.searchParams.delete('filter_hari_lain')
     }
 
+    // Translate any jam_kerja inside where query
+    conds = conds.map(c => {
+      if (!c.includes('jam_kerja')) return c
+      return c.replace(/(?:this\.|m_jam_kerja\.)?jam_kerja\s*(?:=|ilike|like)\s*['"]%?([^%'"]*)%?['"]/gi, (match, raw) => {
+        const val = raw.replace(/\./g, ':').trim()
+        if (!val) return '1=1'
+        if (val.includes('-')) {
+          const [s, e] = val.split('-').map(x => x.trim())
+          if (s && e) {
+            return `(m_jam_kerja.waktu_mulai::text ilike '%${s}%' and m_jam_kerja.waktu_akhir::text ilike '%${e}%')`
+          } else if (s) {
+            return `m_jam_kerja.waktu_mulai::text ilike '%${s}%'`
+          } else if (e) {
+            return `m_jam_kerja.waktu_akhir::text ilike '%${e}%'`
+          }
+        }
+        return `(m_jam_kerja.waktu_mulai::text ilike '%${val}%' or m_jam_kerja.waktu_akhir::text ilike '%${val}%')`
+      })
+    })
+
     if (jamKerja !== null) {
-      const val = String(jamKerja).trim()
+      const val = String(jamKerja).replace(/\./g, ':').trim()
       conds = conds.filter(c => !/(?:this|m_jam_kerja)\.waktu_mulai/i.test(c))
       if (val !== '') {
-        urlObj.searchParams.set('filter_jam_kerja', val)
-      } else {
-        urlObj.searchParams.delete('filter_jam_kerja')
+        if (val.includes('-')) {
+          const [s, e] = val.split('-').map(x => x.trim())
+          if (s && e) {
+            conds.push(`(m_jam_kerja.waktu_mulai::text ilike '%${s}%' and m_jam_kerja.waktu_akhir::text ilike '%${e}%')`)
+          } else if (s) {
+            conds.push(`m_jam_kerja.waktu_mulai::text ilike '%${s}%'`)
+          } else if (e) {
+            conds.push(`m_jam_kerja.waktu_akhir::text ilike '%${e}%'`)
+          }
+        } else {
+          conds.push(`(m_jam_kerja.waktu_mulai::text ilike '%${val}%' or m_jam_kerja.waktu_akhir::text ilike '%${val}%')`)
+        }
       }
+      urlObj.searchParams.delete('filter_jam_kerja')
     }
 
     if (conds.length > 0) {
@@ -316,165 +346,11 @@ if (store && store.axios && store.axios.interceptors && store.axios.interceptors
 }
 
 const activeBtn = ref(null)
-const filterJamMulai = ref('')
-const filterJamAkhir = ref('')
-
-function applyJamKerjaFilter() {
-  const s = filterJamMulai.value ? filterJamMulai.value.trim() : ''
-  const e = filterJamAkhir.value ? filterJamAkhir.value.trim() : ''
-  let val = ''
-  if (s && e) {
-    val = `${s} - ${e}`
-  } else if (s) {
-    val = `${s} -`
-  } else if (e) {
-    val = `- ${e}`
-  }
-
-  if (landing.api && landing.api.params) {
-    if (val) {
-      landing.api.params.filter_jam_kerja = val
-    } else {
-      delete landing.api.params.filter_jam_kerja
-    }
-  }
-
-  // Update inputs in table column if present
-  const tableInputs = document.querySelectorAll('.time-filter-table-start, .time-filter-table-end')
-  if (tableInputs.length >= 2) {
-    tableInputs[0].value = s
-    tableInputs[1].value = e
-  }
-
-  if (apiTable.value && typeof apiTable.value.reload === 'function') {
-    apiTable.value.reload()
-  }
-}
-
-function resetJamKerjaFilter() {
-  filterJamMulai.value = ''
-  filterJamAkhir.value = ''
-  applyJamKerjaFilter()
-}
-
-class JamKerjaFloatingFilter {
-  init(params) {
-    this.params = params
-    this.eGui = document.createElement('div')
-    this.eGui.className = 'time-range-filter-wrapper'
-    this.eGui.style.display = 'flex'
-    this.eGui.style.alignItems = 'center'
-    this.eGui.style.justifyContent = 'center'
-    this.eGui.style.gap = '2px'
-    this.eGui.style.width = '100%'
-    this.eGui.style.height = '100%'
-    this.eGui.style.padding = '0 2px'
-
-    this.inputStart = document.createElement('input')
-    this.inputStart.type = 'time'
-    this.inputStart.className = 'time-filter-start'
-    this.inputStart.style.width = 'calc(50% - 9px)'
-    this.inputStart.style.height = '24px'
-    this.inputStart.style.fontSize = '11px'
-    this.inputStart.style.padding = '0 2px'
-    this.inputStart.style.border = '1px solid #d1d5db'
-    this.inputStart.style.borderRadius = '4px'
-    this.inputStart.style.backgroundColor = '#ffffff'
-    this.inputStart.style.color = '#374151'
-    this.inputStart.style.textAlign = 'center'
-    this.inputStart.title = 'Jam Mulai'
-
-    this.sep = document.createElement('span')
-    this.sep.textContent = '-'
-    this.sep.style.fontWeight = 'bold'
-    this.sep.style.color = '#6b7280'
-    this.sep.style.fontSize = '12px'
-    this.sep.style.userSelect = 'none'
-
-    this.inputEnd = document.createElement('input')
-    this.inputEnd.type = 'time'
-    this.inputEnd.className = 'time-filter-end'
-    this.inputEnd.style.width = 'calc(50% - 9px)'
-    this.inputEnd.style.height = '24px'
-    this.inputEnd.style.fontSize = '11px'
-    this.inputEnd.style.padding = '0 2px'
-    this.inputEnd.style.border = '1px solid #d1d5db'
-    this.inputEnd.style.borderRadius = '4px'
-    this.inputEnd.style.backgroundColor = '#ffffff'
-    this.inputEnd.style.color = '#374151'
-    this.inputEnd.style.textAlign = 'center'
-    this.inputEnd.title = 'Jam Selesai'
-
-    this.btnClear = document.createElement('button')
-    this.btnClear.type = 'button'
-    this.btnClear.innerHTML = '&times;'
-    this.btnClear.style.border = 'none'
-    this.btnClear.style.background = 'transparent'
-    this.btnClear.style.color = '#9ca3af'
-    this.btnClear.style.fontSize = '14px'
-    this.btnClear.style.fontWeight = 'bold'
-    this.btnClear.style.cursor = 'pointer'
-    this.btnClear.style.padding = '0 1px'
-    this.btnClear.style.lineHeight = '1'
-    this.btnClear.title = 'Reset'
-
-    this.eGui.appendChild(this.inputStart)
-    this.eGui.appendChild(this.sep)
-    this.eGui.appendChild(this.inputEnd)
-    this.eGui.appendChild(this.btnClear)
-
-    const onChange = () => {
-      const s = this.inputStart.value || ''
-      const e = this.inputEnd.value || ''
-      let val = ''
-      if (s && e) val = `${s} - ${e}`
-      else if (s) val = `${s} -`
-      else if (e) val = `- ${e}`
-
-      if (landing.api && landing.api.params) {
-        if (val) {
-          landing.api.params.filter_jam_kerja = val
-        } else {
-          delete landing.api.params.filter_jam_kerja
-        }
-        if (apiTable && apiTable.value && typeof apiTable.value.reload === 'function') {
-          apiTable.value.reload()
-        }
-      }
-    }
-
-    this.inputStart.addEventListener('change', onChange)
-    this.inputEnd.addEventListener('change', onChange)
-    this.btnClear.addEventListener('click', (ev) => {
-      ev.stopPropagation()
-      this.inputStart.value = ''
-      this.inputEnd.value = ''
-      onChange()
-    })
-  }
-
-  getGui() {
-    return this.eGui
-  }
-
-  onParentModelChanged(parentModel) {
-    if (!parentModel) {
-      if (this.inputStart) this.inputStart.value = ''
-      if (this.inputEnd) this.inputEnd.value = ''
-    } else if (typeof parentModel === 'string' && parentModel.includes('-')) {
-      const parts = parentModel.split('-').map(x => x.trim())
-      if (this.inputStart) this.inputStart.value = parts[0] || ''
-      if (this.inputEnd) this.inputEnd.value = parts[1] || ''
-    }
-  }
-
-  destroy() {}
-}
 
 function attachJamKerjaTimeFilter() {
   if (typeof document === 'undefined') return false
 
-  // Find floating filter cell for jam_kerja with flexible selectors
+  // Find floating filter cell or input for jam_kerja in the table
   const cells = document.querySelectorAll(
     '[col-id="jam_kerja"], ' +
     '.ag-header-cell[col-id="jam_kerja"], ' +
@@ -487,7 +363,7 @@ function attachJamKerjaTimeFilter() {
 
   cells.forEach(c => {
     const inp = c.querySelector('input')
-    if (inp && !inp.classList.contains('time-filter-table-input')) {
+    if (inp && !inp.classList.contains('time-filter-custom-input')) {
       targetInput = inp
       container = inp.parentElement || c
     }
@@ -496,7 +372,11 @@ function attachJamKerjaTimeFilter() {
   if (!targetInput || !container) return false
   if (container.querySelector('.time-range-filter-wrapper')) return true
 
-  // Hide the default single text input
+  // Set placeholder on default input for keyboard typing
+  targetInput.placeholder = '07:00 - 16:00'
+  targetInput.title = 'Pilih atau ketik jam kerja (contoh: 07:00 - 16:00 atau 07:00)'
+
+  // Hide the default text input to mount dual time picker
   targetInput.style.display = 'none'
 
   const wrapper = document.createElement('div')
@@ -509,20 +389,19 @@ function attachJamKerjaTimeFilter() {
   wrapper.style.height = '100%'
   wrapper.style.padding = '0 2px'
 
-  const inputStart = document.createElement('input')
-  inputStart.type = 'time'
-  inputStart.className = 'time-filter-table-input time-filter-table-start'
-  inputStart.style.width = 'calc(50% - 9px)'
-  inputStart.style.height = '24px'
-  inputStart.style.fontSize = '11px'
-  inputStart.style.padding = '0 2px'
-  inputStart.style.border = '1px solid #d1d5db'
-  inputStart.style.borderRadius = '4px'
-  inputStart.style.backgroundColor = '#ffffff'
-  inputStart.style.color = '#374151'
-  inputStart.style.textAlign = 'center'
-  inputStart.title = 'Jam Mulai'
-  inputStart.value = filterJamMulai.value || ''
+  const inStart = document.createElement('input')
+  inStart.type = 'time'
+  inStart.className = 'time-filter-custom-input'
+  inStart.style.width = 'calc(50% - 9px)'
+  inStart.style.height = '24px'
+  inStart.style.fontSize = '11px'
+  inStart.style.padding = '0 2px'
+  inStart.style.border = '1px solid #d1d5db'
+  inStart.style.borderRadius = '4px'
+  inStart.style.backgroundColor = '#ffffff'
+  inStart.style.color = '#374151'
+  inStart.style.textAlign = 'center'
+  inStart.title = 'Jam Mulai'
 
   const sep = document.createElement('span')
   sep.textContent = '-'
@@ -531,55 +410,71 @@ function attachJamKerjaTimeFilter() {
   sep.style.fontSize = '12px'
   sep.style.userSelect = 'none'
 
-  const inputEnd = document.createElement('input')
-  inputEnd.type = 'time'
-  inputEnd.className = 'time-filter-table-input time-filter-table-end'
-  inputEnd.style.width = 'calc(50% - 9px)'
-  inputEnd.style.height = '24px'
-  inputEnd.style.fontSize = '11px'
-  inputEnd.style.padding = '0 2px'
-  inputEnd.style.border = '1px solid #d1d5db'
-  inputEnd.style.borderRadius = '4px'
-  inputEnd.style.backgroundColor = '#ffffff'
-  inputEnd.style.color = '#374151'
-  inputEnd.style.textAlign = 'center'
-  inputEnd.title = 'Jam Selesai'
-  inputEnd.value = filterJamAkhir.value || ''
+  const inEnd = document.createElement('input')
+  inEnd.type = 'time'
+  inEnd.className = 'time-filter-custom-input'
+  inEnd.style.width = 'calc(50% - 9px)'
+  inEnd.style.height = '24px'
+  inEnd.style.fontSize = '11px'
+  inEnd.style.padding = '0 2px'
+  inEnd.style.border = '1px solid #d1d5db'
+  inEnd.style.borderRadius = '4px'
+  inEnd.style.backgroundColor = '#ffffff'
+  inEnd.style.color = '#374151'
+  inEnd.style.textAlign = 'center'
+  inEnd.title = 'Jam Selesai'
 
-  const btnClear = document.createElement('button')
-  btnClear.type = 'button'
-  btnClear.innerHTML = '&times;'
-  btnClear.style.border = 'none'
-  btnClear.style.background = 'transparent'
-  btnClear.style.color = '#9ca3af'
-  btnClear.style.fontSize = '14px'
-  btnClear.style.fontWeight = 'bold'
-  btnClear.style.cursor = 'pointer'
-  btnClear.style.padding = '0 1px'
-  btnClear.style.lineHeight = '1'
-  btnClear.title = 'Reset'
+  const btnReset = document.createElement('button')
+  btnReset.type = 'button'
+  btnReset.innerHTML = '&times;'
+  btnReset.style.border = 'none'
+  btnReset.style.background = 'transparent'
+  btnReset.style.color = '#9ca3af'
+  btnReset.style.fontSize = '14px'
+  btnReset.style.fontWeight = 'bold'
+  btnReset.style.cursor = 'pointer'
+  btnReset.style.padding = '0 1px'
+  btnReset.style.lineHeight = '1'
+  btnReset.title = 'Reset Jam'
 
-  wrapper.appendChild(inputStart)
+  wrapper.appendChild(inStart)
   wrapper.appendChild(sep)
-  wrapper.appendChild(inputEnd)
-  wrapper.appendChild(btnClear)
+  wrapper.appendChild(inEnd)
+  wrapper.appendChild(btnReset)
 
-  const handleTimeChange = () => {
-    filterJamMulai.value = inputStart.value || ''
-    filterJamAkhir.value = inputEnd.value || ''
-    applyJamKerjaFilter()
+  if (targetInput.value && targetInput.value.includes('-')) {
+    const parts = targetInput.value.split('-').map(x => x.trim())
+    inStart.value = parts[0] || ''
+    inEnd.value = parts[1] || ''
   }
 
-  inputStart.addEventListener('change', handleTimeChange)
-  inputEnd.addEventListener('change', handleTimeChange)
+  const onTimeChange = () => {
+    const s = inStart.value || ''
+    const e = inEnd.value || ''
+    let val = ''
+    if (s && e) {
+      val = `${s} - ${e}`
+    } else if (s) {
+      val = `${s} -`
+    } else if (e) {
+      val = `- ${e}`
+    }
 
-  btnClear.addEventListener('click', (ev) => {
+    targetInput.value = val
+    targetInput.dispatchEvent(new Event('input', { bubbles: true }))
+    targetInput.dispatchEvent(new Event('change', { bubbles: true }))
+  }
+
+  inStart.addEventListener('change', onTimeChange)
+  inEnd.addEventListener('change', onTimeChange)
+
+  btnReset.addEventListener('click', (ev) => {
     ev.stopPropagation()
-    inputStart.value = ''
-    inputEnd.value = ''
-    filterJamMulai.value = ''
-    filterJamAkhir.value = ''
-    applyJamKerjaFilter()
+    inStart.value = ''
+    inEnd.value = ''
+    targetInput.value = ''
+    targetInput.dispatchEvent(new Event('input', { bubbles: true }))
+    targetInput.dispatchEvent(new Event('change', { bubbles: true }))
   })
 
   container.appendChild(wrapper)
@@ -594,10 +489,10 @@ function initJamKerjaFilterObserver() {
   const interval = setInterval(() => {
     const attached = attachJamKerjaTimeFilter()
     retries++
-    if (attached || retries > 20) {
+    if (attached || retries > 25) {
       clearInterval(interval)
     }
-  }, 250)
+  }, 200)
 
   const target = document.querySelector('.bg-white') || document.body
   if (target && window.MutationObserver) {
@@ -775,7 +670,9 @@ const landing = reactive({
     field: 'jam_kerja',
     sortable: true,
     filter: 'ColFilter',
-    floatingFilterComponent: JamKerjaFloatingFilter,
+    filterParams: {
+      placeholder: '07:00 - 16:00'
+    },
     resizable: true,
     flex: 1,
     cellClass: ['border-r', '!border-gray-200', 'justify-start'],
@@ -891,12 +788,46 @@ watch(() => ({ ...(landing.api && landing.api.params) }), (newParams) => {
     modified = true
   }
 
+  if (currentWhere && currentWhere.includes('jam_kerja')) {
+    conds = conds.map(c => {
+      if (!c.includes('jam_kerja')) return c
+      return c.replace(/(?:this\.|m_jam_kerja\.)?jam_kerja\s*(?:=|ilike|like)\s*['"]%?([^%'"]*)%?['"]/gi, (match, raw) => {
+        const val = raw.replace(/\./g, ':').trim()
+        if (!val) return '1=1'
+        if (val.includes('-')) {
+          const [s, e] = val.split('-').map(x => x.trim())
+          if (s && e) {
+            return `(m_jam_kerja.waktu_mulai::text ilike '%${s}%' and m_jam_kerja.waktu_akhir::text ilike '%${e}%')`
+          } else if (s) {
+            return `m_jam_kerja.waktu_mulai::text ilike '%${s}%'`
+          } else if (e) {
+            return `m_jam_kerja.waktu_akhir::text ilike '%${e}%'`
+          }
+        }
+        return `(m_jam_kerja.waktu_mulai::text ilike '%${val}%' or m_jam_kerja.waktu_akhir::text ilike '%${val}%')`
+      })
+    })
+    modified = true
+  }
+
   if (jamKerja !== undefined) {
-    const val = String(jamKerja).trim()
+    const val = String(jamKerja).replace(/\./g, ':').trim()
     conds = conds.filter(c => !/(?:this|m_jam_kerja)\.waktu_mulai/i.test(c))
-    if (val === '') {
-      delete landing.api.params.filter_jam_kerja
+    if (val !== '') {
+      if (val.includes('-')) {
+        const [s, e] = val.split('-').map(x => x.trim())
+        if (s && e) {
+          conds.push(`(m_jam_kerja.waktu_mulai::text ilike '%${s}%' and m_jam_kerja.waktu_akhir::text ilike '%${e}%')`)
+        } else if (s) {
+          conds.push(`m_jam_kerja.waktu_mulai::text ilike '%${s}%'`)
+        } else if (e) {
+          conds.push(`m_jam_kerja.waktu_akhir::text ilike '%${e}%'`)
+        }
+      } else {
+        conds.push(`(m_jam_kerja.waktu_mulai::text ilike '%${val}%' or m_jam_kerja.waktu_akhir::text ilike '%${val}%')`)
+      }
     }
+    delete landing.api.params.filter_jam_kerja
     modified = true
   }
 
