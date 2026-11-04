@@ -1,7 +1,7 @@
 # ðŸ“ NOTULENSI & REKAP HASIL SHOWING HRIS BBS
 **Tanggal Pelaksanaan Showing:** Rabu, 28 Oktober 2026  
 **Tanggal Penyusunan Rekap:** Kamis, 29 Oktober 2026  
-**Pembaruan Status Terakhir:** Selasa, 3 November 2026  
+**Pembaruan Status Terakhir:** Rabu, 4 November 2026  
 **Target Rilis / Presentasi Lanjutan:** Jumat, 6 November 2026 (Pukul 13:00 WIB via Zoom)  
 **Narasumber / Pencatat Lapangan:** Mas Duta (On-Site BBS Kupang Indah)  
 **Dukungan Teknis & Remote:** Rey (Dev Lead)
@@ -135,7 +135,7 @@ Terdapat beberapa penyesuaian aturan bisnis (*business logic*) dan permintaan fi
 
 ---
 
-## 📊 Matriks Status Pengerjaan (Update 3 November 2026)
+## 📊 Matriks Status Pengerjaan (Update 4 November 2026)
 
 | No | Modul / Fitur | PIC | Status | Keterangan & Commit |
 |---|---|---|:---:|---|
@@ -148,7 +148,12 @@ Terdapat beberapa penyesuaian aturan bisnis (*business logic*) dan permintaan fi
 | 7 | **Sinkronisasi Resign & Inactive Karyawan** | Rey / Tim | ✅ Selesai | Two-way reactive trigger `tgl_berhenti` $\leftrightarrow$ `is_active` & auto-deactivate `default_users` |
 | 8 | **PPh 21 Disubsidi Perusahaan (Gross-up)** | Rey | ✅ Selesai | Tunjangan PPh 21 subsidi perusahaan penyeimbang potongan pajak agar take home pay utuh |
 | 9 | **Mutasi Karyawan Prorata (Opsi 2)** | Rey Cannavaro | ✅ Selesai | Prorata split tanggal divisi lama vs baru, snapshot gaji pokok/acuan di t_mutasi, & sinkronisasi m_kary |
-| 10 | **Aturan Cuti 12 Hari & Split Izin Khusus** | Rey Cannavaro | ✅ Selesai | Batas 3 hari berturut-turut, SKD wajib lampiran, & izin khusus (Menikah/Meninggal/Sakit) bebas kuota 12 hari |
+| 10 | **Aturan Cuti 12 Hari, Validasi SKD & Self-Approval (`t_cuti`)** | Rey Cannavaro | ✅ Selesai | Batas 3 hari berturut-turut, wajib lampiran SKD, company field, & izin self-approval superadmin (`431784f`) |
+| 11 | **Approval Lembur Siklus 2 & Catatan Revisi (`t_lembur`)** | Duta & Rey | ✅ Selesai | Fix tombol aksi Approver 2 status HALF APPROVED siklus 2 & mandatory revisi note frontend-backend (`d9f0f2f`) |
+| 12 | **Validasi Duplikasi Tarif Lembur & Reset Copy (`m_lembur`)** | Rey Cannavaro | ✅ Selesai | Cek duplikasi company-divisi-dept, reset kode saat copy data, & toggle status filter (`c1d7fc4`, `92ab949`) |
+| 13 | **Perbaikan Form Master Pengguna (`m_pengguna`)** | Rey Cannavaro | ✅ Selesai | Fix teks tumpang tindih saat pilih NIK, bersihkan placeholder company, & sinkronisasi status aktif (`2f91940`) |
+| 14 | **Penyempurnaan Master Karyawan (`m_kary` / QA Feedback)** | Rey Cannavaro | ✅ Selesai | Fix NIK vs No KTP, edit/delete interaktif baris detail, preview ijazah/referensi, & fix blank form create (`e747651`, `3a97c8c`, `569dc6c`) |
+| 15 | **Refactor Grid Layout Form Gaji (`t_perhitungan_gaji`)** | Duta & Rey | ✅ Selesai | Pindahkan dropdown Tipe Penggajian ke samping periode tanggal (grid simetris 2 kolom) (`3398589`) |
 
 ---
 
