@@ -2,6 +2,14 @@
 <div class="bg-white p-6 rounded-xl h-[570px]">
   <TableApi ref='apiTable' :api="landing.api" :columns="landing.columns" :actions="landing.actions">
     <template #header>
+      <div class="flex items-center gap-x-2 mr-2">
+        <p class="text-sm font-medium">Filter Status :</p>
+        <div class="flex gap-x-2">
+          <button @click="filterShowData(true,1)" :class="activeBtn === 1?'bg-green-600 text-white hover:bg-green-400':'border border-green-600 text-green-600 bg-white hover:bg-green-600 hover:text-white'" class="duration-300 transform hover:-translate-y-0.5 rounded-md py-1 px-2 text-sm">Active</button>
+          <div class="flex my-auto h-4 w-0.5 bg-[#6E91D1]"></div>
+          <button @click="filterShowData(false,2)" :class="activeBtn === 2?'bg-red-600 text-white hover:bg-red-400':'border border-red-600 text-red-600 bg-white hover:bg-red-600 hover:text-white'" class="duration-300 transform hover:-translate-y-0.5 rounded-md py-1 px-2 text-sm">Inactive</button>
+        </div>
+      </div>
       <RouterLink v-if="currentMenu?.can_create||true||store.user.data.username==='developer'" :to="$route.path+'/create?'+(Date.parse(new Date()))" class="bg-green-500 text-white hover:bg-green-600 rounded-[6px] py-2 px-[12.5px]">
         <icon fa="plus" />
         Tambah Data
@@ -17,14 +25,14 @@
     <div class="flex flex-col border rounded shadow-sm px-6 py-6 <md:w-full w-full bg-white">
       <div class="mb-4">
         <h1 class="text-[24px] mb-4 font-bold">
-          Form Lembur
+          Form Tarif Lembur
         </h1>
         <hr>
       </div>
       <div class="grid <md:grid-cols-1 grid-cols-2 gap-2">
         <!-- START COLUMN -->
         <div>
-          <label for="Direktorat" class="font-semibold select-all">Direktorat <span class="text-red-500 space-x-0 pl-0"></span></label>
+          <label for="Direktorat" class="font-semibold select-all">Company <span class="text-red-500 space-x-0 pl-0"></span></label>
           <FieldX :bind="{ readonly: true }" class="w-full py-2 !mt-0"
               :value="values.direktorat" :errorText="formErrors.direktorat?'failed':''"
               @input="v=>values.direktorat=v" :hints="formErrors.direktorat" 
@@ -40,7 +48,7 @@
               @input="v=>values.kode=v" :hints="formErrors.kode" 
               :check="false"
               label=""
-              placeholder=""
+              placeholder="[Auto Generate]"
           />
         </div>
         <div>
@@ -159,7 +167,7 @@
           >
           <div class="flex w-40">
             <div class="flex-auto">
-              <i class="text-red-500">Tidak Aktif</i>
+              <i class="text-red-500">Inactive</i>
             </div>
             <div class="flex-auto">
               <input
@@ -172,7 +180,7 @@
                 />
             </div>
             <div class="flex-auto">
-              <i class="text-green-500">Aktif</i>
+              <i class="text-green-500">Active</i>
             </div>
           </div>
         </div>

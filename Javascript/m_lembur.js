@@ -21,7 +21,7 @@ const tsId = `ts=`+(Date.parse(new Date()))
 // ------------------------------ PERSIAPAN
 const endpointApi = '/m_lembur'
 onBeforeMount(()=>{
-  document.title = 'Master Lembur'
+  document.title = 'Tarif Lembur'
 })
 
 //  @if( $id )------------------- VALUES FORM ! PENTING JANGAN DIHAPUS
@@ -70,6 +70,13 @@ onBeforeMount(async () => {
   for (const key in initialValues) {
     values[key] = initialValues[key]
   }
+  if (initialValues.is_active !== undefined) {
+    values.is_active = (initialValues.is_active === true || initialValues.is_active === 1 || initialValues.is_active === '1' || initialValues.is_active === 'true' || initialValues.is_active === 't')
+  }
+  if (actionText.value === 'Copy' || route.query.action === 'Copy') {
+    values.kode = null
+    delete values.id
+  }
 })
 
 function onBack() {
@@ -107,6 +114,16 @@ async function onSave() {
   //values.tags = JSON.stringify(values.tags)
       try {
         const isCreating = ['Create','Copy','Tambah'].includes(actionText.value)
+        const payload = {
+          ...values,
+          is_active: Boolean(values.is_active)
+        }
+        if (isCreating) {
+          delete payload.id
+          if (actionText.value === 'Copy' || route.query.action === 'Copy') {
+            payload.kode = null
+          }
+        }
         const dataURL = `${store.server.url_backend}/operation${endpointApi}${isCreating ? '' : ('/' + route.params.id)}`
         isRequesting.value = true
         const res = await fetch(dataURL, {
@@ -115,7 +132,7 @@ async function onSave() {
             'Content-Type': 'Application/json',
             Authorization: `${store.user.token_type} ${store.user.token}`
           },
-          body: JSON.stringify(values)
+          body: JSON.stringify(payload)
         })
         if (!res.ok) {
           if ([400, 422].includes(res.status)) {
@@ -135,6 +152,23 @@ async function onSave() {
         })
       }
       isRequesting.value = false
+}
+
+// Filter Action Button
+const activeBtn = ref(null)
+
+function filterShowData(params, noBtn) {
+  if (activeBtn.value === noBtn) {
+    activeBtn.value = null
+    delete landing.api.params.where
+  } else {
+    activeBtn.value = noBtn
+    landing.api.params.where = `this.is_active=${params ? 'true' : 'false'}`
+  }
+
+  if (apiTable.value) {
+    apiTable.value.reload()
+  }
 }
 
 //  @else----------------------- LANDING
@@ -215,6 +249,9 @@ const landing = reactive({
       authorization: `${store.user.token_type} ${store.user.token}`
     },
     params: {
+      simplest: true,
+      join: true,
+      searchfield: 'this.kode, m_dir.nama, m_divisi.nama, m_dept.nama, this.grading, this.besaran, this.is_active',
     },
     onsuccess(response) {
       response.page = response.current_page
@@ -296,6 +333,31 @@ const landing = reactive({
     valueFormatter: (params) => {
       const val = Number(params.value || 0)
       return 'Rp ' + val.toLocaleString('id-ID')
+    }
+  },
+  {
+    headerName: 'Status',
+    field: 'status',
+    filter: 'ColFilter',
+    filterParams: {
+      options: ['Active', 'Inactive']
+    },
+    filterValueGetter: (params) => {
+      const val = params.data ? (params.data.status !== undefined ? params.data.status : params.data.is_active) : params.value
+      return (val === 'Active' || val === true || val === 1 || val === '1' || val === 'true' || val === 't') ? 'Active' : 'Inactive'
+    },
+    valueGetter: (params) => {
+      const val = params.data ? (params.data.status !== undefined ? params.data.status : params.data.is_active) : params.value
+      return (val === 'Active' || val === true || val === 1 || val === '1' || val === 'true' || val === 't') ? 'Active' : 'Inactive'
+    },
+    sortable: true,
+    resizable: true,
+    flex: 1,
+    cellClass: ['border-r', '!border-gray-200', 'justify-center'],
+    cellRenderer: ({ value }) => {
+      return value === 'Active' || value === true
+        ? `<span class="text-green-500 rounded-md text-xs font-medium px-4 py-1 inline-block capitalize">Active</span>`
+        : `<span class="text-red-500 rounded-md text-xs font-medium px-4 py-1 inline-block capitalize">Inactive</span>`
     }
   }]
 })
