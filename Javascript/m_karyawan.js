@@ -325,9 +325,9 @@ onBeforeMount(async () => {
         initialValues.is_active = (initialValues.is_active === true || initialValues.is_active === 1 || initialValues.is_active === 'true') ? 1 : 0
       }
 
-      if (initialValues['tipe_jam_kerja.value'] == 'OFFICE') {
-        getJadwalKerjaOffice()
-      }
+      // if (initialValues['tipe_jam_kerja.value'] == 'OFFICE') {
+      //   getJadwalKerjaOffice()
+      // }
 
       initialValues['m_kary_det_pend']?.forEach(async (item) => {
         const res = await fetch(`${store.server.url_backend}/operation/m_general/${item.tingkat_id}`, {
@@ -514,6 +514,7 @@ onBeforeMount(async () => {
 
   if (values.m_kary_det_kartu?.length > 0) {
     values.ktp_no = values.m_kary_det_kartu[0].ktp_no
+    values.nik = values.ktp_no || initialValues.nik || ''
     values.kk_no = values.m_kary_det_kartu[0].kk_no
     values.npwp_no = values.m_kary_det_kartu[0].npwp_no
     values.npwp_tgl_berlaku = values.m_kary_det_kartu[0].npwp_tgl_berlaku
@@ -534,6 +535,24 @@ onBeforeMount(async () => {
     tempPasfoto = values.m_kary_det_kartu[0].pas_foto
     tempKTP = values.m_kary_det_kartu[0].ktp_foto
     tempKK = values.m_kary_det_kartu[0].kk_foto
+
+    if (actionText.value === 'Copy') {
+      urlPasFoto.value = ''
+      urlKKFoto.value = ''
+      urlKTPFoto.value = ''
+      urlNPWPFoto.value = ''
+      urlBPJSFoto.value = ''
+      tempBPJS = null
+      tempNPWP = null
+      tempPasfoto = null
+      tempKTP = null
+      tempKK = null
+      values.m_kary_det_kartu[0].pas_foto = null
+      values.m_kary_det_kartu[0].ktp_foto = null
+      values.m_kary_det_kartu[0].kk_foto = null
+      values.m_kary_det_kartu[0].npwp_foto = null
+      values.m_kary_det_kartu[0].bpjs_foto = null
+    }
   }
 
   setTimeout(() => {
@@ -566,16 +585,8 @@ async function getJadwalKerjaOffice() {
 }
 
 const changeTipeJamKerja = (v) => {
-  console.log(v)
-  console.log("OK", v.value)
-  values['tipe_jam_kerja.value'] = v.value
-  if (v.value?.toLowerCase() == 'office') {
-    if (initialValues.jadwal_kerja?.id) {
-      values.t_jadwal_kerja_id = initialValues.jadwal_kerja?.id
-    } else {
-      getJadwalKerjaOffice()
-    }
-  }
+  values['tipe_jam_kerja.value'] = v?.value
+  // Tidak memaksakan autofill getJadwalKerjaOffice agar user leluasa memilih jadwal kerja
 }
 
 // preview image
@@ -683,6 +694,17 @@ for (let i = thisYear; i >= 1973; i--) {
   ArrTahun.push(i)
 }
 
+// Helper Preview File
+const previewFile = (fileName, folder = '') => {
+  if (!fileName) return
+  if (fileName.startsWith('http://') || fileName.startsWith('https://') || fileName.startsWith('blob:')) {
+    window.open(fileName, '_blank')
+  } else {
+    window.open(`${store.server.url_backend}/uploads/${folder}/${fileName}`, '_blank')
+  }
+}
+window.previewFileKaryawan = previewFile
+
 // Pendidikan
 let _idPend = 0
 const detailPendidikan = ref([])
@@ -700,184 +722,372 @@ async function fileIjazah(e) {
       e.target.value = null
       return
     }
-    valuesPendidikan.ijazah_foto = file[0].name
+    valuesPendidikan.ijazah_url = URL.createObjectURL(file[0])
     var formData = new FormData()
     formData.append('file', file[0])
-    await fetch(`${store.server.url_backend}/operation/m_kary_det_pend/upload` + '?' + `field=ijazah_foto`, {
+    const res = await fetch(`${store.server.url_backend}/operation/m_kary_det_pend/upload` + '?' + `field=ijazah_foto`, {
       method: 'POST',
       headers: {
         Authorization: `${store.user.token_type} ${store.user.token}`
       },
       body: formData
     })
+    if (res.ok) {
+      const resJson = await res.json().catch(() => ({}))
+      valuesPendidikan.ijazah_foto = resJson.data || resJson.filename || file[0].name
+    } else {
+      valuesPendidikan.ijazah_foto = file[0].name
+    }
   }
 }
 
+// 1. Pendidikan
 const addPendidikan = async () => {
-  var tempObj = {}
-  valuesPendidikan._id = ++_idPend
-  for (const key in valuesPendidikan) {
-    if (key !== 'desc') {
-      if (valuesPendidikan[key] == null) {
-        tempObj[key] = ['Bidang ini wajib diisi']
-      }
-    }
-  }
+  const tempObj = {}
+  if (!valuesPendidikan.tingkat_id) tempObj.tingkat_id = ['Tingkat wajib dipilih']
+  if (!valuesPendidikan.nama_sekolah) tempObj.nama_sekolah = ['Nama Sekolah wajib diisi']
+  if (!valuesPendidikan.thn_masuk) tempObj.thn_masuk = ['Tahun Masuk wajib dipilih']
+  if (!valuesPendidikan.thn_lulus) tempObj.thn_lulus = ['Tahun Lulus wajib dipilih']
+
   if (Object.keys(tempObj).length >= 1) {
     formErrorsPend.value = tempObj
     swal.fire({
       icon: 'error',
-      text: 'Masih ada field yang belum terisi'
+      text: 'Masih ada field wajib pendidikan yang belum terisi'
     })
     return
   }
-  detailPendidikan.value = [...detailPendidikan.value, { ...valuesPendidikan }]
+
+  const payloadPend = { ...valuesPendidikan }
+  if (payloadPend._id) {
+    const idx = detailPendidikan.value.findIndex(e => e._id === payloadPend._id)
+    if (idx !== -1) {
+      detailPendidikan.value[idx] = payloadPend
+      detailPendidikan.value = [...detailPendidikan.value]
+    } else {
+      detailPendidikan.value = [...detailPendidikan.value, payloadPend]
+    }
+  } else {
+    payloadPend._id = ++_idPend
+    detailPendidikan.value = [...detailPendidikan.value, payloadPend]
+  }
+
   Object.keys(valuesPendidikan).forEach(key => valuesPendidikan[key] = null)
-  fileIjz.value.value = null
+  if (fileIjz.value) fileIjz.value.value = null
   formErrorsPend.value = {}
   valuesPendidikan.thn_masuk = thisYear
   valuesPendidikan.thn_lulus = thisYear
 }
 
-// Keluarga
+const onEditPendidikan = (row) => {
+  for (const k in valuesPendidikan) {
+    if (k in row) valuesPendidikan[k] = row[k]
+  }
+}
+
+const onDeletePendidikan = (row, api) => {
+  swal.fire({
+    icon: 'warning',
+    showDenyButton: true,
+    text: 'Hapus baris data pendidikan ini?',
+    confirmButtonText: 'Ya, Hapus',
+    denyButtonText: 'Batal'
+  }).then((res) => {
+    if (res.isConfirmed) {
+      detailPendidikan.value = detailPendidikan.value.filter(e => e._id !== row._id)
+      if (api) api.applyTransaction({ remove: [row] })
+    }
+  })
+}
+
+// 2. Keluarga
 let _idKel = 0
 const detailKeluarga = ref([])
 
 const addKeluarga = async () => {
-  var tempObj = {}
-  valuesKeluarga._id = ++_idKel
-  for (const key in valuesKeluarga) {
-    if (key !== 'desc') {
-      if (valuesKeluarga[key] == null) {
-        tempObj[key] = ['Bidang ini wajib diisi']
-      }
-    }
-  }
+  const tempObj = {}
+  if (!valuesKeluarga.keluarga_id) tempObj.keluarga_id = ['Keluarga wajib dipilih']
+  if (!valuesKeluarga.nama) tempObj.nama = ['Nama anggota keluarga wajib diisi']
+
   if (Object.keys(tempObj).length >= 1) {
     formErrorsKel.value = tempObj
     swal.fire({
       icon: 'error',
-      text: 'Masih ada field yang belum terisi'
+      text: 'Masih ada field keluarga yang belum terisi'
     })
     return
   }
-  detailKeluarga.value = [...detailKeluarga.value, { ...valuesKeluarga }]
+
+  const payloadKel = { ...valuesKeluarga }
+  if (payloadKel._id) {
+    const idx = detailKeluarga.value.findIndex(e => e._id === payloadKel._id)
+    if (idx !== -1) {
+      detailKeluarga.value[idx] = payloadKel
+      detailKeluarga.value = [...detailKeluarga.value]
+    } else {
+      detailKeluarga.value = [...detailKeluarga.value, payloadKel]
+    }
+  } else {
+    payloadKel._id = ++_idKel
+    detailKeluarga.value = [...detailKeluarga.value, payloadKel]
+  }
+
   Object.keys(valuesKeluarga).forEach(key => valuesKeluarga[key] = null)
   formErrorsKel.value = {}
 }
 
-// Pelatihan
+const onEditKeluarga = (row) => {
+  for (const k in valuesKeluarga) {
+    if (k in row) valuesKeluarga[k] = row[k]
+  }
+}
+
+const onDeleteKeluarga = (row, api) => {
+  swal.fire({
+    icon: 'warning',
+    showDenyButton: true,
+    text: 'Hapus baris data keluarga ini?',
+    confirmButtonText: 'Ya, Hapus',
+    denyButtonText: 'Batal'
+  }).then((res) => {
+    if (res.isConfirmed) {
+      detailKeluarga.value = detailKeluarga.value.filter(e => e._id !== row._id)
+      if (api) api.applyTransaction({ remove: [row] })
+    }
+  })
+}
+
+// 3. Pelatihan
 let _idPel = 0
 const detailPelatihan = ref([])
 
 const addPelatihan = async () => {
-  var tempObj = {}
-  valuesPelatihan._id = ++_idPel
-  for (const key in valuesPelatihan) {
-    if (key !== 'catatan') {
-      if (valuesPelatihan[key] == null) {
-        tempObj[key] = ['Bidang ini wajib diisi']
-      }
-    }
-  }
+  const tempObj = {}
+  if (!valuesPelatihan.nama_pel) tempObj.nama_pel = ['Nama Pelatihan wajib diisi']
+  if (!valuesPelatihan.tahun) tempObj.tahun = ['Tahun wajib dipilih']
+
   if (Object.keys(tempObj).length >= 1) {
     formErrorsPel.value = tempObj
     swal.fire({
       icon: 'error',
-      text: 'Masih ada field yang belum terisi'
+      text: 'Masih ada field pelatihan yang belum terisi'
     })
     return
   }
-  detailPelatihan.value = [...detailPelatihan.value, { ...valuesPelatihan }]
+
+  const payloadPel = { ...valuesPelatihan }
+  if (payloadPel._id) {
+    const idx = detailPelatihan.value.findIndex(e => e._id === payloadPel._id)
+    if (idx !== -1) {
+      detailPelatihan.value[idx] = payloadPel
+      detailPelatihan.value = [...detailPelatihan.value]
+    } else {
+      detailPelatihan.value = [...detailPelatihan.value, payloadPel]
+    }
+  } else {
+    payloadPel._id = ++_idPel
+    detailPelatihan.value = [...detailPelatihan.value, payloadPel]
+  }
+
   Object.keys(valuesPelatihan).forEach(key => valuesPelatihan[key] = null)
   formErrorsPel.value = {}
   valuesPelatihan.tahun = thisYear
 }
 
-// Prestasi
+const onEditPelatihan = (row) => {
+  for (const k in valuesPelatihan) {
+    if (k in row) valuesPelatihan[k] = row[k]
+  }
+}
+
+const onDeletePelatihan = (row, api) => {
+  swal.fire({
+    icon: 'warning',
+    showDenyButton: true,
+    text: 'Hapus baris data pelatihan ini?',
+    confirmButtonText: 'Ya, Hapus',
+    denyButtonText: 'Batal'
+  }).then((res) => {
+    if (res.isConfirmed) {
+      detailPelatihan.value = detailPelatihan.value.filter(e => e._id !== row._id)
+      if (api) api.applyTransaction({ remove: [row] })
+    }
+  })
+}
+
+// 4. Prestasi
 let _idPres = 0
 const detailPrestasi = ref([])
 
 const addPrestasi = async () => {
-  var tempObj = {}
-  valuesPrestasi._id = ++_idPres
-  for (const key in valuesPrestasi) {
-    if (key !== 'catatan') {
-      if (valuesPrestasi[key] == null) {
-        tempObj[key] = ['Bidang ini wajib diisi']
-      }
-    }
-  }
+  const tempObj = {}
+  if (!valuesPrestasi.nama_pres) tempObj.nama_pres = ['Nama Prestasi wajib diisi']
+  if (!valuesPrestasi.tahun) tempObj.tahun = ['Tahun wajib dipilih']
+
   if (Object.keys(tempObj).length >= 1) {
     formErrorsPres.value = tempObj
     swal.fire({
       icon: 'error',
-      text: 'Masih ada field yang belum terisi'
+      text: 'Masih ada field prestasi yang belum terisi'
     })
     return
   }
-  detailPrestasi.value = [...detailPrestasi.value, { ...valuesPrestasi }]
+
+  const payloadPres = { ...valuesPrestasi }
+  if (payloadPres._id) {
+    const idx = detailPrestasi.value.findIndex(e => e._id === payloadPres._id)
+    if (idx !== -1) {
+      detailPrestasi.value[idx] = payloadPres
+      detailPrestasi.value = [...detailPrestasi.value]
+    } else {
+      detailPrestasi.value = [...detailPrestasi.value, payloadPres]
+    }
+  } else {
+    payloadPres._id = ++_idPres
+    detailPrestasi.value = [...detailPrestasi.value, payloadPres]
+  }
+
   Object.keys(valuesPrestasi).forEach(key => valuesPrestasi[key] = null)
   formErrorsPres.value = {}
   valuesPrestasi.tahun = thisYear
 }
 
-// Organisasi
+const onEditPrestasi = (row) => {
+  for (const k in valuesPrestasi) {
+    if (k in row) valuesPrestasi[k] = row[k]
+  }
+}
+
+const onDeletePrestasi = (row, api) => {
+  swal.fire({
+    icon: 'warning',
+    showDenyButton: true,
+    text: 'Hapus baris data prestasi ini?',
+    confirmButtonText: 'Ya, Hapus',
+    denyButtonText: 'Batal'
+  }).then((res) => {
+    if (res.isConfirmed) {
+      detailPrestasi.value = detailPrestasi.value.filter(e => e._id !== row._id)
+      if (api) api.applyTransaction({ remove: [row] })
+    }
+  })
+}
+
+// 5. Organisasi
 let _idOrg = 0
 const detailOrganisasi = ref([])
 
 const addOrganisasi = async () => {
-  var tempObj = {}
-  valuesOrganisasi._id = ++_idOrg
-  for (const key in valuesOrganisasi) {
-    if (key !== 'catatan') {
-      if (valuesOrganisasi[key] == null) {
-        tempObj[key] = ['Bidang ini wajib diisi']
-      }
-    }
-  }
+  const tempObj = {}
+  if (!valuesOrganisasi.nama) tempObj.nama = ['Nama Organisasi wajib diisi']
+  if (!valuesOrganisasi.tahun) tempObj.tahun = ['Tahun wajib dipilih']
+
   if (Object.keys(tempObj).length >= 1) {
     formErrorsOrg.value = tempObj
     swal.fire({
       icon: 'error',
-      text: 'Masih ada field yang belum terisi'
+      text: 'Masih ada field organisasi yang belum terisi'
     })
     return
   }
-  detailOrganisasi.value = [...detailOrganisasi.value, { ...valuesOrganisasi }]
+
+  const payloadOrg = { ...valuesOrganisasi }
+  if (payloadOrg._id) {
+    const idx = detailOrganisasi.value.findIndex(e => e._id === payloadOrg._id)
+    if (idx !== -1) {
+      detailOrganisasi.value[idx] = payloadOrg
+      detailOrganisasi.value = [...detailOrganisasi.value]
+    } else {
+      detailOrganisasi.value = [...detailOrganisasi.value, payloadOrg]
+    }
+  } else {
+    payloadOrg._id = ++_idOrg
+    detailOrganisasi.value = [...detailOrganisasi.value, payloadOrg]
+  }
+
   Object.keys(valuesOrganisasi).forEach(key => valuesOrganisasi[key] = null)
   formErrorsOrg.value = {}
   valuesOrganisasi.tahun = thisYear
 }
 
-// Bahasa
+const onEditOrganisasi = (row) => {
+  for (const k in valuesOrganisasi) {
+    if (k in row) valuesOrganisasi[k] = row[k]
+  }
+}
+
+const onDeleteOrganisasi = (row, api) => {
+  swal.fire({
+    icon: 'warning',
+    showDenyButton: true,
+    text: 'Hapus baris data organisasi ini?',
+    confirmButtonText: 'Ya, Hapus',
+    denyButtonText: 'Batal'
+  }).then((res) => {
+    if (res.isConfirmed) {
+      detailOrganisasi.value = detailOrganisasi.value.filter(e => e._id !== row._id)
+      if (api) api.applyTransaction({ remove: [row] })
+    }
+  })
+}
+
+// 6. Bahasa
 let _idBhs = 0
 const detailBahasa = ref([])
 
 const addBahasa = async () => {
-  var tempObj = {}
-  valuesBahasa._id = ++_idBhs
-  for (const key in valuesBahasa) {
-    if (key !== 'catatan') {
-      if (valuesBahasa[key] == null) {
-        tempObj[key] = ['Bidang ini wajib diisi']
-      }
-    }
-  }
+  const tempObj = {}
+  if (!valuesBahasa.bhs_dikuasai) tempObj.bhs_dikuasai = ['Bahasa wajib diisi']
+
   if (Object.keys(tempObj).length >= 1) {
     formErrorsBhs.value = tempObj
     swal.fire({
       icon: 'error',
-      text: 'Masih ada field yang belum terisi'
+      text: 'Masih ada field bahasa yang belum terisi'
     })
     return
   }
-  detailBahasa.value = [...detailBahasa.value, { ...valuesBahasa }]
+
+  const payloadBhs = { ...valuesBahasa }
+  if (payloadBhs._id) {
+    const idx = detailBahasa.value.findIndex(e => e._id === payloadBhs._id)
+    if (idx !== -1) {
+      detailBahasa.value[idx] = payloadBhs
+      detailBahasa.value = [...detailBahasa.value]
+    } else {
+      detailBahasa.value = [...detailBahasa.value, payloadBhs]
+    }
+  } else {
+    payloadBhs._id = ++_idBhs
+    detailBahasa.value = [...detailBahasa.value, payloadBhs]
+  }
+
   Object.keys(valuesBahasa).forEach(key => valuesBahasa[key] = null)
   formErrorsBhs.value = {}
 }
 
-// Pengalaman Kerja
+const onEditBahasa = (row) => {
+  for (const k in valuesBahasa) {
+    if (k in row) valuesBahasa[k] = row[k]
+  }
+}
+
+const onDeleteBahasa = (row, api) => {
+  swal.fire({
+    icon: 'warning',
+    showDenyButton: true,
+    text: 'Hapus baris data bahasa ini?',
+    confirmButtonText: 'Ya, Hapus',
+    denyButtonText: 'Batal'
+  }).then((res) => {
+    if (res.isConfirmed) {
+      detailBahasa.value = detailBahasa.value.filter(e => e._id !== row._id)
+      if (api) api.applyTransaction({ remove: [row] })
+    }
+  })
+}
+
+// 7. Pengalaman Kerja
 let _idPk = 0
 const detailPengalaman = ref([])
 const fileSurat = ref(null)
@@ -894,43 +1104,81 @@ async function fileSrtRef(e) {
       e.target.value = null
       return
     }
-    valuesPengalaman.surat_referensi = file[0].name
+    valuesPengalaman.surat_referensi_url = URL.createObjectURL(file[0])
     var formData = new FormData()
     formData.append('file', file[0])
-    await fetch(`${store.server.url_backend}/operation/m_kary_det_pk/upload` + '?' + `field=surat_referensi`, {
+    const res = await fetch(`${store.server.url_backend}/operation/m_kary_det_pk/upload` + '?' + `field=surat_referensi`, {
       method: 'POST',
       headers: {
         Authorization: `${store.user.token_type} ${store.user.token}`
       },
       body: formData
     })
+    if (res.ok) {
+      const resJson = await res.json().catch(() => ({}))
+      valuesPengalaman.surat_referensi = resJson.data || resJson.filename || file[0].name
+    } else {
+      valuesPengalaman.surat_referensi = file[0].name
+    }
   }
 }
 
 const addPengalaman = async () => {
-  var tempObj = {}
-  valuesPengalaman._id = ++_idPk
-  for (const key in valuesPengalaman) {
-    if (key !== 'catatan') {
-      if (valuesPengalaman[key] == null) {
-        tempObj[key] = ['Bidang ini wajib diisi']
-      }
-    }
-  }
+  const tempObj = {}
+  if (!valuesPengalaman.instansi) tempObj.instansi = ['Nama Instansi wajib diisi']
+  if (!valuesPengalaman.posisi) tempObj.posisi = ['Posisi wajib diisi']
+  if (!valuesPengalaman.thn_masuk) tempObj.thn_masuk = ['Tahun Masuk wajib dipilih']
+  if (!valuesPengalaman.thn_keluar) tempObj.thn_keluar = ['Tahun Keluar wajib dipilih']
+
   if (Object.keys(tempObj)?.length >= 1) {
     formErrorsPK.value = tempObj
     swal.fire({
       icon: 'error',
-      text: 'Masih ada field yang belum terisi'
+      text: 'Masih ada field wajib pengalaman kerja yang belum terisi'
     })
     return
   }
-  detailPengalaman.value = [...detailPengalaman.value, { ...valuesPengalaman }]
+
+  const payloadPK = { ...valuesPengalaman }
+  if (payloadPK._id) {
+    const idx = detailPengalaman.value.findIndex(e => e._id === payloadPK._id)
+    if (idx !== -1) {
+      detailPengalaman.value[idx] = payloadPK
+      detailPengalaman.value = [...detailPengalaman.value]
+    } else {
+      detailPengalaman.value = [...detailPengalaman.value, payloadPK]
+    }
+  } else {
+    payloadPK._id = ++_idPk
+    detailPengalaman.value = [...detailPengalaman.value, payloadPK]
+  }
+
   Object.keys(valuesPengalaman).forEach(key => valuesPengalaman[key] = null)
-  fileSurat.value.value = null
+  if (fileSurat.value) fileSurat.value.value = null
   formErrorsPK.value = {}
   valuesPengalaman.thn_masuk = thisYear
   valuesPengalaman.thn_keluar = thisYear
+}
+
+const onEditPengalaman = (row) => {
+  for (const k in valuesPengalaman) {
+    if (k in row) valuesPengalaman[k] = row[k]
+  }
+}
+
+const onDeletePengalaman = (row, api) => {
+  swal.fire({
+    icon: 'warning',
+    showDenyButton: true,
+    text: 'Hapus baris data pengalaman kerja ini?',
+    confirmButtonText: 'Ya, Hapus',
+    denyButtonText: 'Batal'
+  }).then((res) => {
+    if (res.isConfirmed) {
+      detailPengalaman.value = detailPengalaman.value.filter(e => e._id !== row._id)
+      if (api) api.applyTransaction({ remove: [row] })
+    }
+  })
 }
 
 // ================= FACE RECOGNITION (REVISI: 4 FOTO, HIT /register 4x) =================
@@ -1112,6 +1360,51 @@ function onReset() {
 
 async function onSave() {
   try {
+    formErrors.value = {}
+    const errors = {}
+
+    if (!values.m_dir_id) errors.m_dir_id = ['Company wajib dipilih']
+    if (!values.m_divisi_id) errors.m_divisi_id = ['Divisi wajib dipilih']
+    if (!values.m_dept_id) errors.m_dept_id = ['Departemen wajib dipilih']
+    if (!values.m_posisi_id) errors.m_posisi_id = ['Posisi wajib dipilih']
+    if (!values.m_zona_id) errors.m_zona_id = ['Zona wajib dipilih']
+    if (!values.grading_id) errors.grading_id = ['Grading wajib dipilih']
+    if (!values.m_standart_gaji_id) errors.m_standart_gaji_id = ['Standart Gaji wajib dipilih']
+    if (!values.tipe_jam_kerja_id) errors.tipe_jam_kerja_id = ['Tipe Jam Kerja wajib dipilih']
+    if (!values.costcentre_id && !values.costcontre_id) errors.costcontre_id = ['Costcentre wajib dipilih']
+    if (!values.kode || String(values.kode).trim() === '') errors.kode = ['NIK wajib diisi']
+    if (!values.nama_depan || String(values.nama_depan).trim() === '') errors.nama_depan = ['Nama Karyawan wajib diisi']
+    if (!values.nama_panggilan || String(values.nama_panggilan).trim() === '') errors.nama_panggilan = ['Nama Panggilan wajib diisi']
+    if (!values.jk_id) errors.jk_id = ['Jenis Kelamin wajib dipilih']
+    if (!values.tempat_lahir) errors.tempat_lahir = ['Tempat Lahir wajib diisi']
+    if (!values.tgl_lahir) errors.tgl_lahir = ['Tanggal Lahir wajib diisi']
+    if (!values.alamat_asli && !values.alamat_domisili) errors.alamat_domisili = ['Alamat Tinggal wajib diisi']
+    if (!values.provinsi_id) errors.provinsi_id = ['Provinsi wajib dipilih']
+    if (!values.kota_id) errors.kota_id = ['Kota wajib dipilih']
+    if (!values.kecamatan_id) errors.kecamatan_id = ['Kecamatan wajib dipilih']
+    if (!values.kode_pos) errors.kode_pos = ['Kode Pos wajib diisi']
+    if (!values.no_tlp) errors.no_tlp = ['No. Telepon wajib diisi']
+    if (!values.no_darurat) errors.no_darurat = ['No. Telepon Darurat wajib diisi']
+    if (!values.nama_kontak_darurat) errors.nama_kontak_darurat = ['Nama Kontak Darurat wajib diisi']
+    if (!values.hub_dgn_karyawan) errors.hub_dgn_karyawan = ['Hubungan Dengan Karyawan wajib diisi']
+    if (!values.agama_id) errors.agama_id = ['Agama wajib dipilih']
+    if (!values.gol_darah_id) errors.gol_darah_id = ['Golongan Darah wajib dipilih']
+    if (!values.status_nikah_id) errors.status_nikah_id = ['Status Pernikahan wajib dipilih']
+    if (!values.status_kary_id) errors.status_kary_id = ['Status Karyawan wajib dipilih']
+    if (!values.tgl_masuk) errors.tgl_masuk = ['Tanggal Masuk wajib diisi']
+
+    if (Object.keys(errors).length > 0) {
+      formErrors.value = errors
+      activeTabIndex.value = 0
+      swal.fire({
+        icon: 'warning',
+        title: 'Validasi Gagal',
+        text: 'Mohon lengkapi field mandatory bertanda bintang (*) yang masih kosong'
+      })
+      return
+    }
+
+    values.nik = values.ktp_no || values.nik || ''
     values.nama_lengkap = (values.nama_depan ?? '') + ' ' + (values.nama_belakang ?? '')
     values.m_kary_det_pres = detailPrestasi.value
 
@@ -1137,6 +1430,13 @@ async function onSave() {
     values.m_kary_det_pk = detailPengalaman.value
 
     const isCreating = ['Create', 'Copy', 'Tambah'].includes(actionText.value)
+
+    if (actionText.value === 'Copy') {
+      if (tempKTP && (tempKTP.startsWith('http://') || tempKTP.startsWith('https://'))) tempKTP = null
+      if (tempPasfoto && (tempPasfoto.startsWith('http://') || tempPasfoto.startsWith('https://'))) tempPasfoto = null
+      if (tempKK && (tempKK.startsWith('http://') || tempKK.startsWith('https://'))) tempKK = null
+      if (tempNPWP && (tempNPWP.startsWith('http://') || tempNPWP.startsWith('https://'))) tempNPWP = null
+    }
 
     if (isCreating || values.m_kary_det_kartu?.length === 0) {
       values.m_kary_det_kartu = [{
@@ -1360,7 +1660,8 @@ const landing = reactive({
     flex: 1,
     filter: 'ColFilter',
     resizable: true,
-    cellClass: ['border-r', '!border-gray-200', 'justify-start']
+    cellClass: ['border-r', '!border-gray-200', 'justify-start'],
+    valueGetter: (params) => params.data?.nik || params.data?.['m_kary_det_kartu.0.ktp_no'] || '-'
   },
   {
     headerName: 'Nama',

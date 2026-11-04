@@ -45,8 +45,19 @@ class m_kary extends \App\Models\BasicModels\m_kary
             }
         }
 
+        $nik = !empty($arrayData['nik']) ? $arrayData['nik'] : (!empty($arrayData['ktp_no']) ? $arrayData['ktp_no'] : null);
+        if (empty($nik) && !empty($arrayData['m_kary_det_kartu']) && is_array($arrayData['m_kary_det_kartu'])) {
+            $nik = $arrayData['m_kary_det_kartu'][0]['ktp_no'] ?? null;
+        }
+
+        $kode = !empty($arrayData['kode']) ? trim((string)$arrayData['kode']) : null;
+        if (empty($kode)) {
+            trigger_error("NIK (Nomor Induk Karyawan) wajib diisi!");
+        }
+
         $newArrayData = array_merge($arrayData, [
-            "kode" => @$arrayData['kode'] ?? $this->helper->generateNomor("KODE KARYAWAN"),
+            "kode" => $kode,
+            "nik" => $nik ?? @$arrayData['nik'],
             "m_comp_id" => $m_comp_id,
             "cuti_jatah_reguler" => $arrayData['cuti_jatah_reguler'] ?? ((!empty($arrayData['tgl_masuk']) && Carbon::parse($arrayData['tgl_masuk'])->diffInYears(Carbon::now()) >= 1) ? 12 : 0),
             "cuti_sisa_reguler" => $arrayData['cuti_sisa_reguler'] ?? ((!empty($arrayData['tgl_masuk']) && Carbon::parse($arrayData['tgl_masuk'])->diffInYears(Carbon::now()) >= 1) ? 12 : 0),
@@ -74,6 +85,14 @@ class m_kary extends \App\Models\BasicModels\m_kary
     public function updateBefore($model, $arrayData, $metaData, $id = null)
     {
         $newArrayData = $arrayData;
+
+        if (empty($newArrayData['nik'])) {
+            if (!empty($newArrayData['ktp_no'])) {
+                $newArrayData['nik'] = $newArrayData['ktp_no'];
+            } elseif (!empty($newArrayData['m_kary_det_kartu']) && is_array($newArrayData['m_kary_det_kartu'])) {
+                $newArrayData['nik'] = $newArrayData['m_kary_det_kartu'][0]['ktp_no'] ?? null;
+            }
+        }
 
         if (empty($newArrayData['m_comp_id']) && !empty($newArrayData['m_dir_id'])) {
             $compFromDir = \DB::table('m_dir')->where('id', $newArrayData['m_dir_id'])->value('m_comp_id');

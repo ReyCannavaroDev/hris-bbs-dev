@@ -70,6 +70,24 @@ class Middleware
             $_GET['where'] = $requestData['where'];
         }
 
+        // Normalisasi filter can_outscope agar support 'Ya', 'Tidak', 'Yes', 'No', 'true', 'false', '1', '0' via query where
+        if (!empty($requestData['where']) && $modelInstance && in_array('can_outscope', $modelInstance->columns ?? [])) {
+            $requestData['where'] = preg_replace_callback(
+                '/(?:this\.)?can_outscope\s*(?:=|ilike|like)\s*[\'"]?%?(ya|tidak|yes|no|true|false|1|0)%?[\'"]?/i',
+                function ($m) {
+                    $val = strtolower($m[1]);
+                    $bool = in_array($val, ['ya', 'yes', 'true', '1'], true) ? 'true' : 'false';
+                    return "this.can_outscope=$bool";
+                },
+                $requestData['where']
+            );
+            $request->merge(['where' => $requestData['where']]);
+            if ($request->query) {
+                $request->query->set('where', $requestData['where']);
+            }
+            $_GET['where'] = $requestData['where'];
+        }
+
         // Normalisasi filter is_superadmin dan superadmin agar support 'Yes', 'No', 'true', 'false' via query where
         if (!empty($requestData['where']) && $modelInstance && in_array('is_superadmin', $modelInstance->columns ?? [])) {
             $requestData['where'] = preg_replace_callback(
@@ -311,6 +329,28 @@ class Middleware
                     if (!empty($requestData['where'])) {
                         if (preg_match('/\bthis\.is_hari_berikutnya\s*=\s*(?:true|false|1|0)\b/i', $requestData['where'])) {
                             $requestData['where'] = preg_replace('/\bthis\.is_hari_berikutnya\s*=\s*(?:true|false|1|0)\b/i', $condition, $requestData['where']);
+                        } else {
+                            $requestData['where'] .= " and $condition";
+                        }
+                    } else {
+                        $requestData['where'] = $condition;
+                    }
+                    $request->merge(['where' => $requestData['where']]);
+                    if ($request->query) {
+                        $request->query->set('where', $requestData['where']);
+                        $request->query->remove('search');
+                    }
+                    $_GET['where'] = $requestData['where'];
+                    unset($_GET['search']);
+                    unset($requestData['search']);
+                }
+            } elseif ($searchVal === 'ya' || $searchVal === 'tidak') {
+                if ($modelInstance && in_array('can_outscope', $modelInstance->columns ?? [])) {
+                    $boolVal = ($searchVal === 'ya') ? 'true' : 'false';
+                    $condition = "this.can_outscope=$boolVal";
+                    if (!empty($requestData['where'])) {
+                        if (preg_match('/\bthis\.can_outscope\s*=\s*(?:true|false|1|0)\b/i', $requestData['where'])) {
+                            $requestData['where'] = preg_replace('/\bthis\.can_outscope\s*=\s*(?:true|false|1|0)\b/i', $condition, $requestData['where']);
                         } else {
                             $requestData['where'] .= " and $condition";
                         }

@@ -1275,6 +1275,7 @@
             <label class="col-span-12">Kota<label class="text-red-500 space-x-0 pl-0">*</label></label>
             <FieldSelect :bind="{ disabled: !actionText && !isProfile, clearable:false }"
               class="col-span-12 !mt-0 w-full" :value="valuesPendidikan.kota_id" @input="v=>valuesPendidikan.kota_id=v"
+              @update:valueFull="(objVal)=>{ valuesPendidikan.kota = objVal ? objVal.value : '' }"
               :errorText="formErrorsPend.kota_id?'failed':''" :hints="formErrorsPend.kota_id" label=""
               placeholder="Pilih Kota" valueField="id" displayField="value" :api="{
                     url: `${store.server.url_backend}/operation/m_general`,
@@ -1329,10 +1330,12 @@
         <div class="col-span-8 md:col-span-6">
           <div class="grid grid-cols-12 items-center">
             <label class="col-span-12">Ijazah Terakhir<label class="text-red-500 space-x-0 pl-0">*</label></label>
-            <div class="col-span-12 flex items-center">
-              <input :disabled="!actionText && !isProfile ? true : false" ref="fileIjz" type="file" accept="application/pdf" class="col-span-12 !mt-0 w-full border rounded-[0.25rem] text-[12px] py-[10px] px-[20px]"
+            <div class="col-span-12 flex items-center gap-2">
+              <input :disabled="!actionText && !isProfile ? true : false" ref="fileIjz" type="file" accept="application/pdf,image/*" class="flex-1 !mt-0 w-full border rounded-[0.25rem] text-[12px] py-[10px] px-[20px]"
                 :class="{'border-red-500': formErrorsPend.ijazah_foto}" @change="fileIjazah" @input="(v)=>valuesPendidikan.ijazah_foto=v" >
-
+              <button v-if="valuesPendidikan.ijazah_url || valuesPendidikan.ijazah_foto" type="button" @click="previewFile(valuesPendidikan.ijazah_url || valuesPendidikan.ijazah_foto, 'm_kary_det_pendidikan')" class="bg-blue-600 hover:bg-blue-700 text-white text-xs px-3 py-2 rounded flex items-center gap-1 shrink-0">
+                <icon fa="eye" /> Preview
+              </button>
             </div>
           </div>
         </div>
@@ -1356,21 +1359,29 @@
                     class: 'btn-text-danger',
                     click:(app)=>{
                       if (app && app.params) {
-                        const row = app.params.node.data
-                        swal.fire({
-                          icon: 'warning', showDenyButton: true,
-                          text: `Hapus Baris ${app.params.node.rowIndex-(-1)}?`,
-                        }).then((res) => {
-                          if (res.isConfirmed) {
-                            detailPendidikan = detailPendidikan.filter((e) => e._id != app.params.node.data._id)
-                            app.params.api.applyTransaction({ remove: [app.params.node.data] })
-                          }
-                        })
+                        onDeletePendidikan(app.params.node.data, app.params.api)
                       }
                     }
                   },
                   width: 60,
                   sortable: false, resizable: true, filter: false, wrapText: true,
+                  cellClass: ['justify-center', 'bg-gray-50']
+                },
+                {
+                  headerName: 'Edit',
+                  cellRenderer: !actionText && !isProfile?null:'ButtonGrid',
+                  cellRendererParams: !actionText && !isProfile?null:{
+                    showValue: false,
+                    icon: 'edit',
+                    class: 'btn-text-primary',
+                    click:(app)=>{
+                      if (app && app.params) {
+                        onEditPendidikan(app.params.node.data)
+                      }
+                    }
+                  },
+                  width: 60,
+                  sortable: false, resizable: false, filter: false,
                   cellClass: ['justify-center', 'bg-gray-50']
                 },
                 {
@@ -1403,6 +1414,20 @@
                 },
                 {
                   flex: 1,
+                  headerName: 'Tahun Lulus',
+                  field: 'thn_lulus',
+                  sortable: false, resizable: true, filter: false, wrapText: true,
+                  cellClass: ['!border-gray-200', 'justify-center'],
+                },
+                {
+                  flex: 1,
+                  headerName: 'Kota',
+                  valueGetter: (params) => params.data.kota || params.data.kota_id || '-',
+                  sortable: false, resizable: true, filter: false, wrapText: true,
+                  cellClass: ['!border-gray-200', 'justify-center'],
+                },
+                {
+                  flex: 1,
                   headerName: 'Nilai',
                   field: 'nilai',
                   sortable: false, resizable: true, filter: false, wrapText: true,
@@ -1412,13 +1437,24 @@
                   flex: 1,
                   headerName: 'Pendidikan Terakhir',
                   cellRenderer: (params)=>{
-                    if(params.data.is_pend_terakhir === '1'){
+                    if(params.data.is_pend_terakhir === '1' || params.data.is_pend_terakhir === 1 || params.data.is_pend_terakhir === true){
                       return 'Iya'
                     }else{
                       return 'Tidak'
                     }
                   },
                   sortable: false, resizable: true, filter: false, wrapText: true,
+                  cellClass: ['!border-gray-200', 'justify-center'],
+                },
+                {
+                  flex: 1,
+                  headerName: 'Ijazah',
+                  cellRenderer: (params) => {
+                    const f = params.data.ijazah_url || params.data.ijazah_foto
+                    if (!f) return '-'
+                    return `<button type="button" class="text-blue-600 hover:text-blue-800 underline text-xs" onclick="window.previewFileKaryawan('${f}', 'm_kary_det_pendidikan')">Lihat File</button>`
+                  },
+                  sortable: false, resizable: true, filter: false,
                   cellClass: ['!border-gray-200', 'justify-center'],
                 },
                 {
@@ -1578,70 +1614,80 @@
                     class: 'btn-text-danger',
                     click:(app)=>{
                       if (app && app.params) {
-                        const row = app.params.node.data
-                        swal.fire({
-                          icon: 'warning', showDenyButton: true,
-                          text: `Hapus Baris ${app.params.node.rowIndex-(-1)}?`,
-                        }).then((res) => {
-                          if (res.isConfirmed) {
-                            detailKeluarga = detailKeluarga.filter((e) => e._id != app.params.node.data._id)
-                            app.params.api.applyTransaction({ remove: [app.params.node.data] })
-                          }
-                        })
+                        onDeleteKeluarga(app.params.node.data, app.params.api)
                       }
                     }
                   },
                   width: 60,
-                  sortable: false, resizable: true, filter: false, 
+                  sortable: false, resizable: true, filter: false, wrapText: true,
                   cellClass: ['justify-center', 'bg-gray-50']
+                },
+                {
+                  headerName: 'Edit',
+                  cellRenderer: !actionText && !isProfile?null:'ButtonGrid',
+                  cellRendererParams: !actionText && !isProfile?null:{
+                    showValue: false,
+                    icon: 'edit',
+                    class: 'btn-text-primary',
+                    click:(app)=>{
+                      if (app && app.params) {
+                        onEditKeluarga(app.params.node.data)
+                      }
+                    }
+                  },
+                  width: 60,
+                  sortable: false, resizable: false, filter: false,
+                  cellClass: ['justify-center', 'bg-gray-50']
+                },
+                {
+                  flex: 1,
+                  headerName: 'Nama',
+                  field: 'nama',
+                  sortable: false, resizable: true, filter: false,
+                  cellClass: ['!border-gray-200', 'justify-center'],
                 },
                 {
                   flex: 1,
                   headerName: 'Keluarga',
                   field: 'keluarga',
-                  sortable: false, resizable: true, filter: false, wrapText:true,
+                  sortable: false, resizable: true, filter: false,
                   cellClass: ['!border-gray-200', 'justify-center'],
                 },
                 {
                   flex: 1,
-                  field: 'nama',
-                  sortable: false, resizable: true, filter: false, wrapText:true,
-                  cellClass: ['!border-gray-200', 'justify-center'],
-                },
-                {
-                  flex: 1,
-                  headerName: 'Pekerjaan',
-                  field: 'pekerjaan',
-                  sortable: false, resizable: true, filter: false, wrapText:true,
-                  cellClass: ['!border-gray-200', 'justify-center'],
-                },
-                {
-                  flex: 1,
-                  headerName: 'Pendidikan Terakhir',
-                  field: 'pendidikan',
-                  sortable: false, resizable: true, filter: false, wrapText:true,
+                  headerName: 'Usia',
+                  field: 'usia',
+                  sortable: false, resizable: true, filter: false,
                   cellClass: ['!border-gray-200', 'justify-center'],
                 },
                 {
                   flex: 1,
                   headerName: 'Jenis Kelamin',
                   field: 'jk',
-                  sortable: false, resizable: true, filter: false, wrapText:true,
+                  sortable: false, resizable: true, filter: false,
                   cellClass: ['!border-gray-200', 'justify-center'],
                 },
                 {
                   flex: 1,
-                  field: 'usia',
-                  sortable: false, resizable: true, filter: false, wrapText:true,
+                  headerName: 'Pendidikan Terakhir',
+                  field: 'pend_terakhir',
+                  sortable: false, resizable: true, filter: false,
+                  cellClass: ['!border-gray-200', 'justify-center'],
+                },
+                {
+                  flex: 1,
+                  headerName: 'Pekerjaan',
+                  field: 'pekerjaan',
+                  sortable: false, resizable: true, filter: false,
                   cellClass: ['!border-gray-200', 'justify-center'],
                 },
                 {
                   flex: 1,
                   headerName: 'Catatan',
                   field: 'desc',
-                  sortable: false, resizable: true, filter: false, wrapText:true,
+                  sortable: false, resizable: true, filter: false,
                   cellClass: ['!border-gray-200', 'justify-center'],
-                },
+                }
                 ]">
             <template #header>
               <button :disabled="!actionText && !isProfile ? true : false" @click="addKeluarga" type="button" class="mr-[15px] bg-[#005FBF] hover:bg-[#0055ab] text-white py-[12px] px-[19.5px] flex items-center justify-center space-x-2 rounded">
@@ -1721,21 +1767,29 @@
                     class: 'btn-text-danger',
                     click:(app)=>{
                       if (app && app.params) {
-                        const row = app.params.node.data
-                        swal.fire({
-                          icon: 'warning', showDenyButton: true,
-                          text: `Hapus Baris ${app.params.node.rowIndex-(-1)}?`,
-                        }).then((res) => {
-                          if (res.isConfirmed) {
-                            app.params.api.applyTransaction({ remove: [app.params.node.data] })
-                            detailPelatihan = detailPelatihan.filter((e) => e._id != app.params.node.data._id)
-                          }
-                        })
+                        onDeletePelatihan(app.params.node.data, app.params.api)
                       }
                     }
                   },
                   width: 60,
                   sortable: false, resizable: true, filter: false,
+                  cellClass: ['justify-center', 'bg-gray-50']
+                },
+                {
+                  headerName: 'Edit',
+                  cellRenderer: !actionText && !isProfile?null:'ButtonGrid',
+                  cellRendererParams: !actionText && !isProfile?null:{
+                    showValue: false,
+                    icon: 'edit',
+                    class: 'btn-text-primary',
+                    click:(app)=>{
+                      if (app && app.params) {
+                        onEditPelatihan(app.params.node.data)
+                      }
+                    }
+                  },
+                  width: 60,
+                  sortable: false, resizable: false, filter: false,
                   cellClass: ['justify-center', 'bg-gray-50']
                 },
                 {
@@ -1754,17 +1808,18 @@
                 },
                 {
                   flex: 1,
-                  headerName: 'Kota',
-                  field: 'kota',
+                  headerName: 'Tahun',
+                  field: 'tahun',
                   sortable: false, resizable: true, filter: false,
                   cellClass: ['!border-gray-200', 'justify-center'],
                 },
                 {
                   flex: 1,
-                  field: 'tahun',
+                  headerName: 'Kota',
+                  valueGetter: (params) => params.data.kota || params.data.kota_id || '-',
                   sortable: false, resizable: true, filter: false,
                   cellClass: ['!border-gray-200', 'justify-center'],
-                },
+                }
                 ]">
             <template #header>
               <button :disabled="!actionText && !isProfile ? true : false" @click="addPelatihan" type="button" class="mr-[15px] bg-[#005FBF] hover:bg-[#0055ab] text-white py-[12px] px-[19.5px] flex items-center justify-center space-x-2 rounded">
@@ -1835,16 +1890,7 @@
                     class: 'btn-text-danger',
                     click:(app)=>{
                       if (app && app.params) {
-                        const row = app.params.node.data
-                        swal.fire({
-                          icon: 'warning', showDenyButton: true,
-                          text: `Hapus Baris ${app.params.node.rowIndex-(-1)}?`,
-                        }).then((res) => {
-                          if (res.isConfirmed) {
-                            detailPrestasi = detailPrestasi.filter((e) => e._id != app.params.node.data._id)
-                            app.params.api.applyTransaction({ remove: [app.params.node.data] })
-                          }
-                        })
+                        onDeletePrestasi(app.params.node.data, app.params.api)
                       }
                     }
                   },
@@ -1853,23 +1899,43 @@
                   cellClass: ['justify-center', 'bg-gray-50']
                 },
                 {
+                  headerName: 'Edit',
+                  cellRenderer: !actionText && !isProfile?null:'ButtonGrid',
+                  cellRendererParams: !actionText && !isProfile?null:{
+                    showValue: false,
+                    icon: 'edit',
+                    class: 'btn-text-primary',
+                    click:(app)=>{
+                      if (app && app.params) {
+                        onEditPrestasi(app.params.node.data)
+                      }
+                    }
+                  },
+                  width: 60,
+                  sortable: false, resizable: false, filter: false,
+                  cellClass: ['justify-center', 'bg-gray-50']
+                },
+                {
                   flex: 1,
+                  headerName: 'Tingkat',
                   field: 'tingkat',
                   sortable: false, resizable: true, filter: false,
                   cellClass: ['!border-gray-200', 'justify-center'],
                 },
                 {
                   flex: 1,
+                  headerName: 'Prestasi / Penghargaan',
                   field: 'nama_pres',
                   sortable: false, resizable: true, filter: false,
                   cellClass: ['!border-gray-200', 'justify-center'],
                 },
                 {
                   flex: 1,
+                  headerName: 'Tahun',
                   field: 'tahun',
                   sortable: false, resizable: true, filter: false,
                   cellClass: ['!border-gray-200', 'justify-center'],
-                },
+                }
                 ]">
             <template #header>
               <button :disabled="!actionText && !isProfile ? true : false" @click="addPrestasi" type="button" class="mr-[15px] bg-[#005FBF] hover:bg-[#0055ab] text-white py-[12px] px-[19.5px] flex items-center justify-center space-x-2 rounded">
@@ -1974,16 +2040,7 @@
                     class: 'btn-text-danger',
                     click:(app)=>{
                       if (app && app.params) {
-                        const row = app.params.node.data
-                        swal.fire({
-                          icon: 'warning', showDenyButton: true,
-                          text: `Hapus Baris ${app.params.node.rowIndex-(-1)}?`,
-                        }).then((res) => {
-                          if (res.isConfirmed) {
-                            detailOrganisasi = detailOrganisasi.filter((e) => e._id != app.params.node.data._id)
-                            app.params.api.applyTransaction({ remove: [app.params.node.data] })
-                          }
-                        })
+                        onDeleteOrganisasi(app.params.node.data, app.params.api)
                       }
                     }
                   },
@@ -1992,38 +2049,57 @@
                   cellClass: ['justify-center', 'bg-gray-50']
                 },
                 {
+                  headerName: 'Edit',
+                  cellRenderer: !actionText && !isProfile?null:'ButtonGrid',
+                  cellRendererParams: !actionText && !isProfile?null:{
+                    showValue: false,
+                    icon: 'edit',
+                    class: 'btn-text-primary',
+                    click:(app)=>{
+                      if (app && app.params) {
+                        onEditOrganisasi(app.params.node.data)
+                      }
+                    }
+                  },
+                  width: 60,
+                  sortable: false, resizable: false, filter: false,
+                  cellClass: ['justify-center', 'bg-gray-50']
+                },
+                {
                   flex: 1,
                   headerName: 'Nama Organisasi',
-                  field: 'nama',
+                  field: 'nama_org',
                   sortable: false, resizable: true, filter: false,
                   cellClass: ['!border-gray-200', 'justify-center'],
                 },
                 {
                   flex: 1,
                   headerName: 'Jenis Organisasi',
-                  field: 'jenis',
+                  field: 'jenis_org',
                   sortable: false, resizable: true, filter: false,
                   cellClass: ['!border-gray-200', 'justify-center'],
                 },
                 {
                   flex: 1,
-                  field: 'posisi',
-                  sortable: false, resizable: true, filter: false,
-                  cellClass: ['!border-gray-200', 'justify-center'],
-                },
-                {
-                  flex: 1,
+                  headerName: 'Tahun',
                   field: 'tahun',
                   sortable: false, resizable: true, filter: false,
                   cellClass: ['!border-gray-200', 'justify-center'],
                 },
                 {
                   flex: 1,
-                  headerName: 'Kota',
-                  field: 'kota',
+                  headerName: 'Posisi',
+                  field: 'posisi',
                   sortable: false, resizable: true, filter: false,
                   cellClass: ['!border-gray-200', 'justify-center'],
                 },
+                {
+                  flex: 1,
+                  headerName: 'Kota',
+                  valueGetter: (params) => params.data.kota || params.data.kota_id || '-',
+                  sortable: false, resizable: true, filter: false,
+                  cellClass: ['!border-gray-200', 'justify-center'],
+                }
                 ]">
             <template #header>
               <button :disabled="!actionText && !isProfile ? true : false" @click="addOrganisasi" type="button" class="mr-[15px] bg-[#005FBF] hover:bg-[#0055ab] text-white py-[12px] px-[19.5px] flex items-center justify-center space-x-2 rounded">
@@ -2097,21 +2173,29 @@
                     class: 'btn-text-danger',
                     click:(app)=>{
                       if (app && app.params) {
-                        const row = app.params.node.data
-                        swal.fire({
-                          icon: 'warning', showDenyButton: true,
-                          text: `Hapus Baris ${app.params.node.rowIndex-(-1)}?`,
-                        }).then((res) => {
-                          if (res.isConfirmed) {
-                            detailBahasa = detailBahasa.filter((e) => e._id != app.params.node.data._id)
-                            app.params.api.applyTransaction({ remove: [app.params.node.data] })
-                          }
-                        })
+                        onDeleteBahasa(app.params.node.data, app.params.api)
                       }
                     }
                   },
                   width: 60,
                   sortable: false, resizable: true, filter: false,
+                  cellClass: ['justify-center', 'bg-gray-50']
+                },
+                {
+                  headerName: 'Edit',
+                  cellRenderer: !actionText && !isProfile?null:'ButtonGrid',
+                  cellRendererParams: !actionText && !isProfile?null:{
+                    showValue: false,
+                    icon: 'edit',
+                    class: 'btn-text-primary',
+                    click:(app)=>{
+                      if (app && app.params) {
+                        onEditBahasa(app.params.node.data)
+                      }
+                    }
+                  },
+                  width: 60,
+                  sortable: false, resizable: false, filter: false,
                   cellClass: ['justify-center', 'bg-gray-50']
                 },
                 {
@@ -2137,7 +2221,7 @@
                 },
                 {
                   flex: 1,
-                  headerName: 'Nilai Tertuis',
+                  headerName: 'Nilai Tertulis',
                   field: 'nilai_tertulis',
                   sortable: false, resizable: true, filter: false,
                   cellClass: ['!border-gray-200', 'justify-center'],
@@ -2148,7 +2232,7 @@
                   field: 'level_tertulis',
                   sortable: false, resizable: true, filter: false,
                   cellClass: ['!border-gray-200', 'justify-center'],
-                },
+                }
                 ]">
             <template #header>
               <button :disabled="!actionText && !isProfile ? true : false" @click="addBahasa" type="button" class="mr-[15px] bg-[#005FBF] hover:bg-[#0055ab] text-white py-[12px] px-[19.5px] flex items-center justify-center space-x-2 rounded">
@@ -2236,6 +2320,7 @@
             <label class="col-span-12">Kota<label class="text-red-500 space-x-0 pl-0">*</label></label>
             <FieldSelect :bind="{ disabled: !actionText && !isProfile, clearable:false }"
               class="col-span-12 !mt-0 w-full" :value="valuesPengalaman.kota_id" @input="v=>valuesPengalaman.kota_id=v"
+              @update:valueFull="(objVal)=>{ valuesPengalaman.kota = objVal ? objVal.value : '' }"
               :errorText="formErrorsPK.kota_id?'failed':''" :hints="formErrorsPK.kota_id" label=""
               placeholder="Pilih Kota" valueField="id" displayField="value" :api="{
                     url: `${store.server.url_backend}/operation/m_general`,
@@ -2256,10 +2341,12 @@
         <div class="col-span-8 md:col-span-6">
           <div class="grid grid-cols-12 items-center">
             <label class="col-span-12">Surat Refrensi<label class="text-red-500 space-x-0 pl-0">*</label></label>
-            <div class="col-span-12 flex items-center">
-              <input :disabled="!actionText && !isProfile ? true : false" ref="fileSurat" type="file" accept="application/pdf" class="col-span-12 !mt-0 w-full border rounded-[0.25rem] text-[12px] py-[10px] px-[20px]"
+            <div class="col-span-12 flex items-center gap-2">
+              <input :disabled="!actionText && !isProfile ? true : false" ref="fileSurat" type="file" accept="application/pdf,image/*" class="flex-1 !mt-0 w-full border rounded-[0.25rem] text-[12px] py-[10px] px-[20px]"
                 :class="{'border-red-500': formErrorsPK.surat_referensi}" @change="fileSrtRef" @input="(v)=>valuesPengalaman.surat_referensi=v" >
-
+              <button v-if="valuesPengalaman.surat_referensi_url || valuesPengalaman.surat_referensi" type="button" @click="previewFile(valuesPengalaman.surat_referensi_url || valuesPengalaman.surat_referensi, 'm_kary_det_pengalaman_kerja')" class="bg-blue-600 hover:bg-blue-700 text-white text-xs px-3 py-2 rounded flex items-center gap-1 shrink-0">
+                <icon fa="eye" /> Preview
+              </button>
             </div>
           </div>
         </div>
@@ -2274,16 +2361,7 @@
                     class: 'btn-text-danger',
                     click:(app)=>{
                       if (app && app.params) {
-                        const row = app.params.node.data
-                        swal.fire({
-                          icon: 'warning', showDenyButton: true,
-                          text: `Hapus Baris ${app.params.node.rowIndex-(-1)}?`,
-                        }).then((res) => {
-                          if (res.isConfirmed) {
-                            detailPengalaman = detailPengalaman.filter((e) => e._id != app.params.node.data._id)
-                            app.params.api.applyTransaction({ remove: [app.params.node.data] })
-                          }
-                        })
+                        onDeletePengalaman(app.params.node.data, app.params.api)
                       }
                     }
                   },
@@ -2292,8 +2370,25 @@
                   cellClass: ['justify-center', 'bg-gray-50']
                 },
                 {
+                  headerName: 'Edit',
+                  cellRenderer: !actionText && !isProfile?null:'ButtonGrid',
+                  cellRendererParams: !actionText && !isProfile?null:{
+                    showValue: false,
+                    icon: 'edit',
+                    class: 'btn-text-primary',
+                    click:(app)=>{
+                      if (app && app.params) {
+                        onEditPengalaman(app.params.node.data)
+                      }
+                    }
+                  },
+                  width: 60,
+                  sortable: false, resizable: false, filter: false,
+                  cellClass: ['justify-center', 'bg-gray-50']
+                },
+                {
                   flex: 1,
-                  headerName: 'Nama Instansi',
+                  headerName: 'Nama Perusahaan',
                   field: 'instansi',
                   sortable: false, resizable: true, filter: false,
                   cellClass: ['!border-gray-200', 'justify-center'],
@@ -2307,7 +2402,15 @@
                 },
                 {
                   flex: 1,
+                  headerName: 'Posisi',
                   field: 'posisi',
+                  sortable: false, resizable: true, filter: false,
+                  cellClass: ['!border-gray-200', 'justify-center'],
+                },
+                {
+                  flex: 1,
+                  headerName: 'No. Telp',
+                  field: 'no_telp',
                   sortable: false, resizable: true, filter: false,
                   cellClass: ['!border-gray-200', 'justify-center'],
                 },
@@ -2327,11 +2430,29 @@
                 },
                 {
                   flex: 1,
+                  headerName: 'Kota',
+                  valueGetter: (params) => params.data.kota || params.data.kota_id || '-',
+                  sortable: false, resizable: true, filter: false,
+                  cellClass: ['!border-gray-200', 'justify-center'],
+                },
+                {
+                  flex: 1,
                   headerName: 'Alamat Kantor',
                   field: 'alamat_kantor',
                   sortable: false, resizable: true, filter: false,
                   cellClass: ['!border-gray-200', 'justify-center'],
                 },
+                {
+                  flex: 1,
+                  headerName: 'Surat Referensi',
+                  cellRenderer: (params) => {
+                    const f = params.data.surat_referensi_url || params.data.surat_referensi
+                    if (!f) return '-'
+                    return `<button type="button" class="text-blue-600 hover:text-blue-800 underline text-xs" onclick="window.previewFileKaryawan('${f}', 'm_kary_det_pengalaman_kerja')">Lihat Surat</button>`
+                  },
+                  sortable: false, resizable: true, filter: false,
+                  cellClass: ['!border-gray-200', 'justify-center'],
+                }
                 ]">
             <template #header>
               <button :disabled="!actionText && !isProfile ? true : false" @click="addPengalaman" type="button" class="mr-[15px] bg-[#005FBF] hover:bg-[#0055ab] text-white py-[12px] px-[19.5px] flex items-center justify-center space-x-2 rounded">
