@@ -87,14 +87,14 @@ async function nikChange(id) {
     })
     if (!res.ok) throw new Error("Gagal memuat data karyawan, coba lagi nanti")
     const result = await res.json()
-    values.company = result.data['m_dir.nama'] || result.data['m_comp.nama'] || ''
-    values.m_dir_id = result.data.m_dir_id
-    values.m_comp_id = result.data.m_comp_id
-    values.divisi = result.data['m_divisi.nama']
-    values.departemen = result.data['m_dept.nama']
-    values.name = result.data?.nama_lengkap
-    values.username = initialValues.username === values.username ? initialValues.username : result.data?.kode
-    values.kode = result.data?.nik
+    values.company = result.data['m_dir.nama'] || result.data?.m_dir?.nama || result.data['m_comp.nama'] || result.data?.m_comp?.nama || ''
+    values.m_dir_id = result.data.m_dir_id ?? result.data?.m_dir?.id ?? null
+    values.m_comp_id = result.data.m_comp_id ?? result.data?.m_comp?.id ?? null
+    values.divisi = result.data['m_divisi.nama'] || result.data?.m_divisi?.nama || ''
+    values.departemen = result.data['m_dept.nama'] || result.data?.m_dept?.nama || ''
+    values.name = result.data?.nama_lengkap || ''
+    values.username = initialValues.username === values.username ? initialValues.username : (result.data?.kode || '')
+    values.kode = result.data?.nik || result.data?.kode || ''
     if(!isRead){
       values.password = "12345"
       values.password_confirm = "12345"
@@ -107,6 +107,7 @@ async function nikChange(id) {
     values.divisi = null
     values.departemen = null
     values.name = null
+    values.kode = null
     values.username = null
     values.password = null
     values.password_confirm = null

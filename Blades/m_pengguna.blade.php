@@ -37,7 +37,7 @@
           <FieldX :bind="{ readonly: true }" class="w-full py-2 !mt-0"
               :value="values.company" :errorname="formErrors.company?'failed':''"
               @input="v=>values.company=v" :hints="formErrors.company" 
-              placeholder="(Pilih Karyawan)"
+              label=""
               :check="false"
           />
         </div>
@@ -46,6 +46,7 @@
           <FieldX :bind="{ readonly: true }" class="w-full py-2 !mt-0"
               :value="values.divisi" :errorname="formErrors.divisi?'failed':''"
               @input="v=>values.divisi=v" :hints="formErrors.divisi" 
+              label=""
               :check="false"
           />
         </div>
@@ -54,6 +55,7 @@
           <FieldX :bind="{ readonly: true }" class="w-full py-2 !mt-0"
               :value="values.departemen" :errorname="formErrors.departemen?'failed':''"
               @input="v=>values.departemen=v" :hints="formErrors.departemen" 
+              label=""
               :check="false"
           />
         </div>
@@ -71,10 +73,10 @@
           <label class="font-semibold">NIK <label class="text-red-500 space-x-0 pl-0"></label></label>
           <FieldPopup 
               :bind="{ readonly: !actionText, disabled: !actionText }"
-              class="p-0 m-0 !mt-[9px]"
+              class="w-full py-2 !mt-0"
               valueField="id" displayField="kode"
-              @input="nikChange"
-              :value="values.m_kary_id" @input="(v)=>values.m_kary_id=v"
+              :value="values.m_kary_id"
+              @input="(v)=>{ values.m_kary_id = v; nikChange(v); }"
               :api="{
                 url: `${store.server.url_backend}/operation/m_kary`,
                 headers: { 'Content-Type': 'Application/json', Authorization: `${store.user.token_type} ${store.user.token}`},
@@ -82,7 +84,9 @@
                   simplest:true,
                 }
               }"
-               fa-icon="user" :check="false" 
+              placeholder="Pilih NIK"
+              label=""
+              fa-icon="user" :check="false" 
               :columns="[{
                 headerName: 'No',
                 valueGetter:(p)=>p.node.rowIndex + 1,
@@ -133,6 +137,7 @@
           <FieldX :bind="{ readonly: true }" class="w-full py-2 !mt-0"
               :value="values.name" :errorname="formErrors.name?'failed':''"
               @input="v=>values.name=v" :hints="formErrors.name" 
+              label=""
               :check="false"
           />
         </div>
@@ -141,6 +146,7 @@
           <FieldX :bind="{ readonly: !actionText }" class="w-full py-2 !mt-0"
               :value="values.username" :errorname="formErrors.username?'failed':''"
               @input="v=>values.username=v" :hints="formErrors.username" 
+              label=""
               :check="false"
           />
         </div>
@@ -149,6 +155,7 @@
           <FieldX :bind="{ readonly: !actionText }" class="w-full py-2 !mt-0"
               :value="values.email" :errorname="formErrors.email?'failed':''"
               @input="v=>values.email=v" :hints="formErrors.email" 
+              label=""
               :check="false"
           />
         </div>
@@ -163,6 +170,7 @@
           <FieldX :bind="{ readonly: !actionText }" class="w-full py-2 !mt-0"
               :value="values.password" :errorname="formErrors.password?'failed':''"
               @input="v=>values.password=v" :hints="formErrors.password" 
+              label=""
               :check="false"
               type="password"
               fa-icon="lock"
@@ -174,6 +182,7 @@
           <FieldX :bind="{ readonly: !actionText }" class="w-full py-2 !mt-0"
               :value="values.password_confirm" :errorname="formErrors.password_confirm?'failed':''"
               @input="v=>values.password_confirm=v" :hints="formErrors.password_confirm" 
+              label=""
               :check="false"
               type="password"
               fa-icon="lock"
