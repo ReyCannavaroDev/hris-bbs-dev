@@ -3,6 +3,33 @@
   <TableApi ref='apiTable' :api="landing.api" :columns="landing.columns" :actions="landing.actions">
     <template #header>
       <div class="flex items-center gap-x-2 mr-2">
+        <p class="text-sm font-medium">Filter Jam Kerja :</p>
+        <div class="flex items-center gap-x-1 border border-gray-300 rounded-md px-2 py-1 bg-white shadow-sm">
+          <input
+            type="time"
+            v-model="filterJamMulai"
+            @change="applyJamKerjaFilter"
+            class="text-xs outline-none bg-transparent text-gray-700 w-[65px]"
+            title="Jam Mulai"
+          />
+          <span class="text-gray-400 font-bold text-xs">-</span>
+          <input
+            type="time"
+            v-model="filterJamAkhir"
+            @change="applyJamKerjaFilter"
+            class="text-xs outline-none bg-transparent text-gray-700 w-[65px]"
+            title="Jam Selesai"
+          />
+          <button
+            v-if="filterJamMulai || filterJamAkhir"
+            @click="resetJamKerjaFilter"
+            type="button"
+            class="text-gray-400 hover:text-red-500 text-sm font-bold ml-1 leading-none"
+            title="Reset Jam"
+          >&times;</button>
+        </div>
+      </div>
+      <div class="flex items-center gap-x-2 mr-2">
         <p class="text-sm font-medium">Filter Status :</p>
         <div class="flex gap-x-2">
           <button @click="filterShowData(true,1)" :class="activeBtn === 1?'bg-green-600 text-white hover:bg-green-400':'border border-green-600 text-green-600 bg-white hover:bg-green-600 hover:text-white'" class="duration-300 transform hover:-translate-y-0.5 rounded-md py-1 px-2 text-sm">Active</button>

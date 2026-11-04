@@ -316,6 +316,46 @@ if (store && store.axios && store.axios.interceptors && store.axios.interceptors
 }
 
 const activeBtn = ref(null)
+const filterJamMulai = ref('')
+const filterJamAkhir = ref('')
+
+function applyJamKerjaFilter() {
+  const s = filterJamMulai.value ? filterJamMulai.value.trim() : ''
+  const e = filterJamAkhir.value ? filterJamAkhir.value.trim() : ''
+  let val = ''
+  if (s && e) {
+    val = `${s} - ${e}`
+  } else if (s) {
+    val = `${s} -`
+  } else if (e) {
+    val = `- ${e}`
+  }
+
+  if (landing.api && landing.api.params) {
+    if (val) {
+      landing.api.params.filter_jam_kerja = val
+    } else {
+      delete landing.api.params.filter_jam_kerja
+    }
+  }
+
+  // Update inputs in table column if present
+  const tableInputs = document.querySelectorAll('.time-filter-table-start, .time-filter-table-end')
+  if (tableInputs.length >= 2) {
+    tableInputs[0].value = s
+    tableInputs[1].value = e
+  }
+
+  if (apiTable.value && typeof apiTable.value.reload === 'function') {
+    apiTable.value.reload()
+  }
+}
+
+function resetJamKerjaFilter() {
+  filterJamMulai.value = ''
+  filterJamAkhir.value = ''
+  applyJamKerjaFilter()
+}
 
 class JamKerjaFloatingFilter {
   init(params) {
@@ -434,21 +474,30 @@ class JamKerjaFloatingFilter {
 function attachJamKerjaTimeFilter() {
   if (typeof document === 'undefined') return false
 
-  const cell = document.querySelector(
-    '.ag-header-row-floating-filter [col-id="jam_kerja"], ' +
-    '[col-id="jam_kerja"].ag-floating-filter, ' +
-    '.ag-floating-filter[col-id="jam_kerja"]'
+  // Find floating filter cell for jam_kerja with flexible selectors
+  const cells = document.querySelectorAll(
+    '[col-id="jam_kerja"], ' +
+    '.ag-header-cell[col-id="jam_kerja"], ' +
+    '.ag-floating-filter[col-id="jam_kerja"], ' +
+    '.ag-floating-filter-cell[col-id="jam_kerja"]'
   )
 
-  if (!cell) return false
-  if (cell.querySelector('.time-range-filter-wrapper')) return true
+  let targetInput = null
+  let container = null
 
-  const defaultInput = cell.querySelector('input')
-  const parentContainer = defaultInput ? defaultInput.parentElement : cell
+  cells.forEach(c => {
+    const inp = c.querySelector('input')
+    if (inp && !inp.classList.contains('time-filter-table-input')) {
+      targetInput = inp
+      container = inp.parentElement || c
+    }
+  })
 
-  if (defaultInput) {
-    defaultInput.style.display = 'none'
-  }
+  if (!targetInput || !container) return false
+  if (container.querySelector('.time-range-filter-wrapper')) return true
+
+  // Hide the default single text input
+  targetInput.style.display = 'none'
 
   const wrapper = document.createElement('div')
   wrapper.className = 'time-range-filter-wrapper'
@@ -462,7 +511,7 @@ function attachJamKerjaTimeFilter() {
 
   const inputStart = document.createElement('input')
   inputStart.type = 'time'
-  inputStart.className = 'time-filter-start'
+  inputStart.className = 'time-filter-table-input time-filter-table-start'
   inputStart.style.width = 'calc(50% - 9px)'
   inputStart.style.height = '24px'
   inputStart.style.fontSize = '11px'
@@ -473,6 +522,7 @@ function attachJamKerjaTimeFilter() {
   inputStart.style.color = '#374151'
   inputStart.style.textAlign = 'center'
   inputStart.title = 'Jam Mulai'
+  inputStart.value = filterJamMulai.value || ''
 
   const sep = document.createElement('span')
   sep.textContent = '-'
@@ -483,7 +533,7 @@ function attachJamKerjaTimeFilter() {
 
   const inputEnd = document.createElement('input')
   inputEnd.type = 'time'
-  inputEnd.className = 'time-filter-end'
+  inputEnd.className = 'time-filter-table-input time-filter-table-end'
   inputEnd.style.width = 'calc(50% - 9px)'
   inputEnd.style.height = '24px'
   inputEnd.style.fontSize = '11px'
@@ -494,6 +544,7 @@ function attachJamKerjaTimeFilter() {
   inputEnd.style.color = '#374151'
   inputEnd.style.textAlign = 'center'
   inputEnd.title = 'Jam Selesai'
+  inputEnd.value = filterJamAkhir.value || ''
 
   const btnClear = document.createElement('button')
   btnClear.type = 'button'
@@ -513,41 +564,10 @@ function attachJamKerjaTimeFilter() {
   wrapper.appendChild(inputEnd)
   wrapper.appendChild(btnClear)
 
-  const curVal = landing.api?.params?.filter_jam_kerja || ''
-  if (curVal && curVal.includes('-')) {
-    const parts = curVal.split('-').map(x => x.trim())
-    inputStart.value = parts[0] || ''
-    inputEnd.value = parts[1] || ''
-  }
-
   const handleTimeChange = () => {
-    const s = inputStart.value || ''
-    const e = inputEnd.value || ''
-    let val = ''
-    if (s && e) {
-      val = `${s} - ${e}`
-    } else if (s) {
-      val = `${s} -`
-    } else if (e) {
-      val = `- ${e}`
-    }
-
-    if (defaultInput) {
-      defaultInput.value = val
-      defaultInput.dispatchEvent(new Event('input', { bubbles: true }))
-      defaultInput.dispatchEvent(new Event('change', { bubbles: true }))
-    }
-
-    if (landing.api && landing.api.params) {
-      if (val) {
-        landing.api.params.filter_jam_kerja = val
-      } else {
-        delete landing.api.params.filter_jam_kerja
-      }
-      if (apiTable && apiTable.value && typeof apiTable.value.reload === 'function') {
-        apiTable.value.reload()
-      }
-    }
+    filterJamMulai.value = inputStart.value || ''
+    filterJamAkhir.value = inputEnd.value || ''
+    applyJamKerjaFilter()
   }
 
   inputStart.addEventListener('change', handleTimeChange)
@@ -557,10 +577,12 @@ function attachJamKerjaTimeFilter() {
     ev.stopPropagation()
     inputStart.value = ''
     inputEnd.value = ''
-    handleTimeChange()
+    filterJamMulai.value = ''
+    filterJamAkhir.value = ''
+    applyJamKerjaFilter()
   })
 
-  parentContainer.appendChild(wrapper)
+  container.appendChild(wrapper)
   return true
 }
 
