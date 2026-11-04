@@ -104,6 +104,7 @@ class m_jam_kerja extends \App\Models\BasicModels\m_jam_kerja
         $jamKerja = request('filter_jam_kerja') ?? request('jam_kerja');
         if (!empty($jamKerja)) {
             $val = trim((string)$jamKerja);
+            $val = str_replace('.', ':', $val);
             $model = $model->where(function ($q) use ($val) {
                 if (str_contains($val, '-')) {
                     $parts = explode('-', $val);

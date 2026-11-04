@@ -223,6 +223,7 @@ class Middleware
         // Normalisasi filter_jam_kerja: pertahankan parameter agar diproses oleh scopeFilter di Custom.php
         if (isset($requestData['filter_jam_kerja']) && $modelInstance && in_array('waktu_mulai', $modelInstance->columns ?? [])) {
             $val = trim((string)$requestData['filter_jam_kerja']);
+            $val = str_replace('.', ':', $val);
             if ($val !== '') {
                 $request->merge(['filter_jam_kerja' => $val]);
                 if ($request->query) {
