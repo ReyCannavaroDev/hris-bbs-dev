@@ -10,9 +10,18 @@ class tpengumuman extends Migration
     public function up()
     {
         Schema::table($this->tableName, function (Blueprint $table) {
-            //$table->string('_existColumnName_')->change();
-            //$table->string('_columnName_');
-            //$table->dropColumn([ ]);
+            if (!Schema::hasColumn($this->tableName, 'm_divisi_id')) {
+                $table->bigInteger('m_divisi_id')->comment('{"src":"m_divisi.id"}')->nullable();
+            }
+        });
+    }
+
+    public function down()
+    {
+        Schema::table($this->tableName, function (Blueprint $table) {
+            if (Schema::hasColumn($this->tableName, 'm_divisi_id')) {
+                $table->dropColumn('m_divisi_id');
+            }
         });
     }
 }

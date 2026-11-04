@@ -29,6 +29,7 @@ let initialValues = {}
 const changedValues = []
 
 const values = reactive({
+  m_divisi_id: null,
   is_active : true
 })
 
@@ -127,7 +128,8 @@ async function onSave() {
         const isCreating = ['Create','Copy','Tambah'].includes(actionText.value)
         const dataURL = `${store.server.url_backend}/operation${endpointApi}${isCreating ? '' : ('/' + route.params.id)}`
         isRequesting.value = true
-         values.is_active = values.is_active ? 1 : 0
+        values.is_active = values.is_active ? 1 : 0
+        values.m_divisi_id = values.m_divisi_id ? values.m_divisi_id : null
         const res = await fetch(dataURL, {
           method: isCreating ? 'POST' : 'PUT',
           headers: {
@@ -251,7 +253,7 @@ const landing = reactive({
     },
     params: {
       simplest: true,
-      searchfield:'this.id, this.nama, this.lat, this.long',
+      searchfield:'this.id, this.judul, m_divisi.nama, this.tag, this.content',
     },
     onsuccess(response) {
       if (response && response.data) {
@@ -276,16 +278,39 @@ const landing = reactive({
   },
   {
     field: 'judul',
+    headerName: 'Judul',
     wrapText:true,
     filter: true,
     sortable: true,
-    flex:1,
+    flex:1.5,
     filter: 'ColFilter',
     resizable: true,
     cellClass: [ 'border-r', '!border-gray-200']
   },
   {
+    field: 'm_divisi.nama',
+    headerName: 'Target Divisi',
+    filter: true,
+    sortable: true,
+    flex: 1,
+    filter: 'ColFilter',
+    resizable: true,
+    valueGetter: (p) => p.data['m_divisi.nama'] || p.data.target_divisi || (p.data.m_divisi_id ? `Divisi #${p.data.m_divisi_id}` : 'Semua Divisi'),
+    cellClass: (p) => [
+      'border-r', 
+      '!border-gray-200', 
+      p.data.m_divisi_id ? 'justify-start' : 'justify-center'
+    ],
+    cellRenderer: (p) => {
+      const val = p.value || (p.data ? (p.data['m_divisi.nama'] || p.data.target_divisi || (p.data.m_divisi_id ? `Divisi #${p.data.m_divisi_id}` : 'Semua Divisi')) : 'Semua Divisi')
+      return (val === 'Semua Divisi' || !p.data?.m_divisi_id)
+        ? `<span class="bg-blue-50 text-blue-700 border border-blue-200 px-2.5 py-0.5 rounded-full text-xs font-semibold">Semua Divisi</span>`
+        : `<span class="font-medium text-gray-800">${val}</span>`
+    }
+  },
+  {
     field: 'tag',
+    headerName: 'Tag',
     wrapText:true,
     filter: true,
     sortable: true,

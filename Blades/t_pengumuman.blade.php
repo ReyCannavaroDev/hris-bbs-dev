@@ -50,6 +50,36 @@
         </div>
 
         <div class="grid grid-cols-12 items-center gap-y-2">
+          <label class="col-span-12">Target Divisi <small class="text-blue-600 font-normal text-xs">(Kosongkan jika ditujukan untuk seluruh divisi)</small></label>
+          <FieldSelect
+            class="col-span-12 !mt-0"
+            :bind="{ disabled: !actionText, clearable: true }"
+            :value="values.m_divisi_id"
+            @input="v => values.m_divisi_id = v"
+            :errorText="formErrors.m_divisi_id ? 'failed' : ''"
+            :hints="formErrors.m_divisi_id"
+            displayField="nama"
+            valueField="id"
+            label=""
+            placeholder="Pilih Divisi (Opsional / Seluruh Divisi)"
+            :api="{
+              url: `${store.server.url_backend}/operation/m_divisi`,
+              headers: {
+                Authorization: `${store.user.token_type} ${store.user.token}`
+              },
+              params: {
+                simplest: true,
+                single: true,
+                transform: false,
+                where: `this.is_active='true'`,
+                selectfield: 'this.id, this.nama, this.is_active'
+              }
+            }"
+            fa-icon="search" :check="false"
+          />
+        </div>
+
+        <div class="grid grid-cols-12 items-center gap-y-2">
           <label class="col-span-12">Gambar Thumbnail <label class="text-red-500 space-x-0 pl-0">*</label></label>
           <FieldUpload
             class="col-span-12 !mt-0"
