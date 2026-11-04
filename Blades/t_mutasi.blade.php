@@ -303,17 +303,23 @@
         <div>
           <label class="font-semibold">Standar Gaji Baru<span class="text-red-500 space-x-0 pl-0">*</span></label>
           <FieldSelect class="w-full py-2 !mt-0" :value="values.m_standart_baru_id"
-            :key="`${values.m_posisi_baru_id}_${values.m_dir_id}_${values.m_zona_id}`"
-            @input="v=>values.m_standart_baru_id=v" valueField="id" displayField="kode" :api="{
+            @input="v=>values.m_standart_baru_id=v"
+            @update:valueFull="(obj)=>{
+              if (obj && obj.gaji_pokok) {
+                values.gaji_pokok_baru = obj.gaji_pokok
+                values.gaji_acuan_baru = obj.gaji_pokok
+              }
+            }"
+            valueField="id" displayField="kode" :api="{
                 url: `${store.server.url_backend}/operation/m_standart_gaji`,
                 headers: { 'Content-Type': 'Application/json', Authorization: `${store.user.token_type} ${store.user.token}`},
                 params: {
                   simplest: true,
                   single: true,
-                  where: `this.is_active='true'` + (values.m_posisi_baru_id ? ` AND this.m_posisi_id = ${values.m_posisi_baru_id}` : '') + (values.m_dir_id ? ` AND this.m_dir_id = ${values.m_dir_id}` : '') + (values.m_zona_id ? ` AND (this.m_zona_id = ${values.m_zona_id} OR this.m_zona_id IS NULL)` : ''),
+                  where: `this.is_active='true'`,
                   transform: false,
                 }
-            }" placeholder="Pilih gaji baru" label="" :check="false" />
+            }" placeholder="Pilih Standar Gaji Baru" label="" :check="false" />
         </div>
         <div>
           <label class="font-semibold">Gaji Pokok Baru (Personal)</label>
