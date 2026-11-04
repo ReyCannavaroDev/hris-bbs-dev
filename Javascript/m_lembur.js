@@ -35,6 +35,7 @@ const values = reactive({
 onBeforeMount(async () => {
   // tampilkan default direktorat dengan store user comp.nama
   values.direktorat = store.user.data?.direktorat
+  values.m_dir_id = store.user.data?.m_dir_id || store.user.data?.company_id
   if (isRead) {
     //  READ DATA
     try {
@@ -111,6 +112,14 @@ function onReset() {
 }
 
 async function onSave() {
+  if (values.besaran === null || values.besaran === undefined || values.besaran === '' || Number(values.besaran) <= 0) {
+    formErrors.value = { besaran: ['Tarif / Jam (Besaran) wajib diisi dengan nominal lebih dari 0'] }
+    swal.fire({
+      icon: 'error',
+      text: 'Tarif / Jam (Besaran) wajib diisi dengan nominal lebih dari 0'
+    })
+    return
+  }
   //values.tags = JSON.stringify(values.tags)
       try {
         const isCreating = ['Create','Copy','Tambah'].includes(actionText.value)
