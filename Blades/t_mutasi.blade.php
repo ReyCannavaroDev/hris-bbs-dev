@@ -69,6 +69,10 @@
                 values.m_dept_lama_id = objVal['m_dept.id'] || objVal.m_dept_id
                 values.m_posisi_lama_id = objVal['m_posisi.id'] || objVal.m_posisi_id
                 values.m_standart_posisi_id = objVal['m_standart_gaji.id'] || objVal.m_standart_gaji_id
+                values.gaji_pokok_lama = objVal.gaji_pokok || 0
+                values.gaji_acuan_lama = objVal.gaji_acuan || 0
+                if (!values.gaji_pokok_baru || values.gaji_pokok_baru == 0) values.gaji_pokok_baru = objVal.gaji_pokok || 0
+                if (!values.gaji_acuan_baru || values.gaji_acuan_baru == 0) values.gaji_acuan_baru = objVal.gaji_acuan || 0
                 values.status_kary_id = objVal.status_kary_id || objVal['m_general.id'] || 1
                 if (values.tipe_mutasi === 'Antar Departement') {
                   values.m_devisi_baru_id = values.m_divisi_lama_id
@@ -81,7 +85,7 @@
                 simplest: true,
                 single: true,
                 where: `this.is_active='true'`,
-                searchfield: 'kode, nik, nama_depan, nama_lengkap, m_dir.nama, m_divisi.nama, id'
+                searchfield: 'kode, nik, nama_depan, nama_lengkap, m_dir.nama, m_divisi.nama, id, gaji_pokok, gaji_acuan'
               }
             }" placeholder="Pilih Karyawan" label="" :check="false" :columns="[
             {
@@ -232,6 +236,16 @@
             }
         }" placeholder="Pilih gaji baru" label="" :check="false" />
 </div>
+        <div>
+          <label class="font-semibold">Gaji Pokok Lama</label>
+          <FieldX :bind="{ disabled: true }" type="number" label="" class="w-full py-2 !mt-0"
+            :value="values.gaji_pokok_lama" placeholder="Gaji Pokok Lama" :check="false" />
+        </div>
+        <div>
+          <label class="font-semibold">Gaji Acuan Lama (Basis BPJS)</label>
+          <FieldX :bind="{ disabled: true }" type="number" label="" class="w-full py-2 !mt-0"
+            :value="values.gaji_acuan_lama" placeholder="Gaji Acuan Lama" :check="false" />
+        </div>
 
         <div>
           <label class="font-semibold">Divisi Baru<span class="text-red-500 space-x-0 pl-0">*</span></label>
@@ -300,6 +314,18 @@
                   transform: false,
                 }
             }" placeholder="Pilih gaji baru" label="" :check="false" />
+        </div>
+        <div>
+          <label class="font-semibold">Gaji Pokok Baru (Personal)</label>
+          <FieldX :bind="{ readonly: !actionText }" type="number" label="" class="w-full py-2 !mt-0"
+            :value="values.gaji_pokok_baru" @input="v=>values.gaji_pokok_baru=v"
+            placeholder="Gaji Pokok Baru" :check="false" />
+        </div>
+        <div>
+          <label class="font-semibold">Gaji Acuan Baru (Basis BPJS)</label>
+          <FieldX :bind="{ readonly: !actionText }" type="number" label="" class="w-full py-2 !mt-0"
+            :value="values.gaji_acuan_baru" @input="v=>values.gaji_acuan_baru=v"
+            placeholder="Gaji Acuan Baru" :check="false" />
         </div>
 
         <div>

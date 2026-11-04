@@ -10,9 +10,36 @@ class tmutasi extends Migration
     public function up()
     {
         Schema::table($this->tableName, function (Blueprint $table) {
-            //$table->string('_existColumnName_')->change();
-            //$table->string('_columnName_');
-            $table->dropColumn(['deskripsi', 'catatan']);
+            if (!Schema::hasColumn($this->tableName, 'gaji_pokok_lama')) {
+                $table->decimal('gaji_pokok_lama', 12, 2)->nullable();
+            }
+            if (!Schema::hasColumn($this->tableName, 'gaji_pokok_baru')) {
+                $table->decimal('gaji_pokok_baru', 12, 2)->nullable();
+            }
+            if (!Schema::hasColumn($this->tableName, 'gaji_acuan_lama')) {
+                $table->decimal('gaji_acuan_lama', 12, 2)->nullable();
+            }
+            if (!Schema::hasColumn($this->tableName, 'gaji_acuan_baru')) {
+                $table->decimal('gaji_acuan_baru', 12, 2)->nullable();
+            }
+        });
+    }
+
+    public function down()
+    {
+        Schema::table($this->tableName, function (Blueprint $table) {
+            if (Schema::hasColumn($this->tableName, 'gaji_acuan_baru')) {
+                $table->dropColumn('gaji_acuan_baru');
+            }
+            if (Schema::hasColumn($this->tableName, 'gaji_acuan_lama')) {
+                $table->dropColumn('gaji_acuan_lama');
+            }
+            if (Schema::hasColumn($this->tableName, 'gaji_pokok_baru')) {
+                $table->dropColumn('gaji_pokok_baru');
+            }
+            if (Schema::hasColumn($this->tableName, 'gaji_pokok_lama')) {
+                $table->dropColumn('gaji_pokok_lama');
+            }
         });
     }
 }

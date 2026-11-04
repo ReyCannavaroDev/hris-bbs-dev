@@ -9,6 +9,18 @@ class t_mutasi extends \App\Models\BasicModels\t_mutasi
     {
         parent::__construct();
         $this->helper = getCore("Helper");
+        $newCols = ['gaji_pokok_lama', 'gaji_pokok_baru', 'gaji_acuan_lama', 'gaji_acuan_baru'];
+        $this->fillable    = array_merge($this->fillable, $newCols);
+        $this->columns     = array_merge($this->columns, $newCols);
+        $this->columnsFull = array_merge($this->columnsFull, [
+            'gaji_pokok_lama:decimal',
+            'gaji_pokok_baru:decimal',
+            'gaji_acuan_lama:decimal',
+            'gaji_acuan_baru:decimal'
+        ]);
+        $this->createable  = array_merge($this->createable, $newCols);
+        $this->updateable  = array_merge($this->updateable, $newCols);
+        $this->searchable  = array_merge($this->searchable, $newCols);
     }
 
     public $fileColumns = [
@@ -23,12 +35,28 @@ class t_mutasi extends \App\Models\BasicModels\t_mutasi
         $karyId = $arrayData['m_kary_id'] ?? null;
         $mDirId = $arrayData['m_dir_id'] ?? null;
         $mCompId = $arrayData['m_comp_id'] ?? null;
+        $kary = null;
 
-        if ($karyId && (!$mDirId || !$mCompId)) {
-            $kary = \DB::table('m_kary')->where('id', $karyId)->select('m_dir_id', 'm_comp_id')->first();
+        if ($karyId) {
+            $kary = \DB::table('m_kary')->where('id', $karyId)->first();
             if ($kary) {
                 $mDirId = $mDirId ?: $kary->m_dir_id;
                 $mCompId = $mCompId ?: ($kary->m_comp_id ?: 1);
+            }
+        }
+
+        // Ambil nilai gaji pokok & acuan lama dari master karyawan
+        $gajiPokokLama = $arrayData['gaji_pokok_lama'] ?? ($kary ? ($kary->gaji_pokok ?: 0) : 0);
+        $gajiAcuanLama = $arrayData['gaji_acuan_lama'] ?? ($kary ? ($kary->gaji_acuan ?: 0) : 0);
+        $gajiPokokBaru = $arrayData['gaji_pokok_baru'] ?? $gajiPokokLama;
+        $gajiAcuanBaru = $arrayData['gaji_acuan_baru'] ?? $gajiAcuanLama;
+
+        // Jika standar baru dipilih dan gaji baru masih kosong/0, default dari standar baru
+        if ((empty($gajiPokokBaru) || (float)$gajiPokokBaru == 0) && !empty($arrayData['m_standart_baru_id'])) {
+            $standartBaru = \DB::table('m_standart_gaji')->where('id', $arrayData['m_standart_baru_id'])->first();
+            if ($standartBaru) {
+                $gajiPokokBaru = $standartBaru->gaji_pokok ?: $gajiPokokBaru;
+                $gajiAcuanBaru = $standartBaru->gaji_pokok ?: $gajiAcuanBaru;
             }
         }
 
@@ -37,6 +65,10 @@ class t_mutasi extends \App\Models\BasicModels\t_mutasi
             "status" => "DRAFT",
             "m_dir_id" => $mDirId,
             "m_comp_id" => $mCompId ?: 1,
+            "gaji_pokok_lama" => (float)$gajiPokokLama,
+            "gaji_pokok_baru" => (float)$gajiPokokBaru,
+            "gaji_acuan_lama" => (float)$gajiAcuanLama,
+            "gaji_acuan_baru" => (float)$gajiAcuanBaru,
         ]);
 
         return [
@@ -61,7 +93,7 @@ class t_mutasi extends \App\Models\BasicModels\t_mutasi
         $mCompId = $arrayData['m_comp_id'] ?? ($existing ? $existing->m_comp_id : null);
 
         if ($karyId && (!$mDirId || !$mCompId)) {
-            $kary = \DB::table('m_kary')->where('id', $karyId)->select('m_dir_id', 'm_comp_id')->first();
+            $kary = \DB::table('m_kary')->where('id', $karyId)->select('m_dir_id', 'm_comp_id', 'gaji_pokok', 'gaji_acuan')->first();
             if ($kary) {
                 $mDirId = $mDirId ?: $kary->m_dir_id;
                 $mCompId = $mCompId ?: ($kary->m_comp_id ?: 1);
@@ -137,6 +169,13 @@ class t_mutasi extends \App\Models\BasicModels\t_mutasi
             if ($data["m_comp_id"]) {
                 $updateKaryPayload["m_comp_id"] = $data["m_comp_id"];
             }
+            // Sinkronisasi gaji pokok baru dan gaji acuan baru ke master karyawan
+            if (isset($data["gaji_pokok_baru"]) && (float)$data["gaji_pokok_baru"] > 0) {
+                $updateKaryPayload["gaji_pokok"] = (float)$data["gaji_pokok_baru"];
+            }
+            if (isset($data["gaji_acuan_baru"]) && (float)$data["gaji_acuan_baru"] > 0) {
+                $updateKaryPayload["gaji_acuan"] = (float)$data["gaji_acuan_baru"];
+            }
 
             $updateKary = $karyawan->update($updateKaryPayload);
 
@@ -145,7 +184,7 @@ class t_mutasi extends \App\Models\BasicModels\t_mutasi
                 \DB::commit();
 
                 return response()->json([
-                    "message" => "Data berhasil diposting.",
+                    "message" => "Data mutasi berhasil diposting. Master karyawan dan perhitungan gaji prorata otomatis diperbarui.",
                 ]);
             } else {
                 // If any update fails, rollback the transaction

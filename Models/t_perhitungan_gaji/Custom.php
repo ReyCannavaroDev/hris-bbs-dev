@@ -54,57 +54,178 @@ class t_perhitungan_gaji extends \App\Models\BasicModels\t_perhitungan_gaji
         $firstDayOfMonth = $startDate;
         $lastDayOfMonth = $endDate;
 
-        $defaultColumns = [
-            [
-                'name'  => 'gaji_pokok',
-                'type'  => 'gaji_pokok_periode'
-            ],
-            [
-                'name'  => 'uang_saku',
-                'type'  => 'uang_saku_periode'
-            ],
-            [
-                'name'  => 'tunjangan_posisi',
-                'type'  => 'tunjangan_posisi_periode'
-            ],
-            [
-                'name'  => 'tunjangan_kemahalan_id',
-                'table' => 'm_tunj_kemahalan',
-                'type'  => 'tunjangan_kemahalan_periode'
-            ],
-            [
-                'name'  => 'uang_makan',
-                'type'  => 'uang_makan'
-            ],
-            [
-                'name'  => 'tunjangan_tetap',
-                'type'  => 'tunjangan_tetap'
-            ]
-        ];
-
-        foreach($defaultColumns as $idx => $key ){
-            $defaultColumns[$idx]['label']  = $this->helper->snakeCaseToCapitalize($key['name']);
-            $defaultColumns[$idx]['factor'] = '+'; // pasti tambah karena default kolom tunjangan
-
-            // dynamic 
-            if(@!$key['table']) {
-                if ($key['name'] === 'gaji_pokok' && !empty($kary->gaji_pokok) && (float)$kary->gaji_pokok > 0) {
-                    $defaultColumns[$idx]['value']  = (float)$kary->gaji_pokok;
-                    $defaultColumns[$idx]['type']   = $standart_gaji[$key['type']] ?? 'Bulanan';
-                } else {
-                    $defaultColumns[$idx]['value']  = (float)$standart_gaji[$key['name']] ?? 0;
-                    $defaultColumns[$idx]['type']   = $standart_gaji[$key['type']];
+        // Cek apakah karyawan mengalami mutasi di tengah periode (Opsi 2 - Prorata Split Tanggal)
+        $mutasiData = null;
+        if ($kary && $firstDayOfMonth && $lastDayOfMonth) {
+            try {
+                $coreGaji = new \App\Cores\PerhitunganGaji();
+                $cekMutasi = $coreGaji->cekDanHitungProrataMutasi($kary, $firstDayOfMonth, $lastDayOfMonth);
+                if (!empty($cekMutasi['has_mutasi'])) {
+                    $mutasiData = $cekMutasi;
                 }
-            }else{
-                if($key['table'] == 'm_tunj_kemahalan'){
-                    $defaultColumns[$idx]['label']  = "Tunjangan Kemahalan";
-                    $defaultColumns[$idx]['value']  = (float)\DB::table($key['table'])->where('id', $standart_gaji[$key['name']])->pluck('besaran')->first() ?? 0;
-                    $defaultColumns[$idx]['type']   = $standart_gaji[$key['type']];
+            } catch (\Throwable $e) {
+                $mutasiData = null;
+            }
+        }
+
+        if ($mutasiData) {
+            $defaultColumns = [];
+            // 1. Gaji Pokok Prorata Divisi Lama & Divisi Baru
+            if ($mutasiData['gp_prorata_lama'] > 0) {
+                $defaultColumns[] = [
+                    'label'      => "Gaji Pokok - {$mutasiData['divisi_lama']} (Prorata {$mutasiData['hari_lama']} Hari)",
+                    'factor'     => '+',
+                    'value'      => (float) $mutasiData['gp_prorata_lama'],
+                    'type'       => 'Bulanan',
+                    'can_adjust' => 1
+                ];
+            }
+            if ($mutasiData['gp_prorata_baru'] > 0) {
+                $defaultColumns[] = [
+                    'label'      => "Gaji Pokok - {$mutasiData['divisi_baru']} (Prorata {$mutasiData['hari_baru']} Hari)",
+                    'factor'     => '+',
+                    'value'      => (float) $mutasiData['gp_prorata_baru'],
+                    'type'       => 'Bulanan',
+                    'can_adjust' => 1
+                ];
+            }
+
+            // 2. Tunjangan Posisi Prorata
+            $tpLama = (float)($mutasiData['standart_lama']->tunjangan_posisi ?? 0);
+            if ($tpLama > 0) {
+                $defaultColumns[] = [
+                    'label'      => "Tunjangan Posisi - {$mutasiData['divisi_lama']} (Prorata {$mutasiData['hari_lama']} Hari)",
+                    'factor'     => '+',
+                    'value'      => (float) round($tpLama * $mutasiData['rasio_lama']),
+                    'type'       => 'Bulanan',
+                    'can_adjust' => 1
+                ];
+            }
+            $tpBaru = (float)($mutasiData['standart_baru']->tunjangan_posisi ?? 0);
+            if ($tpBaru > 0) {
+                $defaultColumns[] = [
+                    'label'      => "Tunjangan Posisi - {$mutasiData['divisi_baru']} (Prorata {$mutasiData['hari_baru']} Hari)",
+                    'factor'     => '+',
+                    'value'      => (float) round($tpBaru * $mutasiData['rasio_baru']),
+                    'type'       => 'Bulanan',
+                    'can_adjust' => 1
+                ];
+            }
+
+            // 3. Uang Saku Prorata
+            $usLama = (float)($mutasiData['standart_lama']->uang_saku ?? 0);
+            if ($usLama > 0) {
+                $defaultColumns[] = [
+                    'label'      => "Uang Saku - {$mutasiData['divisi_lama']} (Prorata {$mutasiData['hari_lama']} Hari)",
+                    'factor'     => '+',
+                    'value'      => (float) round($usLama * $mutasiData['rasio_lama']),
+                    'type'       => 'Bulanan',
+                    'can_adjust' => 1
+                ];
+            }
+            $usBaru = (float)($mutasiData['standart_baru']->uang_saku ?? 0);
+            if ($usBaru > 0) {
+                $defaultColumns[] = [
+                    'label'      => "Uang Saku - {$mutasiData['divisi_baru']} (Prorata {$mutasiData['hari_baru']} Hari)",
+                    'factor'     => '+',
+                    'value'      => (float) round($usBaru * $mutasiData['rasio_baru']),
+                    'type'       => 'Bulanan',
+                    'can_adjust' => 1
+                ];
+            }
+
+            // 4. Tunjangan Kemahalan Prorata
+            $tkLamaId = $mutasiData['standart_lama']->tunjangan_kemahalan_id ?? null;
+            if ($tkLamaId) {
+                $besaranTkLama = (float)\DB::table('m_tunj_kemahalan')->where('id', $tkLamaId)->value('besaran') ?: 0;
+                if ($besaranTkLama > 0) {
+                    $defaultColumns[] = [
+                        'label'      => "Tunjangan Kemahalan - {$mutasiData['divisi_lama']} (Prorata {$mutasiData['hari_lama']} Hari)",
+                        'factor'     => '+',
+                        'value'      => (float) round($besaranTkLama * $mutasiData['rasio_lama']),
+                        'type'       => 'Bulanan',
+                        'can_adjust' => 1
+                    ];
                 }
             }
-            $defaultColumns[$idx]['can_adjust'] = 1;
-            if ($defaultColumns[$idx]['value'] == 0) {
-                unset($defaultColumns[$idx]);
+            $tkBaruId = $mutasiData['standart_baru']->tunjangan_kemahalan_id ?? null;
+            if ($tkBaruId) {
+                $besaranTkBaru = (float)\DB::table('m_tunj_kemahalan')->where('id', $tkBaruId)->value('besaran') ?: 0;
+                if ($besaranTkBaru > 0) {
+                    $defaultColumns[] = [
+                        'label'      => "Tunjangan Kemahalan - {$mutasiData['divisi_baru']} (Prorata {$mutasiData['hari_baru']} Hari)",
+                        'factor'     => '+',
+                        'value'      => (float) round($besaranTkBaru * $mutasiData['rasio_baru']),
+                        'type'       => 'Bulanan',
+                        'can_adjust' => 1
+                    ];
+                }
+            }
+
+            // 5. Uang Makan (Harian)
+            $umNilai = (float)($mutasiData['standart_baru']->uang_makan ?? ($standart_gaji['uang_makan'] ?? 0));
+            if ($umNilai > 0) {
+                $defaultColumns[] = [
+                    'label'      => 'Uang Makan',
+                    'factor'     => '+',
+                    'value'      => $umNilai,
+                    'type'       => 'Harian',
+                    'can_adjust' => 1
+                ];
+            }
+        } else {
+            $defaultColumns = [
+                [
+                    'name'  => 'gaji_pokok',
+                    'type'  => 'gaji_pokok_periode'
+                ],
+                [
+                    'name'  => 'uang_saku',
+                    'type'  => 'uang_saku_periode'
+                ],
+                [
+                    'name'  => 'tunjangan_posisi',
+                    'type'  => 'tunjangan_posisi_periode'
+                ],
+                [
+                    'name'  => 'tunjangan_kemahalan_id',
+                    'table' => 'm_tunj_kemahalan',
+                    'type'  => 'tunjangan_kemahalan_periode'
+                ],
+                [
+                    'name'  => 'uang_makan',
+                    'type'  => 'uang_makan'
+                ],
+                [
+                    'name'  => 'tunjangan_tetap',
+                    'type'  => 'tunjangan_tetap'
+                ]
+            ];
+
+            foreach($defaultColumns as $idx => $key ){
+                $defaultColumns[$idx]['label']  = $this->helper->snakeCaseToCapitalize($key['name']);
+                $defaultColumns[$idx]['factor'] = '+'; // pasti tambah karena default kolom tunjangan
+
+                // dynamic 
+                if(@!$key['table']) {
+                    if ($key['name'] === 'gaji_pokok' && !empty($kary->gaji_pokok) && (float)$kary->gaji_pokok > 0) {
+                        $defaultColumns[$idx]['value']  = (float)$kary->gaji_pokok;
+                        $defaultColumns[$idx]['type']   = $standart_gaji[$key['type']] ?? 'Bulanan';
+                    } else {
+                        $defaultColumns[$idx]['value']  = (float)$standart_gaji[$key['name']] ?? 0;
+                        $defaultColumns[$idx]['type']   = $standart_gaji[$key['type']];
+                    }
+                }else{
+                    if($key['table'] == 'm_tunj_kemahalan'){
+                        $defaultColumns[$idx]['label']  = "Tunjangan Kemahalan";
+                        $defaultColumns[$idx]['value']  = (float)\DB::table($key['table'])->where('id', $standart_gaji[$key['name']])->pluck('besaran')->first() ?? 0;
+                        $defaultColumns[$idx]['type']   = $standart_gaji[$key['type']];
+                    }
+                }
+                $defaultColumns[$idx]['can_adjust'] = 1;
+                if ($defaultColumns[$idx]['value'] == 0) {
+                    unset($defaultColumns[$idx]);
+                }
             }
         }
 
@@ -183,10 +304,21 @@ class t_perhitungan_gaji extends \App\Models\BasicModels\t_perhitungan_gaji
 
         // Potongan BPJS Resmi Pemerintah (Pekerja: Kesehatan 1%, JHT 2%, JP 1%) berbasis gaji_acuan
         // Jika mingguan, otomatis dibagi 4 (prorata per minggu) agar kalkulasi 1 bulan transparan
+        $basisGajiBPJS = 0;
+        if (!empty($mutasiData)) {
+            $basisLama = (float)($mutasiData['gaji_acuan_lama'] ?: $mutasiData['gp_lama']);
+            $basisBaru = (float)($mutasiData['gaji_acuan_baru'] ?: $mutasiData['gp_baru']);
+            $basisGajiBPJS = round(($basisLama * $mutasiData['rasio_lama']) + ($basisBaru * $mutasiData['rasio_baru']));
+        } else {
+            $basisGajiBPJS = (!empty($kary->gaji_acuan) && (float)$kary->gaji_acuan > 0)
+                ? (float)$kary->gaji_acuan
+                : ((!empty($kary->gaji_pokok) && (float)$kary->gaji_pokok > 0) ? (float)$kary->gaji_pokok : 0);
+        }
+
         $bpjsRincian = [];
         try {
             $coreGajiBPJS = new \App\Cores\PerhitunganGaji();
-            $bpjsData = $coreGajiBPJS->hitungPotonganBPJS($kary, $kary->gaji_acuan ?? null, ['is_mingguan' => $isPeriodMingguan]);
+            $bpjsData = $coreGajiBPJS->hitungPotonganBPJS($kary, $basisGajiBPJS ?: ($kary->gaji_acuan ?? null), ['is_mingguan' => $isPeriodMingguan]);
             $bpjsRincian = $bpjsData['rincian'] ?? [];
         } catch (\Throwable $e) {
             $bpjsRincian = [];
@@ -194,9 +326,6 @@ class t_perhitungan_gaji extends \App\Models\BasicModels\t_perhitungan_gaji
 
         // Fallback langsung berbasis gaji_acuan jika rincian dari core masih kosong
         if (empty($bpjsRincian)) {
-            $basisGajiBPJS = (!empty($kary->gaji_acuan) && (float)$kary->gaji_acuan > 0)
-                ? (float)$kary->gaji_acuan
-                : ((!empty($kary->gaji_pokok) && (float)$kary->gaji_pokok > 0) ? (float)$kary->gaji_pokok : 0);
 
             if ($basisGajiBPJS > 0) {
                 $pembagiBPJS = $isPeriodMingguan ? 4 : 1;
@@ -803,6 +932,21 @@ class t_perhitungan_gaji extends \App\Models\BasicModels\t_perhitungan_gaji
             foreach ($kary as $key) {
                 $gaji = $this->salaryOfKary($key->id, $strDateFrom, $strDateTo);
                 $nikVal = $key->nik ?: $key->kode;
+
+                // Tambahkan keterangan mutasi jika ada
+                $mutasiNote = '';
+                $mutasiRecord = \DB::table('t_mutasi')
+                    ->where('m_kary_id', $key->id)
+                    ->where('status', 'POSTED')
+                    ->whereBetween('tgl', [$strDateFrom, $strDateTo])
+                    ->orderBy('tgl', 'desc')
+                    ->first();
+                if ($mutasiRecord) {
+                    $divLama = \DB::table('m_divisi')->where('id', $mutasiRecord->m_divisi_lama_id)->value('nama') ?? 'Divisi Lama';
+                    $divBaru = \DB::table('m_divisi')->where('id', $mutasiRecord->m_devisi_baru_id)->value('nama') ?? 'Divisi Baru';
+                    $mutasiNote = "Prorata Mutasi ($divLama ➔ $divBaru per " . date('d/m/Y', strtotime($mutasiRecord->tgl)) . ")";
+                }
+
                 $data[] = [
                     'm_kary_id'         => $key->id,
                     'm_kary.nik'        => $nikVal,
@@ -823,6 +967,7 @@ class t_perhitungan_gaji extends \App\Models\BasicModels\t_perhitungan_gaji
                     'total_gaji'        => $gaji['total_gaji'],
                     'netto'             => $gaji['netto'],
                     'detail_gaji'       => $gaji['detail'],
+                    'desc'              => $mutasiNote,
                 ];
             }
 

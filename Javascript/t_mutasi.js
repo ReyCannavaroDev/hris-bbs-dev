@@ -162,7 +162,8 @@ async function posted() {
     }
     swal.fire({
       icon: 'success',
-      text: 'Data mutasi berhasil diposting!',
+      title: 'Berhasil Diposting!',
+      text: 'Data mutasi berhasil diposting! Master karyawan telah diperbarui dan perhitungan gaji pada periode mutasi akan otomatis dihitung prorata.',
     }).then(() => {
       router.replace('/' + modulPath + '?reload='+(Date.parse(new Date())))
     })

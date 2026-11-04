@@ -625,6 +625,115 @@ class PerhitunganGaji
     }
 
     /**
+     * 4.C Cek dan Hitung Prorata Mutasi Karyawan (Opsi 2 - Split Tanggal MoM 28 Okt 2026)
+     * Jika karyawan dimutasi di tengah periode penggajian:
+     * - Hari sebelum mutasi dibebankan ke Divisi Lama
+     * - Hari setelah mutasi dibebankan ke Divisi Baru
+     *
+     * @param object|int $karyOrId
+     * @param string $startDate (Y-m-d)
+     * @param string $endDate (Y-m-d)
+     * @param array $options
+     * @return array
+     */
+    public function cekDanHitungProrataMutasi($karyOrId, $startDate, $endDate, $options = [])
+    {
+        $kary = is_object($karyOrId) ? $karyOrId : DB::table('m_kary')->where('id', $karyOrId)->first();
+        if (!$kary || !$startDate || !$endDate) {
+            return ['has_mutasi' => false];
+        }
+
+        $mutasi = DB::table('t_mutasi')
+            ->where('m_kary_id', $kary->id)
+            ->where('status', 'POSTED')
+            ->whereBetween('tgl', [$startDate, $endDate])
+            ->orderBy('tgl', 'desc')
+            ->first();
+
+        if (!$mutasi) {
+            return ['has_mutasi' => false];
+        }
+
+        $tglMutasi = $mutasi->tgl;
+        $totalHari = 0;
+        $hariLama = 0;
+        $hariBaru = 0;
+
+        try {
+            $curr = new \DateTime($startDate);
+            $end = new \DateTime($endDate);
+            $tglMutasiObj = new \DateTime($tglMutasi);
+
+            while ($curr <= $end) {
+                $w = (int)$curr->format('w');
+                // Hitung hari kerja (bukan hari Minggu)
+                if ($w !== 0) {
+                    $totalHari++;
+                    if ($curr < $tglMutasiObj) {
+                        $hariLama++;
+                    } else {
+                        $hariBaru++;
+                    }
+                }
+                $curr->modify('+1 day');
+            }
+        } catch (\Throwable $e) {
+            $totalHari = 25;
+            $hariLama = 12;
+            $hariBaru = 13;
+        }
+
+        if ($totalHari <= 0) {
+            $totalHari = 25;
+            $hariLama = 12;
+            $hariBaru = 13;
+        }
+
+        $rasioLama = $hariLama / $totalHari;
+        $rasioBaru = $hariBaru / $totalHari;
+
+        $divisiLamaNama = DB::table('m_divisi')->where('id', $mutasi->m_divisi_lama_id)->value('nama') ?? 'Divisi Lama';
+        $divisiBaruNama = DB::table('m_divisi')->where('id', $mutasi->m_devisi_baru_id)->value('nama') ?? 'Divisi Baru';
+
+        $standartLama = $mutasi->m_standart_posisi_id ? DB::table('m_standart_gaji')->where('id', $mutasi->m_standart_posisi_id)->first() : null;
+        $standartBaru = $mutasi->m_standart_baru_id ? DB::table('m_standart_gaji')->where('id', $mutasi->m_standart_baru_id)->first() : null;
+
+        $gpLama = (!empty($mutasi->gaji_pokok_lama) && (float)$mutasi->gaji_pokok_lama > 0)
+            ? (float)$mutasi->gaji_pokok_lama
+            : ((float)($standartLama->gaji_pokok ?? ($kary->gaji_pokok ?? 0)));
+
+        $gpBaru = (!empty($mutasi->gaji_pokok_baru) && (float)$mutasi->gaji_pokok_baru > 0)
+            ? (float)$mutasi->gaji_pokok_baru
+            : ((float)($standartBaru->gaji_pokok ?? ($kary->gaji_pokok ?? 0)));
+
+        $gpProrataLama = round($gpLama * $rasioLama);
+        $gpProrataBaru = round($gpBaru * $rasioBaru);
+
+        return [
+            'has_mutasi'      => true,
+            'mutasi'          => $mutasi,
+            'tgl_mutasi'      => $tglMutasi,
+            'divisi_lama_id'  => $mutasi->m_divisi_lama_id,
+            'divisi_lama'     => $divisiLamaNama,
+            'divisi_baru_id'  => $mutasi->m_devisi_baru_id,
+            'divisi_baru'     => $divisiBaruNama,
+            'hari_lama'       => $hariLama,
+            'hari_baru'       => $hariBaru,
+            'total_hari'      => $totalHari,
+            'rasio_lama'      => $rasioLama,
+            'rasio_baru'      => $rasioBaru,
+            'gp_lama'         => $gpLama,
+            'gp_baru'         => $gpBaru,
+            'gp_prorata_lama' => $gpProrataLama,
+            'gp_prorata_baru' => $gpProrataBaru,
+            'standart_lama'   => $standartLama,
+            'standart_baru'   => $standartBaru,
+            'gaji_acuan_lama' => $mutasi->gaji_acuan_lama ?? ($kary->gaji_acuan ?? $gpLama),
+            'gaji_acuan_baru' => $mutasi->gaji_acuan_baru ?? ($kary->gaji_acuan ?? $gpBaru),
+        ];
+    }
+
+    /**
      * 5. Hitung Keseluruhan Gaji Karyawan (Single Employee Payroll Run)
      * Menggabungkan Hak Upah, Denda Telat, Potongan Izin, dan Kasbon.
      *
