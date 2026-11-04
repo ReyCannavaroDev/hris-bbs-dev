@@ -46,6 +46,34 @@
       <div class="grid <md:grid-cols-1 grid-cols-2 gap-2">
         <!-- START COLUMN -->
         <div>
+          <label class="font-semibold">Company</label>
+          <FieldSelect
+            :bind="{ disabled: !actionText || !store.user.data?.is_superadmin, clearable: !(!actionText || !store.user.data?.is_superadmin) }"
+            class="w-full py-2 !mt-0"
+            :value="values.m_dir_id"
+            @input="v=>values.m_dir_id=v"
+            :errorText="formErrors.m_dir_id?'failed':''"
+            :hints="formErrors.m_dir_id"
+            placeholder="Pilih Company"
+            label=""
+            displayField="nama"
+            valueField="id"
+            :api="{
+                url: `${store.server.url_backend}/operation/m_dir`,
+                headers: {
+                  'Content-Type': 'Application/json',
+                  Authorization: `${store.user.token_type} ${store.user.token}`
+                },
+                params: {
+                  simplest:true,
+                  where: `this.is_active='true'`,
+                  transform:false,
+                  selectfield: 'this.id, this.nama, this.is_active'
+                }
+            }"
+            fa-icon="search" :check="false" />
+        </div>
+        <div>
           <label class="font-semibold">Nomor<span class="text-red-500 space-x-0 pl-0"></span></label>
           <FieldX :bind="{ readonly: true }" label="" class="w-full py-2 !mt-0" :value="values.nomor"
             :errorText="formErrors.nomor?'failed':''" @input="v=>values.nomor=v" :hints="formErrors.nomor"
@@ -211,22 +239,55 @@
         </div>
 
         <div>
-          <label class="col-span-12">Surat Dokter<span v-if="values.alasan_string?.toLowerCase().includes('sakit') || values.tipe_string?.toLowerCase().includes('sakit')" class="text-red-500 pl-1 font-bold">* (Wajib untuk Sakit)</span></label>
-          <FieldUpload class="w-full py-2 !mt-0"
-          :bind="{ readonly: !actionText,disabled: !actionText }"
-            :value="values.attachment" @input="(v)=>values.attachment=v" :maxSize="10"
-            :reducerDisplay="val=>!val?null:val.split(':::')[val.split(':::').length-1]"
-            :api="{
-              url: `${store.server.url_backend}/operation/t_cuti/upload`,
-              headers: { Authorization: `${store.user.token_type} ${store.user.token}`},
-              params: { field: 'attachment' },
-              onsuccess: response=>response,
-              onerror:(error)=>{},
-             }"
-             :hints="formErrors.attachment" placeholder="Masukan Surat Dokter" fa-icon="upload"
-             accept="application/pdf" label="" :check="false"  
-          />
-          
+          <label class="col-span-12 font-semibold">
+            Surat Dokter
+            <span v-if="isCutiSakit" class="text-red-500 pl-1 font-bold">* (Wajib untuk Sakit)</span>
+          </label>
+          <!-- Mode View / Readonly: Tidak bisa upload lagi saat view data -->
+          <div v-if="!actionText" class="w-full py-2 !mt-0">
+            <div v-if="values.attachment" class="flex items-center justify-between p-2.5 bg-gray-50 border border-gray-300 rounded shadow-sm">
+              <div class="flex items-center space-x-2 truncate pr-2">
+                <svg class="w-5 h-5 text-red-600 shrink-0" fill="currentColor" viewBox="0 0 20 20">
+                  <path fill-rule="evenodd" d="M4 4a2 2 0 012-2h4.586A2 2 0 0112 2.586L15.414 6A2 2 0 0116 7.414V16a2 2 0 01-2 2H6a2 2 0 01-2-2V4zm2 6a1 1 0 011-1h6a1 1 0 110 2H7a1 1 0 01-1-1zm1 3a1 1 0 100 2h6a1 1 0 100-2H7z" clip-rule="evenodd" />
+                </svg>
+                <span class="text-sm font-medium text-gray-700 truncate" :title="attachmentDisplayName">
+                  {{ attachmentDisplayName }}
+                </span>
+              </div>
+              <button 
+                type="button" 
+                @click="openAttachment" 
+                class="px-3 py-1.5 text-xs font-semibold text-white bg-blue-600 hover:bg-blue-700 rounded transition inline-flex items-center gap-1 shrink-0 cursor-pointer focus:outline-none">
+                <svg class="w-3.5 h-3.5 inline mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+                </svg>
+                Lihat Surat Dokter
+              </button>
+            </div>
+            <div v-else class="text-sm text-gray-400 italic py-2">
+              Tidak ada surat dokter terlampir
+            </div>
+          </div>
+
+          <!-- Mode Create / Edit: Hanya bisa upload saat create atau edit -->
+          <div v-else>
+            <FieldUpload class="w-full py-2 !mt-0"
+              :value="values.attachment" @input="(v)=>values.attachment=v" :maxSize="10"
+              :reducerDisplay="val=>!val?null:val.split(':::')[val.split(':::').length-1]"
+              :api="{
+                url: `${store.server.url_backend}/operation/t_cuti/upload`,
+                headers: { Authorization: `${store.user.token_type} ${store.user.token}`},
+                params: { field: 'attachment' },
+                onsuccess: response=>response,
+                onerror:(error)=>{},
+               }"
+               :hints="formErrors.attachment" 
+               :placeholder="isCutiSakit ? 'Unggah Surat Dokter (Wajib)' : 'Masukan Surat Dokter (Opsional)'" 
+               fa-icon="upload"
+               accept="application/pdf,image/*" label="" :check="false"  
+            />
+          </div>
         </div>
         <div>
           <label class="col-span-12">Keterangan Cuti<label class="text-red-500 space-x-0 pl-0"></label></label>

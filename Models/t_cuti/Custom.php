@@ -41,6 +41,16 @@ class t_cuti extends \App\Models\BasicModels\t_cuti
     {
         $approval = generate_approval_log::where('trx_table', 't_cuti')->where('trx_id', $row['id']) ->orderBy('created_at', 'desc')->value('action_note');
         $row['approval_note'] = $approval ?? '-';
+        $compNama = $row['m_dir.nama'] ?? null;
+        if (empty($compNama) && !empty($row['m_dir_id'])) {
+            $compNama = \DB::table('m_dir')->where('id', $row['m_dir_id'])->value('nama');
+        }
+        if (empty($compNama) && !empty($row['m_kary_id'])) {
+            $compNama = \DB::table('m_kary as k')->join('m_dir as d', 'd.id', '=', 'k.m_dir_id')->where('k.id', $row['m_kary_id'])->value('d.nama');
+        }
+        if (!empty($compNama)) {
+            $row['m_dir.nama'] = $compNama;
+        }
 
         foreach (['date_from', 'date_to'] as $col) {
             if (!empty($row[$col])) {

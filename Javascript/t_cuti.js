@@ -1,5 +1,5 @@
 import { useRouter, useRoute, RouterLink } from 'vue-router'
-import { ref, readonly, reactive, inject, onMounted, onBeforeMount, watchEffect, onActivated ,  } from 'vue'
+import { ref, readonly, reactive, inject, onMounted, onBeforeMount, watchEffect, onActivated, computed } from 'vue'
 
 
 const router = useRouter()
@@ -80,8 +80,36 @@ let initialValues = {}
 const changedValues = []
 
 const values = reactive({
+  m_dir_id: null,
+  m_comp_id: null,
+  m_kary_id: null,
+  alasan_id: null,
+  tipe_cuti_id: null,
+  alasan_string: '',
+  tipe_string: '',
+  attachment: null,
 })
 const totalDays = ref();
+
+const isCutiSakit = computed(() => {
+  const strCheck = ((values.alasan_string || '') + ' ' + (values.tipe_string || '') + ' ' + (values.keterangan || '')).toLowerCase();
+  return strCheck.includes('sakit');
+});
+
+const attachmentDisplayName = computed(() => {
+  if (!values.attachment) return '';
+  const parts = values.attachment.split(':::');
+  return parts[parts.length - 1];
+});
+
+function openAttachment() {
+  if (!values.attachment) return;
+  const rawPath = values.attachment;
+  const path = rawPath.startsWith('http')
+    ? rawPath
+    : `${store.server.url_backend}/${rawPath.replace(/^(\.\/|\/)/, '')}`;
+  window.open(path, '_blank');
+}
 
 function onDateFromChange(val) {
   const d = parseDate(val)
@@ -189,6 +217,15 @@ onBeforeMount(async () => {
 
   for (const key in initialValues) {
     values[key] = initialValues[key]
+  }
+  if (!values.m_dir_id && (initialValues['m_kary.m_dir_id'] || initialValues['m_dir.id'] || initialValues['m_kary_dir_id'])) {
+    values.m_dir_id = initialValues['m_kary.m_dir_id'] || initialValues['m_dir.id'] || initialValues['m_kary_dir_id']
+  }
+  if (!values.alasan_string && (initialValues['alasan.value'] || initialValues['m_general.value'])) {
+    values.alasan_string = initialValues['alasan.value'] || initialValues['m_general.value']
+  }
+  if (!values.tipe_string && initialValues['tipe_cuti.value']) {
+    values.tipe_string = initialValues['tipe_cuti.value']
   }
   if (values.date_from) values.date_from = formatDateDisplay(values.date_from)
   if (values.date_to) values.date_to = formatDateDisplay(values.date_to)
@@ -310,6 +347,23 @@ function onSave() {
     const isMenikah = strCheck.includes('nikah') || strCheck.includes('menikah');
     const isMeninggal = strCheck.includes('meninggal') || strCheck.includes('kematian') || strCheck.includes('duka');
 
+    // Validasi Wajib Surat Dokter untuk Cuti Sakit (Mandatory)
+    if (isSakit && !values.attachment) {
+      isBadForm.value = true;
+      formErrors.value = {
+        ...formErrors.value,
+        attachment: 'Pengajuan cuti sakit wajib melampirkan Surat Keterangan Dokter (SKD).'
+      };
+      swal.fire({
+        icon: 'warning',
+        title: 'Surat Dokter Wajib Diunggah',
+        text: 'Pengajuan cuti sakit wajib melampirkan Surat Keterangan Dokter (SKD). Silakan unggah dokumen surat dokter terlebih dahulu sebelum menyimpan.',
+        confirmButtonText: 'Mengerti',
+        confirmButtonColor: '#1469AE',
+      });
+      return;
+    }
+
     if (!isP24 && dFrom && dTo) {
       const diffTime = dTo.getTime() - dFrom.getTime();
       const diffDays = Math.round(diffTime / (1000 * 3600 * 24)) + 1;
@@ -320,14 +374,6 @@ function onSave() {
           swal.fire({
             icon: 'error',
             text: 'Pengajuan izin sakit dengan Surat Keterangan Dokter (SKD) maksimal 3 hari kerja per pengajuan.',
-          });
-          return;
-        }
-        if (!values.attachment) {
-          isBadForm.value = true;
-          swal.fire({
-            icon: 'error',
-            text: 'Pengajuan izin sakit wajib melampirkan file Surat Keterangan Dokter (SKD).',
           });
           return;
         }
