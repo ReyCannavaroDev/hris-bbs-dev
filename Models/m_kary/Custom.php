@@ -9,7 +9,13 @@ class m_kary extends \App\Models\BasicModels\m_kary
     public function __construct()
     {
         parent::__construct();
-        $this->helper = getCore("Helper");
+        $this->helper      = getCore("Helper");
+        $this->fillable    = array_merge($this->fillable, ['gaji_pokok', 'gaji_acuan']);
+        $this->columns     = array_merge($this->columns, ['gaji_pokok', 'gaji_acuan']);
+        $this->columnsFull = array_merge($this->columnsFull, ['gaji_pokok:decimal', 'gaji_acuan:decimal']);
+        $this->createable  = array_merge($this->createable, ['gaji_pokok', 'gaji_acuan']);
+        $this->updateable  = array_merge($this->updateable, ['gaji_pokok', 'gaji_acuan']);
+        $this->searchable  = array_merge($this->searchable, ['gaji_pokok', 'gaji_acuan']);
     }
 
     public $fileColumns = [
@@ -409,6 +415,8 @@ class m_kary extends \App\Models\BasicModels\m_kary
                 "is_active" => $data["is_active"] ?? true,
                 "m_standart_gaji_id" => $data["m_standart_gaji_id"] ?? 0,
                 "periode_gaji_id" => $data["periode_gaji_id"] ?? 0,
+                "gaji_pokok" => $data["gaji_pokok"] ?? null,
+                "gaji_acuan" => $data["gaji_acuan"] ?? null,
             ]);
 
             \DB::commit();
@@ -490,6 +498,8 @@ class m_kary extends \App\Models\BasicModels\m_kary
             "updated_at"   => null,
             "m_standart_gaji_id"   => null,
             "periode_gaji_id"  => null,
+            "gaji_pokok"        => null,
+            "gaji_acuan"        => null,
             "ref_id"   => null,
             "presensi_lokasi_default_id"   => null,
             "exp_date_cuti"    => null,

@@ -142,7 +142,7 @@ Terdapat beberapa penyesuaian aturan bisnis (*business logic*) dan permintaan fi
 | 3 | **Preset Cut-Off Payroll Tanggal 25 & Fleksibilitas Gaji** | Mas Duta | ✅ Selesai | Auto-set dinamis 26 s/d 25 bulanan, 1 minggu lembur, opsi 'LEMBUR SAJA', & fix label overlapping (`d0ba545`) |
 | 4 | **Denda Keterlambatan Pembulatan ke Atas** | Mas Duta | ✅ Selesai | Formula `ceil($menit/30) * 25000`, history presensi harian, & dropdown rincian denda (`482ea06`) |
 | 5 | **Kolom Sisa Angsuran & Pelunasan Manual Kasbon (`t_potongan`)** | Mas Duta | ✅ Selesai | Kolom Sisa Angsuran di landing table & tombol/endpoint Pelunasan Manual (`482ea06`) |
-| 6 | **Gaji Pokok Per-Personal & Field `gaji_acuan` (UMK BPJS)** | Rey / Tim | ⏳ To Do | Master gaji karyawan & dasar pengali BPJS |
+| 6 | **Gaji Pokok Per-Personal & Field `gaji_acuan` (UMK BPJS)** | Rey / Tim | ✅ Selesai | Input gaji pokok personal prioritas di m_kary, auto-fill standar gaji, & field gaji_acuan BPJS |
 | 7 | **Sinkronisasi Resign & Inactive Karyawan** | Rey / Tim | ✅ Selesai | Two-way reactive trigger `tgl_berhenti` $\leftrightarrow$ `is_active` & auto-deactivate `default_users` |
 | 8 | **PPh 21 Disubsidi Perusahaan (Gross-up)** | Rey | ✅ Selesai | Tunjangan PPh 21 subsidi perusahaan penyeimbang potongan pajak agar take home pay utuh |
 | 9 | **Mutasi Karyawan Prorata (Opsi 2)** | Rey | ⏳ To Do | Split perhitungan hari kerja divisi lama vs divisi baru |
@@ -167,9 +167,9 @@ Berikut daftar tugas pengerjaan yang akan diselesaikan secara bertahap menuju pr
 - [x] **Task 1.1:** Update logika denda keterlambatan di `Cores/PerhitunganGaji.php`: ubah formula denda menjadi pembulatan ke atas per kelipatan 30 menit (`ceil($menit / 30) * 25000`).
 - [x] **Task 1.2:** Verifikasi proteksi izin P24 agar tetap bebas denda saat pembulatan baru diterapkan.
 
-### Track 2: Master Karyawan & Master Upah (`m_kary` & `m_standart_gaji`)
-- [ ] **Task 2.1:** Tambahkan field `gaji_acuan` (basis UMK BPJS) pada migrasi dan model master gaji/karyawan.
-- [ ] **Task 2.2:** Sesuaikan input `m_kary` agar gaji pokok per-personal menjadi prioritas utama kalkulasi gaji.
+### Track 2: Master Karyawan & Master Upah (`m_kary` & `m_standart_gaji`) — ✅ Selesai Dikerjakan (Rey Cannavaro - 4 Nov 2026)
+- [x] **Task 2.1:** Tambahkan field `gaji_acuan` (basis UMK BPJS) pada migrasi dan model master gaji/karyawan.
+- [x] **Task 2.2:** Sesuaikan input `m_kary` agar gaji pokok per-personal menjadi prioritas utama kalkulasi gaji.
 - [x] **Task 2.3:** Buat logika sinkronisasi reaktif di `m_kary` antara toggle `is_active` dan field `tanggal_berhenti_kerja`.
 
 ### Track 3: Engine Perhitungan Gaji & Pajak (`t_perhitungan_gaji` & `Cores`)

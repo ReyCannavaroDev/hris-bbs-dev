@@ -70,7 +70,15 @@ class PerhitunganGaji
                 ->first();
         }
 
-        $gajiPokok = (float) ($standarGaji->gaji_pokok ?? 0);
+        // Prioritaskan gaji pokok per-personal di m_kary, fallback ke m_standart_gaji jika kosong / 0
+        $gajiPokok = (!empty($kary->gaji_pokok) && (float) $kary->gaji_pokok > 0)
+            ? (float) $kary->gaji_pokok
+            : (float) ($standarGaji->gaji_pokok ?? 0);
+
+        // Gaji acuan (basis perhitungan UMK / BPJS)
+        $gajiAcuan = (!empty($kary->gaji_acuan) && (float) $kary->gaji_acuan > 0)
+            ? (float) $kary->gaji_acuan
+            : $gajiPokok;
         $uangMakan = (float) ($standarGaji->uang_makan ?? 0);
         $uangSaku = (float) ($standarGaji->uang_saku ?? 0);
         $tunjanganPosisi = (float) ($standarGaji->tunjangan_posisi ?? 0);
@@ -122,6 +130,7 @@ class PerhitunganGaji
             'standar_gaji_id'       => $standarGaji->id ?? null,
             'standar_gaji_kode'     => $standarGaji->kode ?? null,
             'gaji_pokok'            => $gajiPokok,
+            'gaji_acuan'            => $gajiAcuan,
             'gaji_pokok_periode'    => $standarGaji->gaji_pokok_periode ?? 'Bulanan',
             'uang_makan'            => $uangMakan,
             'uang_saku'             => $uangSaku,

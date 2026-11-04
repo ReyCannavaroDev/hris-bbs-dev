@@ -88,9 +88,13 @@ class t_perhitungan_gaji extends \App\Models\BasicModels\t_perhitungan_gaji
 
             // dynamic 
             if(@!$key['table']) {
+                if ($key['name'] === 'gaji_pokok' && !empty($kary->gaji_pokok) && (float)$kary->gaji_pokok > 0) {
+                    $defaultColumns[$idx]['value']  = (float)$kary->gaji_pokok;
+                    $defaultColumns[$idx]['type']   = $standart_gaji[$key['type']] ?? 'Bulanan';
+                } else {
                     $defaultColumns[$idx]['value']  = (float)$standart_gaji[$key['name']] ?? 0;
                     $defaultColumns[$idx]['type']   = $standart_gaji[$key['type']];
-              
+                }
             }else{
                 if($key['table'] == 'm_tunj_kemahalan'){
                     $defaultColumns[$idx]['label']  = "Tunjangan Kemahalan";
@@ -168,7 +172,9 @@ class t_perhitungan_gaji extends \App\Models\BasicModels\t_perhitungan_gaji
         }
 
         // check kehadiran & denda/potongan presensi karyawan (MoM BBS 7 Oktober 2026)
-        $gaji_pokok = (float) (@$standart_gaji['gaji_pokok'] ?? ($standart_gaji->gaji_pokok ?? 0));
+        $gaji_pokok = (!empty($kary->gaji_pokok) && (float)$kary->gaji_pokok > 0)
+            ? (float)$kary->gaji_pokok
+            : (float) (@$standart_gaji['gaji_pokok'] ?? ($standart_gaji->gaji_pokok ?? 0));
         $gajiPokokPeriode = strtolower(trim($standart_gaji->gaji_pokok_periode ?? (@$standart_gaji['gaji_pokok_periode'] ?? 'Bulanan')));
 
         $periodeGajiKary = null;

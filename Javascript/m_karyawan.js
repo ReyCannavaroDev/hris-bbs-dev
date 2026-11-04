@@ -104,12 +104,35 @@ const setStandartGaji = async () => {
     } else {
       values.m_standart_gaji_id = data[0]?.id
     }
+
+    // Auto-populate gaji_pokok & gaji_acuan jika belum diisi atau 0
+    if (data && data.length > 0 && data[0]?.gaji_pokok) {
+      if (values.gaji_pokok === null || values.gaji_pokok === undefined || values.gaji_pokok === '' || Number(values.gaji_pokok) === 0) {
+        values.gaji_pokok = data[0].gaji_pokok
+      }
+      if (values.gaji_acuan === null || values.gaji_acuan === undefined || values.gaji_acuan === '' || Number(values.gaji_acuan) === 0) {
+        values.gaji_acuan = values.gaji_pokok || data[0].gaji_pokok
+      }
+    }
+  }
+}
+
+const onStandartGajiSelect = (item) => {
+  if (item && item.gaji_pokok) {
+    if (values.gaji_pokok === null || values.gaji_pokok === undefined || values.gaji_pokok === '' || Number(values.gaji_pokok) === 0) {
+      values.gaji_pokok = item.gaji_pokok
+    }
+    if (values.gaji_acuan === null || values.gaji_acuan === undefined || values.gaji_acuan === '' || Number(values.gaji_acuan) === 0) {
+      values.gaji_acuan = values.gaji_pokok || item.gaji_pokok
+    }
   }
 }
 
 const values = reactive({
   is_active: 1,
   can_outscope: false,
+  gaji_pokok: null,
+  gaji_acuan: null,
   m_comp_id: null,
   m_dir_id: null,
   direktorat: store.user.data?.direktorat,

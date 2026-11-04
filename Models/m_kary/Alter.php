@@ -10,16 +10,27 @@ class mkary extends Migration
     public function up()
     {
         Schema::table($this->tableName, function (Blueprint $table) {
-            //$table->string('_existColumnName_')->change();
-            //$table->string('_columnName_');
-            // $table->dropColumn(['ig','x','facebook','linkedin','email']);
-            $table->boolean('can_outscope')->default(false);
-            // $table->integer('limit_potong')->default(7)->nullable()->change();
-            // $table->string('ig',100)->nullable();
-            // $table->string('x',100)->nullable();
-            // $table->string('facebook',100)->nullable();
-            // $table->string('linkedin',100)->nullable();
-            // $table->string('email',100)->nullable();
+            if (!Schema::hasColumn($this->tableName, 'can_outscope')) {
+                $table->boolean('can_outscope')->default(false);
+            }
+            if (!Schema::hasColumn($this->tableName, 'gaji_pokok')) {
+                $table->decimal('gaji_pokok', 12, 2)->nullable();
+            }
+            if (!Schema::hasColumn($this->tableName, 'gaji_acuan')) {
+                $table->decimal('gaji_acuan', 12, 2)->nullable();
+            }
+        });
+    }
+
+    public function down()
+    {
+        Schema::table($this->tableName, function (Blueprint $table) {
+            if (Schema::hasColumn($this->tableName, 'gaji_acuan')) {
+                $table->dropColumn('gaji_acuan');
+            }
+            if (Schema::hasColumn($this->tableName, 'gaji_pokok')) {
+                $table->dropColumn('gaji_pokok');
+            }
         });
     }
 }
