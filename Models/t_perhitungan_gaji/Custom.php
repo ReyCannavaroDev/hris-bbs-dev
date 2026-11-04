@@ -478,6 +478,15 @@ class t_perhitungan_gaji extends \App\Models\BasicModels\t_perhitungan_gaji
             $gaji_per_hari = $gaji_pokok > 0 ? ($gaji_pokok / $jml_hari_sebulan) : 0;
         }
 
+        // Jika karyawan mengalami mutasi di tengah periode, hitung gaji_per_hari dari total hak gaji pokok prorata
+        if ($mutasiData && !empty($mutasiData['has_mutasi'])) {
+            $totalGpProrata = (float)(($mutasiData['gp_prorata_lama'] ?? 0) + ($mutasiData['gp_prorata_baru'] ?? 0));
+            $pembagiHari = ($mutasiData['total_hari'] ?? 0) > 0 ? (int)$mutasiData['total_hari'] : ($hariKerjaEfektif ?: 25);
+            if ($totalGpProrata > 0 && $pembagiHari > 0) {
+                $gaji_per_hari = round($totalGpProrata / $pembagiHari, 2);
+            }
+        }
+
         $tipePeriodeKolom = $isMingguan ? 'Mingguan' : ($isHarian ? 'Harian' : 'Bulanan');
 
         try {
@@ -567,6 +576,15 @@ class t_perhitungan_gaji extends \App\Models\BasicModels\t_perhitungan_gaji
                 if (($sisa_cuti - $tidak_masuk_kerja) < 0) {
                     $hariDipotong = $tidak_masuk_kerja - max(0, $sisa_cuti);
                     $value = round($gaji_per_hari * $hariDipotong, 2);
+
+                    // Plafon maksimal: Potongan tidak masuk kerja tidak boleh melebihi hak gaji pokok periode berjalan
+                    $maxPotongGp = ($mutasiData && !empty($mutasiData['has_mutasi']))
+                        ? (float)(($mutasiData['gp_prorata_lama'] ?? 0) + ($mutasiData['gp_prorata_baru'] ?? 0))
+                        : (float)$gaji_pokok;
+                    if ($maxPotongGp > 0 && $value > $maxPotongGp) {
+                        $value = $maxPotongGp;
+                    }
+
                     $defaultColumns[] = [
                         'label'      => "Potongan Tidak Masuk Kerja ($tidak_masuk_kerja)",
                         'factor'     => '-',
@@ -834,7 +852,7 @@ class t_perhitungan_gaji extends \App\Models\BasicModels\t_perhitungan_gaji
 
             // default summary salary
             $getBasicSalary = $this->factorSalary($m_standart_gaji, $kary, $periode, $periodeAkhir);
-            $netto          = $this->summarySubSalary($getBasicSalary);
+            $netto          = max(0, $this->summarySubSalary($getBasicSalary));
             $getBasicSalary    = array_merge($getBasicSalary, [
                 [
                     'label'    => 'Total Gaji',
@@ -844,7 +862,7 @@ class t_perhitungan_gaji extends \App\Models\BasicModels\t_perhitungan_gaji
                 ]
             ]);
 
-            $nettoFinish    = $this->summarySubSalary($getBasicSalary);
+            $nettoFinish    = max(0, $this->summarySubSalary($getBasicSalary));
 
             // default summary tax (Skema Gross-Up Subsidi Perusahaan)
             $arrPPH         = $this->countPPH21($kary, $netto);
@@ -852,7 +870,7 @@ class t_perhitungan_gaji extends \App\Models\BasicModels\t_perhitungan_gaji
             $totalTax       = (float) (@$taxItem['value'] ?? 0);
             if(count($arrPPH)){
                 $getBasicSalary = array_merge($getBasicSalary, $arrPPH);
-                $nettoFinish    = $this->summarySubSalary($getBasicSalary);
+                $nettoFinish    = max(0, $this->summarySubSalary($getBasicSalary));
                 $getBasicSalary = array_merge($getBasicSalary, [
                     [
                         'label'    => 'Total Gaji Bersih (Take Home Pay)',
@@ -944,7 +962,17 @@ class t_perhitungan_gaji extends \App\Models\BasicModels\t_perhitungan_gaji
                 if ($mutasiRecord) {
                     $divLama = \DB::table('m_divisi')->where('id', $mutasiRecord->m_divisi_lama_id)->value('nama') ?? 'Divisi Lama';
                     $divBaru = \DB::table('m_divisi')->where('id', $mutasiRecord->m_devisi_baru_id)->value('nama') ?? 'Divisi Baru';
-                    $mutasiNote = "Prorata Mutasi ($divLama ➔ $divBaru per " . date('d/m/Y', strtotime($mutasiRecord->tgl)) . ")";
+                    if ($mutasiRecord->m_divisi_lama_id == $mutasiRecord->m_devisi_baru_id) {
+                        $deptLama = $mutasiRecord->m_dept_lama_id ? (\DB::table('m_dept')->where('id', $mutasiRecord->m_dept_lama_id)->value('nama') ?? '') : '';
+                        $deptBaru = $mutasiRecord->m_dept_baru_id ? (\DB::table('m_dept')->where('id', $mutasiRecord->m_dept_baru_id)->value('nama') ?? '') : '';
+                        $posLama = $mutasiRecord->m_posisi_lama_id ? (\DB::table('m_posisi')->where('id', $mutasiRecord->m_posisi_lama_id)->value('desc_kerja') ?? '') : '';
+                        $posBaru = $mutasiRecord->m_posisi_baru_id ? (\DB::table('m_posisi')->where('id', $mutasiRecord->m_posisi_baru_id)->value('desc_kerja') ?? '') : '';
+                        $pemLama = $deptLama ?: ($posLama ?: 'Lama');
+                        $pemBaru = $deptBaru ?: ($posBaru ?: 'Baru');
+                        $mutasiNote = "Prorata Mutasi ({$divLama} ({$pemLama}) ➔ {$divBaru} ({$pemBaru}) per " . date('d/m/Y', strtotime($mutasiRecord->tgl)) . ")";
+                    } else {
+                        $mutasiNote = "Prorata Mutasi ($divLama ➔ $divBaru per " . date('d/m/Y', strtotime($mutasiRecord->tgl)) . ")";
+                    }
                 }
 
                 $data[] = [

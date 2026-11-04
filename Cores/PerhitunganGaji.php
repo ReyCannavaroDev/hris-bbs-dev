@@ -695,6 +695,23 @@ class PerhitunganGaji
         $divisiLamaNama = DB::table('m_divisi')->where('id', $mutasi->m_divisi_lama_id)->value('nama') ?? 'Divisi Lama';
         $divisiBaruNama = DB::table('m_divisi')->where('id', $mutasi->m_devisi_baru_id)->value('nama') ?? 'Divisi Baru';
 
+        $deptLamaNama = $mutasi->m_dept_lama_id ? (DB::table('m_dept')->where('id', $mutasi->m_dept_lama_id)->value('nama') ?? '') : '';
+        $deptBaruNama = $mutasi->m_dept_baru_id ? (DB::table('m_dept')->where('id', $mutasi->m_dept_baru_id)->value('nama') ?? '') : '';
+
+        $posisiLamaNama = $mutasi->m_posisi_lama_id ? (DB::table('m_posisi')->where('id', $mutasi->m_posisi_lama_id)->value('desc_kerja') ?? '') : '';
+        $posisiBaruNama = $mutasi->m_posisi_baru_id ? (DB::table('m_posisi')->where('id', $mutasi->m_posisi_baru_id)->value('desc_kerja') ?? '') : '';
+
+        // Jika divisi lama dan baru identik (misal mutasi internal divisi / antar departemen), tambahkan pembeda
+        if ($mutasi->m_divisi_lama_id == $mutasi->m_devisi_baru_id) {
+            $pembedaLama = $deptLamaNama ?: ($posisiLamaNama ?: 'Lama');
+            $pembedaBaru = $deptBaruNama ?: ($posisiBaruNama ?: 'Baru');
+            $labelLama = "{$divisiLamaNama} ({$pembedaLama})";
+            $labelBaru = "{$divisiBaruNama} ({$pembedaBaru})";
+        } else {
+            $labelLama = $divisiLamaNama;
+            $labelBaru = $divisiBaruNama;
+        }
+
         $standartLama = $mutasi->m_standart_posisi_id ? DB::table('m_standart_gaji')->where('id', $mutasi->m_standart_posisi_id)->first() : null;
         $standartBaru = $mutasi->m_standart_baru_id ? DB::table('m_standart_gaji')->where('id', $mutasi->m_standart_baru_id)->first() : null;
 
@@ -708,28 +725,38 @@ class PerhitunganGaji
 
         $gpProrataLama = round($gpLama * $rasioLama);
         $gpProrataBaru = round($gpBaru * $rasioBaru);
+        $totalGpProrata = $gpProrataLama + $gpProrataBaru;
+        $gajiPerHariMutasi = $totalHari > 0 ? round($totalGpProrata / $totalHari, 2) : 0;
 
         return [
-            'has_mutasi'      => true,
-            'mutasi'          => $mutasi,
-            'tgl_mutasi'      => $tglMutasi,
-            'divisi_lama_id'  => $mutasi->m_divisi_lama_id,
-            'divisi_lama'     => $divisiLamaNama,
-            'divisi_baru_id'  => $mutasi->m_devisi_baru_id,
-            'divisi_baru'     => $divisiBaruNama,
-            'hari_lama'       => $hariLama,
-            'hari_baru'       => $hariBaru,
-            'total_hari'      => $totalHari,
-            'rasio_lama'      => $rasioLama,
-            'rasio_baru'      => $rasioBaru,
-            'gp_lama'         => $gpLama,
-            'gp_baru'         => $gpBaru,
-            'gp_prorata_lama' => $gpProrataLama,
-            'gp_prorata_baru' => $gpProrataBaru,
-            'standart_lama'   => $standartLama,
-            'standart_baru'   => $standartBaru,
-            'gaji_acuan_lama' => $mutasi->gaji_acuan_lama ?? ($kary->gaji_acuan ?? $gpLama),
-            'gaji_acuan_baru' => $mutasi->gaji_acuan_baru ?? ($kary->gaji_acuan ?? $gpBaru),
+            'has_mutasi'           => true,
+            'mutasi'               => $mutasi,
+            'tgl_mutasi'           => $tglMutasi,
+            'divisi_lama_id'       => $mutasi->m_divisi_lama_id,
+            'divisi_lama'          => $labelLama,
+            'divisi_baru_id'       => $mutasi->m_devisi_baru_id,
+            'divisi_baru'          => $labelBaru,
+            'raw_divisi_lama'      => $divisiLamaNama,
+            'raw_divisi_baru'      => $divisiBaruNama,
+            'dept_lama'            => $deptLamaNama,
+            'dept_baru'            => $deptBaruNama,
+            'posisi_lama'          => $posisiLamaNama,
+            'posisi_baru'          => $posisiBaruNama,
+            'hari_lama'            => $hariLama,
+            'hari_baru'            => $hariBaru,
+            'total_hari'           => $totalHari,
+            'rasio_lama'           => $rasioLama,
+            'rasio_baru'           => $rasioBaru,
+            'gp_lama'              => $gpLama,
+            'gp_baru'              => $gpBaru,
+            'gp_prorata_lama'      => $gpProrataLama,
+            'gp_prorata_baru'      => $gpProrataBaru,
+            'total_gp_prorata'     => $totalGpProrata,
+            'gaji_per_hari_mutasi' => $gajiPerHariMutasi,
+            'standart_lama'        => $standartLama,
+            'standart_baru'        => $standartBaru,
+            'gaji_acuan_lama'      => $mutasi->gaji_acuan_lama ?? ($kary->gaji_acuan ?? $gpLama),
+            'gaji_acuan_baru'      => $mutasi->gaji_acuan_baru ?? ($kary->gaji_acuan ?? $gpBaru),
         ];
     }
 
