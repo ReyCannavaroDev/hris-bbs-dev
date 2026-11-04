@@ -22,32 +22,71 @@
       </div>
       <div class="grid <md:grid-cols-1 grid-cols-2 gap-2">
         <div>
-          <label class="font-semibold">Periode Awal<span class="text-red-500 space-x-0 pl-0">*</span></label>
-          <FieldX :bind="{ readonly: !actionText , required: true}" class="w-full py-2 !mt-0"
-              :value="values.periode_awal" :errorText="formErrors.periode_awal?'failed':''"
-              :hints="formErrors.periode_awal" 
-              :check="false"
-              type="date"
-              label=""
-              placeholder="DD/MM/YYYY"
-              @input="(v)=>{
-                onPeriodeAwalChange(v)
-              }"
-          />
+          <label class="font-semibold">Tipe Penggajian</label>
+          <FieldSelect
+            class="w-full py-2 !mt-0"
+            :bind="{ disabled: !actionText, clearable:true }"
+            :value="values.periode_gaji_id" 
+            :check="false"
+            @input="(v)=>{
+              onPeriodeGajiInput(v)
+            }"
+            @update:valueFull="(objVal)=>{
+              onTipePeriodeChange(objVal)
+            }"
+            :errorText="formErrors.periode_gaji_id?'failed':''"
+            :hints="formErrors.periode_gaji_id"
+            label=""
+            placeholder="Pilih Tipe Penggajian"
+            displayField="value"
+            valueField="id"
+            :api="{
+                url: `${store.server.url_backend}/operation/m_general`,
+                headers: {
+                  Authorization: `${store.user.token_type} ${store.user.token}`
+                },
+                params: {
+                  simplest:true,
+                  single:true,
+                  where:`this.group='PERIODE GAJI' and this.is_active='true'`,
+                  transform:false,
+                },
+                onsuccess(response) {
+                  onLoadPeriodeOptions(response)
+                  return response
+                }
+            }"
+            fa-icon="search" :check="true" />
         </div>
-        <div>
-          <label class="font-semibold">Periode Akhir<span class="text-red-500 space-x-0 pl-0">*</span></label>
-          <FieldX :bind="{ readonly: !actionText , required: true}" class="w-full py-2 !mt-0"
-              :value="values.periode_akhir" :errorText="formErrors.periode_akhir?'failed':''"
-              :hints="formErrors.periode_akhir" 
-              :check="false"
-              type="date"
-              label=""
-              placeholder="DD/MM/YYYY"
-              @input="(v)=>{
-                onPeriodeAkhirChange(v)
-              }"
-          />
+        <div class="grid grid-cols-2 gap-2">
+          <div>
+            <label class="font-semibold">Periode Awal<span class="text-red-500 space-x-0 pl-0">*</span></label>
+            <FieldX :bind="{ readonly: !actionText , required: true}" class="w-full py-2 !mt-0"
+                :value="values.periode_awal" :errorText="formErrors.periode_awal?'failed':''"
+                :hints="formErrors.periode_awal" 
+                :check="false"
+                type="date"
+                label=""
+                placeholder="DD/MM/YYYY"
+                @input="(v)=>{
+                  onPeriodeAwalChange(v)
+                }"
+            />
+          </div>
+          <div>
+            <label class="font-semibold">Periode Akhir<span class="text-red-500 space-x-0 pl-0">*</span></label>
+            <FieldX :bind="{ readonly: !actionText , required: true}" class="w-full py-2 !mt-0"
+                :value="values.periode_akhir" :errorText="formErrors.periode_akhir?'failed':''"
+                :hints="formErrors.periode_akhir" 
+                :check="false"
+                type="date"
+                label=""
+                placeholder="DD/MM/YYYY"
+                @input="(v)=>{
+                  onPeriodeAkhirChange(v)
+                }"
+            />
+          </div>
         </div>
         <div>
           <label class="font-semibold">Company</label>
@@ -151,42 +190,6 @@
             fa-icon="search" :check="true" />
         </div>
         <div>
-          <FieldSelect
-            class="w-full py-2 !mt-0"
-            :bind="{ disabled: !actionText, clearable:true }"
-            :value="values.periode_gaji_id" 
-            :check="false"
-            @input="(v)=>{
-              onPeriodeGajiInput(v)
-            }"
-            @update:valueFull="(objVal)=>{
-              onTipePeriodeChange(objVal)
-            }"
-            :errorText="formErrors.periode_gaji_id?'failed':''"
-            :hints="formErrors.periode_gaji_id"
-            label="Periode Gaji (Tipe Penggajian)"
-            placeholder="Pilih Periode Gaji"
-            displayField="value"
-            valueField="id"
-            :api="{
-                url: `${store.server.url_backend}/operation/m_general`,
-                headers: {
-                  Authorization: `${store.user.token_type} ${store.user.token}`
-                },
-                params: {
-                  simplest:true,
-                  single:true,
-                  where:`this.group='PERIODE GAJI' and this.is_active='true'`,
-                  transform:false,
-                },
-                onsuccess(response) {
-                  onLoadPeriodeOptions(response)
-                  return response
-                }
-            }"
-            fa-icon="search" :check="true" />
-        </div>
-        <div class="col-span-2">
           <label class="font-semibold">Karyawan</label>
           <FieldSelect
             class="w-full py-2 !mt-0"
