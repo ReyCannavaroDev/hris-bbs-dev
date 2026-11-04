@@ -1449,11 +1449,7 @@
                 {
                   flex: 1,
                   headerName: 'Ijazah',
-                  cellRenderer: (params) => {
-                    const f = params.data.ijazah_url || params.data.ijazah_foto
-                    if (!f) return '-'
-                    return `<button type="button" class="text-blue-600 hover:text-blue-800 underline text-xs" onclick="window.previewFileKaryawan('${f}', 'm_kary_det_pendidikan')">Lihat File</button>`
-                  },
+                  cellRenderer: cellRendererIjazah,
                   sortable: false, resizable: true, filter: false,
                   cellClass: ['!border-gray-200', 'justify-center'],
                 },
@@ -2445,11 +2441,7 @@
                 {
                   flex: 1,
                   headerName: 'Surat Referensi',
-                  cellRenderer: (params) => {
-                    const f = params.data.surat_referensi_url || params.data.surat_referensi
-                    if (!f) return '-'
-                    return `<button type="button" class="text-blue-600 hover:text-blue-800 underline text-xs" onclick="window.previewFileKaryawan('${f}', 'm_kary_det_pengalaman_kerja')">Lihat Surat</button>`
-                  },
+                  cellRenderer: cellRendererSuratReferensi,
                   sortable: false, resizable: true, filter: false,
                   cellClass: ['!border-gray-200', 'justify-center'],
                 }

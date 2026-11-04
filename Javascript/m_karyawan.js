@@ -512,7 +512,8 @@ onBeforeMount(async () => {
     values.no_rek = values.m_kary_det_pemb[0].no_rek
   }
 
-  const realKtp = values.m_kary_det_kartu?.[0]?.ktp_no || initialValues.nomor_ktp || (initialValues.nik && initialValues.nik !== initialValues.kode ? initialValues.nik : '') || ''
+  const cardKtp = (values.m_kary_det_kartu && values.m_kary_det_kartu.length > 0) ? values.m_kary_det_kartu[0].ktp_no : null
+  const realKtp = cardKtp || initialValues.nomor_ktp || (initialValues.nik && initialValues.nik !== initialValues.kode ? initialValues.nik : '') || ''
   values.ktp_no = realKtp
   values.nik = realKtp
 
@@ -706,6 +707,18 @@ const previewFile = (fileName, folder = '') => {
   }
 }
 window.previewFileKaryawan = previewFile
+
+const cellRendererIjazah = (params) => {
+  const f = params?.data?.ijazah_url || params?.data?.ijazah_foto
+  if (!f) return '-'
+  return `<button type="button" class="text-blue-600 hover:text-blue-800 underline text-xs" onclick="window.previewFileKaryawan('${f}', 'm_kary_det_pendidikan')">Lihat File</button>`
+}
+
+const cellRendererSuratReferensi = (params) => {
+  const f = params?.data?.surat_referensi_url || params?.data?.surat_referensi
+  if (!f) return '-'
+  return `<button type="button" class="text-blue-600 hover:text-blue-800 underline text-xs" onclick="window.previewFileKaryawan('${f}', 'm_kary_det_pengalaman_kerja')">Lihat Surat</button>`
+}
 
 // Pendidikan
 let _idPend = 0
