@@ -967,8 +967,12 @@ class t_perhitungan_gaji extends \App\Models\BasicModels\t_perhitungan_gaji
                         $deptBaru = $mutasiRecord->m_dept_baru_id ? (\DB::table('m_dept')->where('id', $mutasiRecord->m_dept_baru_id)->value('nama') ?? '') : '';
                         $posLama = $mutasiRecord->m_posisi_lama_id ? (\DB::table('m_posisi')->where('id', $mutasiRecord->m_posisi_lama_id)->value('desc_kerja') ?? '') : '';
                         $posBaru = $mutasiRecord->m_posisi_baru_id ? (\DB::table('m_posisi')->where('id', $mutasiRecord->m_posisi_baru_id)->value('desc_kerja') ?? '') : '';
-                        $pemLama = $deptLama ?: ($posLama ?: 'Lama');
-                        $pemBaru = $deptBaru ?: ($posBaru ?: 'Baru');
+                        $pemLama = ($deptLama !== $deptBaru && $deptLama) ? $deptLama : ($posLama ?: 'Lama');
+                        $pemBaru = ($deptLama !== $deptBaru && $deptBaru) ? $deptBaru : ($posBaru ?: 'Baru');
+                        if ($pemLama === $pemBaru) {
+                            $pemLama = "{$pemLama} - Lama";
+                            $pemBaru = "{$pemBaru} - Baru";
+                        }
                         $mutasiNote = "Prorata Mutasi ({$divLama} ({$pemLama}) ➔ {$divBaru} ({$pemBaru}) per " . date('d/m/Y', strtotime($mutasiRecord->tgl)) . ")";
                     } else {
                         $mutasiNote = "Prorata Mutasi ($divLama ➔ $divBaru per " . date('d/m/Y', strtotime($mutasiRecord->tgl)) . ")";

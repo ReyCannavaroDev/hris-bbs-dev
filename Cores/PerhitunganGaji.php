@@ -703,8 +703,12 @@ class PerhitunganGaji
 
         // Jika divisi lama dan baru identik (misal mutasi internal divisi / antar departemen), tambahkan pembeda
         if ($mutasi->m_divisi_lama_id == $mutasi->m_devisi_baru_id) {
-            $pembedaLama = $deptLamaNama ?: ($posisiLamaNama ?: 'Lama');
-            $pembedaBaru = $deptBaruNama ?: ($posisiBaruNama ?: 'Baru');
+            $pembedaLama = ($deptLamaNama !== $deptBaruNama && $deptLamaNama) ? $deptLamaNama : ($posisiLamaNama ?: 'Lama');
+            $pembedaBaru = ($deptLamaNama !== $deptBaruNama && $deptBaruNama) ? $deptBaruNama : ($posisiBaruNama ?: 'Baru');
+            if ($pembedaLama === $pembedaBaru) {
+                $pembedaLama = "{$pembedaLama} - Lama";
+                $pembedaBaru = "{$pembedaBaru} - Baru";
+            }
             $labelLama = "{$divisiLamaNama} ({$pembedaLama})";
             $labelBaru = "{$divisiBaruNama} ({$pembedaBaru})";
         } else {
