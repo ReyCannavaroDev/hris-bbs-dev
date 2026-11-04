@@ -189,7 +189,7 @@ Berikut daftar tugas pengerjaan yang akan diselesaikan secara bertahap menuju pr
 
 ### Track 6: Quality Assurance & Simulasi End-to-End
 - [x] **Task 6.1:** Uji coba alur approval lembur bersama Mas Duta (`t_lembur` $\rightarrow$ `IN APPROVAL` $\rightarrow$ `APPROVED` $\rightarrow$ `l_spl`).
-- [ ] **Task 6.2:** Simulasi payroll lengkap dengan cut-off 25, denda baru, PPh 21 subsidi, dan mutasi divisi.
+- [x] **Task 6.2:** Simulasi payroll lengkap dengan cut-off 25, denda baru, PPh 21 subsidi, dan mutasi divisi (Kalkulasi diverifikasi akurat & diserahkan ke Tim QA untuk testing end-to-end menyeluruh).
 - [ ] **Task 6.3:** Persiapan slide & skenario live demo Zoom Jumat, 6 November 2026.
 
 ---
