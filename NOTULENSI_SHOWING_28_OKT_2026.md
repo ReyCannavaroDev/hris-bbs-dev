@@ -41,6 +41,8 @@ Terdapat beberapa penyesuaian aturan bisnis (*business logic*) dan permintaan fi
   Master `m_zona` dan `m_grading` tetap dipertahankan namun difungsikan murni sebagai **klasifikasi data / catatan profil karyawan**, bukan penentu mutlak angka gaji pokok.
 - **Field Baru `gaji_acuan` (Dasar Iuran BPJS):**  
   Menambahkan field baru `gaji_acuan` (default mengikuti nilai **UMK Kabupaten setempat**). Field ini dipakai khusus sebagai basis pengali iuran BPJS Kesehatan dan BPJS Ketenagakerjaan.
+  - Untuk penggajian **Bulanan**: Iuran BPJS dipotong utuh 1 bulan penuh (Kesehatan 1%, JHT 2%, JP 1%).
+  - Untuk penggajian **Mingguan**: Iuran BPJS otomatis dibagi **1/4 (prorata mingguan)** agar transparan per minggu dan pas terakumulasi 1 bulan penuh.
 - **Skema Staf Harian & Borongan:**  
   Model perhitungan harian berbasis kehadiran dan SPK disetujui dan dinyatakan aman.
 

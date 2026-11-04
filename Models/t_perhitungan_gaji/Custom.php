@@ -171,19 +171,78 @@ class t_perhitungan_gaji extends \App\Models\BasicModels\t_perhitungan_gaji
             }
         }
 
+        // Deteksi apakah periode penggajian adalah mingguan (<= 7 hari atau periode mingguan)
+        $diffHariPeriod = ($firstDayOfMonth && $lastDayOfMonth)
+            ? (int) ( (strtotime($lastDayOfMonth) - strtotime($firstDayOfMonth)) / 86400 ) + 1
+            : 25;
+        $periodeTextKary = strtolower(trim($kary->periode_text ?? ''));
+        if (empty($periodeTextKary) && !empty($kary->periode_gaji_id)) {
+            $periodeTextKary = strtolower(trim(\DB::table('m_general')->where('id', $kary->periode_gaji_id)->value('value') ?? ''));
+        }
+        $isPeriodMingguan = ($periodeTextKary === 'mingguan' || str_contains($periodeTextKary, 'minggu') || $diffHariPeriod <= 7);
+
         // Potongan BPJS Resmi Pemerintah (Pekerja: Kesehatan 1%, JHT 2%, JP 1%) berbasis gaji_acuan
+        // Jika mingguan, otomatis dibagi 4 (prorata per minggu) agar kalkulasi 1 bulan transparan
+        $bpjsRincian = [];
         try {
             $coreGajiBPJS = new \App\Cores\PerhitunganGaji();
-            $bpjsData = $coreGajiBPJS->hitungPotonganBPJS($kary->id, $kary->gaji_acuan ?? null);
-            if (!empty($bpjsData['rincian'])) {
-                foreach ($bpjsData['rincian'] as $bpjsItem) {
-                    if ($bpjsItem['value'] > 0) {
-                        $defaultColumns[] = $bpjsItem;
-                    }
+            $bpjsData = $coreGajiBPJS->hitungPotonganBPJS($kary, $kary->gaji_acuan ?? null, ['is_mingguan' => $isPeriodMingguan]);
+            $bpjsRincian = $bpjsData['rincian'] ?? [];
+        } catch (\Throwable $e) {
+            $bpjsRincian = [];
+        }
+
+        // Fallback langsung berbasis gaji_acuan jika rincian dari core masih kosong
+        if (empty($bpjsRincian)) {
+            $basisGajiBPJS = (!empty($kary->gaji_acuan) && (float)$kary->gaji_acuan > 0)
+                ? (float)$kary->gaji_acuan
+                : ((!empty($kary->gaji_pokok) && (float)$kary->gaji_pokok > 0) ? (float)$kary->gaji_pokok : 0);
+
+            if ($basisGajiBPJS > 0) {
+                $pembagiBPJS = $isPeriodMingguan ? 4 : 1;
+                $tipeBPJS = $isPeriodMingguan ? 'Mingguan' : 'Bulanan';
+                $tagMingguan = $isPeriodMingguan ? ' - Mingguan' : '';
+
+                $kes = round((min($basisGajiBPJS, 12000000) * 0.01) / $pembagiBPJS);
+                $jht = round(($basisGajiBPJS * 0.02) / $pembagiBPJS);
+                $jp  = round((min($basisGajiBPJS, 11086300) * 0.01) / $pembagiBPJS);
+
+                if ($kes > 0) {
+                    $bpjsRincian[] = [
+                        'label'      => "Potongan BPJS Kesehatan (1%{$tagMingguan})",
+                        'factor'     => '-',
+                        'value'      => (float) $kes,
+                        'type'       => $tipeBPJS,
+                        'can_adjust' => 1
+                    ];
+                }
+                if ($jht > 0) {
+                    $bpjsRincian[] = [
+                        'label'      => "Potongan BPJS TK - JHT (2%{$tagMingguan})",
+                        'factor'     => '-',
+                        'value'      => (float) $jht,
+                        'type'       => $tipeBPJS,
+                        'can_adjust' => 1
+                    ];
+                }
+                if ($jp > 0) {
+                    $bpjsRincian[] = [
+                        'label'      => "Potongan BPJS TK - JP (1%{$tagMingguan})",
+                        'factor'     => '-',
+                        'value'      => (float) $jp,
+                        'type'       => $tipeBPJS,
+                        'can_adjust' => 1
+                    ];
                 }
             }
-        } catch (\Throwable $e) {
-            // Safe fallback jika data belum lengkap
+        }
+
+        if (!empty($bpjsRincian)) {
+            foreach ($bpjsRincian as $bpjsItem) {
+                if ($bpjsItem['value'] > 0) {
+                    $defaultColumns[] = $bpjsItem;
+                }
+            }
         }
 
         // check kehadiran & denda/potongan presensi karyawan (MoM BBS 7 Oktober 2026)
