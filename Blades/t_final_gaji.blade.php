@@ -41,14 +41,14 @@
         </div>
 
         <div>
-          <label class="font-semibold">Company / Cabang</label>
+          <label class="font-semibold">Company</label>
           <FieldSelect class="w-full py-2 !mt-0" :bind="{ disabled: !actionText, clearable:true }"
             :value="values.m_dir_id" :check="false" @input="(v)=>{
               values.m_dir_id=v
               values.m_divisi_id=null
               values.m_dept_id=null
               clearDetail()
-            }" :errorText="formErrors.m_dir_id?'failed':''" :hints="formErrors.m_dir_id" placeholder="Pilih Company / Cabang"
+            }" :errorText="formErrors.m_dir_id?'failed':''" :hints="formErrors.m_dir_id" placeholder="Pilih Company"
             label=""
             displayField="nama" valueField="id" :api="{
                 url: `${store.server.url_backend}/operation/m_dir`,
@@ -187,7 +187,7 @@
                 Karyawan</td>
               <td
                 class="text-[#8F8F8F] font-semibold text-[14px] text-capitalize px-2 text-center w-[12%] border bg-[#f8f8f8] border-[#CACACA]">
-                Company / Cabang</td>
+                Company</td>
               <td
                 class="text-[#8F8F8F] font-semibold text-[14px] text-capitalize px-2 text-center w-[12%] border bg-[#f8f8f8] border-[#CACACA]">
                 Divisi</td>

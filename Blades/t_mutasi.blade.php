@@ -37,7 +37,7 @@
           />
         </div>
         <div>
-          <label class="font-semibold">Company / Cabang<span class="text-red-500 space-x-0 pl-0">*</span></label>
+          <label class="font-semibold">Company<span class="text-red-500 space-x-0 pl-0">*</span></label>
             <FieldSelect
               :bind="{ disabled: true, clearable:false }" class="w-full py-2 !mt-0"
               :value="values.m_dir_id" @input="v=>values.m_dir_id=v"
@@ -120,7 +120,7 @@
             {
               flex: 1,
               field: 'm_dir.nama',
-              headerName: 'Company / Cabang',
+              headerName: 'Company',
               sortable: false, 
               resizable: true, 
               filter: 'ColFilter',
