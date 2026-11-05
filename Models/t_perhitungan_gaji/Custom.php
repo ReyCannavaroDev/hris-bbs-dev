@@ -216,23 +216,55 @@ class t_perhitungan_gaji extends \App\Models\BasicModels\t_perhitungan_gaji
                 $defaultColumns[$idx]['label']  = $this->helper->snakeCaseToCapitalize($key['name']);
                 $defaultColumns[$idx]['factor'] = '+'; // pasti tambah karena default kolom tunjangan
 
+                $compVal = 0;
+                $compType = 'Bulanan';
+
                 // dynamic 
                 if(@!$key['table']) {
-                    if ($key['name'] === 'gaji_pokok' && !empty($kary->gaji_pokok) && (float)$kary->gaji_pokok > 0) {
-                        $defaultColumns[$idx]['value']  = (float)$kary->gaji_pokok;
-                        $defaultColumns[$idx]['type']   = is_array($standart_gaji) ? ($standart_gaji[$key['type']] ?? ($isPeriodMingguan ? 'Mingguan' : 'Bulanan')) : ($standart_gaji->{$key['type']} ?? ($isPeriodMingguan ? 'Mingguan' : 'Bulanan'));
+                    if ($key['name'] === 'gaji_pokok') {
+                        if (!empty($kary->gaji_pokok) && (float)$kary->gaji_pokok > 0) {
+                            $compVal = (float)$kary->gaji_pokok;
+                            $compType = $isPeriodMingguan ? 'Mingguan' : (is_array($standart_gaji) ? ($standart_gaji[$key['type']] ?? 'Bulanan') : ($standart_gaji->{$key['type']} ?? 'Bulanan'));
+                        } else {
+                            $rawVal = (float)(is_array($standart_gaji) ? ($standart_gaji[$key['name']] ?? 0) : ($standart_gaji->{$key['name']} ?? 0));
+                            $rawType = is_array($standart_gaji) ? ($standart_gaji[$key['type']] ?? 'Bulanan') : ($standart_gaji->{$key['type']} ?? 'Bulanan');
+                            if ($isPeriodMingguan && strtolower($rawType) === 'bulanan') {
+                                $compVal = round($rawVal / 4, 2);
+                                $compType = 'Mingguan';
+                            } else {
+                                $compVal = $rawVal;
+                                $compType = $rawType;
+                            }
+                        }
                     } else {
-                        $defaultColumns[$idx]['value']  = (float)(is_array($standart_gaji) ? ($standart_gaji[$key['name']] ?? 0) : ($standart_gaji->{$key['name']} ?? 0));
-                        $defaultColumns[$idx]['type']   = is_array($standart_gaji) ? ($standart_gaji[$key['type']] ?? 'Bulanan') : ($standart_gaji->{$key['type']} ?? 'Bulanan');
+                        $rawVal = (float)(is_array($standart_gaji) ? ($standart_gaji[$key['name']] ?? 0) : ($standart_gaji->{$key['name']} ?? 0));
+                        $rawType = is_array($standart_gaji) ? ($standart_gaji[$key['type']] ?? 'Bulanan') : ($standart_gaji->{$key['type']} ?? 'Bulanan');
+                        if ($isPeriodMingguan && strtolower($rawType) === 'bulanan') {
+                            $compVal = round($rawVal / 4, 2);
+                            $compType = 'Mingguan';
+                        } else {
+                            $compVal = $rawVal;
+                            $compType = $rawType;
+                        }
                     }
                 }else{
                     if($key['table'] == 'm_tunj_kemahalan'){
                         $defaultColumns[$idx]['label']  = "Tunjangan Kemahalan";
                         $kemahalanId = is_array($standart_gaji) ? ($standart_gaji[$key['name']] ?? null) : ($standart_gaji->{$key['name']} ?? null);
-                        $defaultColumns[$idx]['value']  = $kemahalanId ? ((float)\DB::table($key['table'])->where('id', $kemahalanId)->pluck('besaran')->first() ?? 0) : 0;
-                        $defaultColumns[$idx]['type']   = is_array($standart_gaji) ? ($standart_gaji[$key['type']] ?? 'Bulanan') : ($standart_gaji->{$key['type']} ?? 'Bulanan');
+                        $rawVal = $kemahalanId ? ((float)\DB::table($key['table'])->where('id', $kemahalanId)->pluck('besaran')->first() ?? 0) : 0;
+                        $rawType = is_array($standart_gaji) ? ($standart_gaji[$key['type']] ?? 'Bulanan') : ($standart_gaji->{$key['type']} ?? 'Bulanan');
+                        if ($isPeriodMingguan && strtolower($rawType) === 'bulanan') {
+                            $compVal = round($rawVal / 4, 2);
+                            $compType = 'Mingguan';
+                        } else {
+                            $compVal = $rawVal;
+                            $compType = $rawType;
+                        }
                     }
                 }
+
+                $defaultColumns[$idx]['value'] = $compVal;
+                $defaultColumns[$idx]['type']  = $compType;
                 $defaultColumns[$idx]['can_adjust'] = 1;
                 if ($defaultColumns[$idx]['value'] == 0) {
                     unset($defaultColumns[$idx]);
@@ -244,11 +276,17 @@ class t_perhitungan_gaji extends \App\Models\BasicModels\t_perhitungan_gaji
         $standartGajiId = is_array($standart_gaji) ? ($standart_gaji['id'] ?? 0) : ($standart_gaji->id ?? 0);
         $standart_gaji_det = $standartGajiId ? m_standart_gaji_det::where('m_standart_gaji_id', $standartGajiId)->get() : [];
         foreach($standart_gaji_det as $d){
+            $detVal = (float)$d->nilai;
+            $detType = $d->periode;
+            if ($isPeriodMingguan && strtolower($detType) === 'bulanan') {
+                $detVal = round($detVal / 4, 2);
+                $detType = 'Mingguan';
+            }
             $defaultColumns[] = [
                 'label'    => $d->komponen,
                 'factor'   => $d->faktor,
-                'value'    => $d->nilai,
-                'type'     => $d->periode,
+                'value'    => $detVal,
+                'type'     => $detType,
                 'can_adjust' => 1
                 
             ];
@@ -483,7 +521,11 @@ class t_perhitungan_gaji extends \App\Models\BasicModels\t_perhitungan_gaji
         } elseif ($isMingguan) {
             // Periode mingguan: bagi berdasarkan hari kerja efektif (di luar hari Minggu dan tanggal merah)
             $pembagiHari = ($hariKerjaEfektif > 0) ? $hariKerjaEfektif : 6;
-            $gaji_per_hari = $gaji_pokok > 0 ? ($gaji_pokok / $pembagiHari) : 0;
+            // Jika gaji pokok berasal dari template bulanan (karyawan belum punya gaji personal), prorata per minggu (/ 4) dulu
+            $gpMingguan = (!empty($kary->gaji_pokok) && (float)$kary->gaji_pokok > 0)
+                ? (float)$kary->gaji_pokok
+                : ($gajiPokokPeriode === 'bulanan' ? round($gaji_pokok / 4, 2) : $gaji_pokok);
+            $gaji_per_hari = $gpMingguan > 0 ? ($gpMingguan / $pembagiHari) : 0;
         } else {
             // Standar bulanan BBS (25 hari kerja)
             $jml_hari_sebulan = 25;
@@ -592,7 +634,7 @@ class t_perhitungan_gaji extends \App\Models\BasicModels\t_perhitungan_gaji
                     // Plafon maksimal: Potongan tidak masuk kerja tidak boleh melebihi hak gaji pokok periode berjalan
                     $maxPotongGp = ($mutasiData && !empty($mutasiData['has_mutasi']))
                         ? (float)(($mutasiData['gp_prorata_lama'] ?? 0) + ($mutasiData['gp_prorata_baru'] ?? 0))
-                        : (float)$gaji_pokok;
+                        : (float)($isMingguan ? ((!empty($kary->gaji_pokok) && (float)$kary->gaji_pokok > 0) ? (float)$kary->gaji_pokok : ($gajiPokokPeriode === 'bulanan' ? round($gaji_pokok / 4, 2) : $gaji_pokok)) : $gaji_pokok);
                     if ($maxPotongGp > 0 && $value > $maxPotongGp) {
                         $value = $maxPotongGp;
                     }
@@ -913,6 +955,17 @@ class t_perhitungan_gaji extends \App\Models\BasicModels\t_perhitungan_gaji
                     ->where('grading_id', $kary->grading_id)
                     ->where('is_active', true)
                     ->first();
+            }
+
+            // Jika karyawan memiliki gaji_pokok personal di m_kary, nilai personal SELALU menjadi prioritas utama (MoM BBS)
+            if ($m_standart_gaji && !empty($kary->gaji_pokok) && (float)$kary->gaji_pokok > 0) {
+                if (is_object($m_standart_gaji)) {
+                    $m_standart_gaji->gaji_pokok = (float) $kary->gaji_pokok;
+                    $m_standart_gaji->gaji_pokok_periode = $isPeriodMingguan ? 'Mingguan' : ($m_standart_gaji->gaji_pokok_periode ?? 'Bulanan');
+                } elseif (is_array($m_standart_gaji)) {
+                    $m_standart_gaji['gaji_pokok'] = (float) $kary->gaji_pokok;
+                    $m_standart_gaji['gaji_pokok_periode'] = $isPeriodMingguan ? 'Mingguan' : ($m_standart_gaji['gaji_pokok_periode'] ?? 'Bulanan');
+                }
             }
 
             if (!$m_standart_gaji) return [
