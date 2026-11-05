@@ -64,6 +64,89 @@ class t_perhitungan_gaji extends \App\Models\BasicModels\t_perhitungan_gaji
         }
         $isPeriodMingguan = ($periodeTextKary === 'mingguan' || str_contains($periodeTextKary, 'minggu') || $diffHariPeriod <= 7);
 
+        // Ambil konfigurasi nama hari libur mingguan dari m_general (default: Minggu)
+        $hariLiburNama = ['minggu', 'sunday'];
+        try {
+            $generalLibur = \DB::table('m_general')
+                ->where('group', 'HARI LIBUR')
+                ->where('is_active', true)
+                ->pluck('value')
+                ->map(function($v) { return strtolower(trim($v)); })
+                ->toArray();
+            if (count($generalLibur)) {
+                $hariLiburNama = array_unique(array_merge($hariLiburNama, $generalLibur));
+            }
+        } catch (\Throwable $e) {
+            // default tetap ['minggu', 'sunday']
+        }
+
+        // Ambil daftar tanggal merah / libur nasional dalam rentang periode
+        $liburNasional = [];
+        try {
+            $liburNasional = \DB::table('m_libur_nasional')
+                ->where('is_active', true)
+                ->whereBetween('tanggal', [$firstDayOfMonth, $lastDayOfMonth])
+                ->pluck('tanggal')
+                ->map(function($t) { return date('Y-m-d', strtotime($t)); })
+                ->toArray();
+        } catch (\Throwable $e) {
+            $liburNasional = [];
+        }
+
+        // Hitung total hari kalender, hari minggu, tanggal merah, dan hari kerja efektif
+        $diffKalender = 0;
+        $totalHariLibur = 0;
+        $hariKerjaEfektif = 0;
+
+        if ($firstDayOfMonth && $lastDayOfMonth) {
+            $currDate = new \DateTime($firstDayOfMonth);
+            $endDateObj = new \DateTime($lastDayOfMonth);
+
+            $daysMapIdn = [
+                0 => 'minggu',
+                1 => 'senin',
+                2 => 'selasa',
+                3 => 'rabu',
+                4 => 'kamis',
+                5 => 'jumat',
+                6 => 'sabtu',
+            ];
+
+            while ($currDate <= $endDateObj) {
+                $diffKalender++;
+                $tglStr = $currDate->format('Y-m-d');
+                $dayOfWeek = (int) $currDate->format('w'); // 0 = Minggu
+                $namaHariIdn = $daysMapIdn[$dayOfWeek] ?? '';
+
+                $isHariLiburMingguan = ($dayOfWeek === 0 || in_array($namaHariIdn, $hariLiburNama));
+                $isTanggalMerah = in_array($tglStr, $liburNasional);
+
+                if ($isHariLiburMingguan || $isTanggalMerah) {
+                    $totalHariLibur++;
+                } else {
+                    $hariKerjaEfektif++;
+                }
+
+                $currDate->modify('+1 day');
+            }
+        } else {
+            $diffKalender = 25;
+            $hariKerjaEfektif = 25;
+        }
+
+        if ($hariKerjaEfektif <= 0) {
+            $hariKerjaEfektif = max(1, $diffKalender - $totalHariLibur);
+        }
+
+        if ($diffKalender <= 7) {
+            $isPeriodMingguan = true;
+        }
+
+        // Jumlah hari kerja pengali untuk komponen bertipe harian (seperti uang makan harian)
+        $hariKerjaPeriode = $isPeriodMingguan
+            ? (($hariKerjaEfektif > 0) ? $hariKerjaEfektif : 5)
+            : (($hariKerjaEfektif > 0) ? $hariKerjaEfektif : 25);
+
         // Cek apakah karyawan mengalami mutasi di tengah periode (Opsi 2 - Prorata Split Tanggal)
         $mutasiData = null;
         if ($kary && $firstDayOfMonth && $lastDayOfMonth) {
@@ -172,16 +255,31 @@ class t_perhitungan_gaji extends \App\Models\BasicModels\t_perhitungan_gaji
                 }
             }
 
-            // 5. Uang Makan (Harian)
+            // 5. Uang Makan
             $umNilai = (float)($mutasiData['standart_baru']->uang_makan ?? ($standart_gaji['uang_makan'] ?? 0));
+            $umPeriode = strtolower(trim($mutasiData['standart_baru']->uang_makan_periode ?? (is_array($standart_gaji) ? ($standart_gaji['uang_makan_periode'] ?? 'Harian') : ($standart_gaji->uang_makan_periode ?? 'Harian'))));
             if ($umNilai > 0) {
-                $defaultColumns[] = [
-                    'label'      => 'Uang Makan',
-                    'factor'     => '+',
-                    'value'      => $umNilai,
-                    'type'       => 'Harian',
-                    'can_adjust' => 1
-                ];
+                if ($umPeriode === 'harian') {
+                    $totalUm = round($umNilai * $hariKerjaPeriode, 2);
+                    $defaultColumns[] = [
+                        'name'       => 'uang_makan',
+                        'label'      => "Uang Makan ({$hariKerjaPeriode} Hari)",
+                        'factor'     => '+',
+                        'value'      => $totalUm,
+                        'type'       => $isPeriodMingguan ? 'Mingguan' : 'Bulanan',
+                        'can_adjust' => 1
+                    ];
+                } else {
+                    $totalUm = $isPeriodMingguan ? round($umNilai / 4, 2) : $umNilai;
+                    $defaultColumns[] = [
+                        'name'       => 'uang_makan',
+                        'label'      => 'Uang Makan',
+                        'factor'     => '+',
+                        'value'      => $totalUm,
+                        'type'       => $isPeriodMingguan ? 'Mingguan' : 'Bulanan',
+                        'can_adjust' => 1
+                    ];
+                }
             }
         } else {
             $defaultColumns = [
@@ -204,11 +302,11 @@ class t_perhitungan_gaji extends \App\Models\BasicModels\t_perhitungan_gaji
                 ],
                 [
                     'name'  => 'uang_makan',
-                    'type'  => 'uang_makan'
+                    'type'  => 'uang_makan_periode'
                 ],
                 [
                     'name'  => 'tunjangan_tetap',
-                    'type'  => 'tunjangan_tetap'
+                    'type'  => 'tunjangan_tetap_periode'
                 ]
             ];
 
@@ -234,6 +332,25 @@ class t_perhitungan_gaji extends \App\Models\BasicModels\t_perhitungan_gaji
                             } else {
                                 $compVal = $rawVal;
                                 $compType = $rawType;
+                            }
+                        }
+                    } elseif ($key['name'] === 'uang_makan') {
+                        $rawVal = (float)(is_array($standart_gaji) ? ($standart_gaji[$key['name']] ?? 0) : ($standart_gaji->{$key['name']} ?? 0));
+                        $rawType = is_array($standart_gaji) ? ($standart_gaji[$key['type']] ?? 'Harian') : ($standart_gaji->{$key['type']} ?? 'Harian');
+
+                        if (strtolower(trim($rawType)) === 'harian') {
+                            // Uang makan harian: dikalikan jumlah hari kerja efektif periode (mingguan atau bulanan)
+                            $compVal = round($rawVal * $hariKerjaPeriode, 2);
+                            $compType = $isPeriodMingguan ? 'Mingguan' : 'Bulanan';
+                            $defaultColumns[$idx]['label'] = "Uang Makan ({$hariKerjaPeriode} Hari)";
+                        } else {
+                            // Uang makan bulanan
+                            if ($isPeriodMingguan) {
+                                $compVal = round($rawVal / 4, 2);
+                                $compType = 'Mingguan';
+                            } else {
+                                $compVal = $rawVal;
+                                $compType = 'Bulanan';
                             }
                         }
                     } else {
@@ -278,12 +395,17 @@ class t_perhitungan_gaji extends \App\Models\BasicModels\t_perhitungan_gaji
         foreach($standart_gaji_det as $d){
             $detVal = (float)$d->nilai;
             $detType = $d->periode;
-            if ($isPeriodMingguan && strtolower($detType) === 'bulanan') {
+            $detLabel = $d->komponen;
+            if (strtolower(trim($detType)) === 'harian') {
+                $detVal = round($detVal * $hariKerjaPeriode, 2);
+                $detType = $isPeriodMingguan ? 'Mingguan' : 'Bulanan';
+                $detLabel = "{$d->komponen} ({$hariKerjaPeriode} Hari)";
+            } elseif ($isPeriodMingguan && strtolower($detType) === 'bulanan') {
                 $detVal = round($detVal / 4, 2);
                 $detType = 'Mingguan';
             }
             $defaultColumns[] = [
-                'label'    => $d->komponen,
+                'label'    => $detLabel,
                 'factor'   => $d->faktor,
                 'value'    => $detVal,
                 'type'     => $detType,
@@ -351,6 +473,89 @@ class t_perhitungan_gaji extends \App\Models\BasicModels\t_perhitungan_gaji
             $periodeTextKary = strtolower(trim(\DB::table('m_general')->where('id', $kary->periode_gaji_id)->value('value') ?? ''));
         }
         $isPeriodMingguan = ($periodeTextKary === 'mingguan' || str_contains($periodeTextKary, 'minggu') || $diffHariPeriod <= 7);
+
+        // Ambil konfigurasi nama hari libur mingguan dari m_general (default: Minggu)
+        $hariLiburNama = ['minggu', 'sunday'];
+        try {
+            $generalLibur = \DB::table('m_general')
+                ->where('group', 'HARI LIBUR')
+                ->where('is_active', true)
+                ->pluck('value')
+                ->map(function($v) { return strtolower(trim($v)); })
+                ->toArray();
+            if (count($generalLibur)) {
+                $hariLiburNama = array_unique(array_merge($hariLiburNama, $generalLibur));
+            }
+        } catch (\Throwable $e) {
+            // default tetap ['minggu', 'sunday']
+        }
+
+        // Ambil daftar tanggal merah / libur nasional dalam rentang periode
+        $liburNasional = [];
+        try {
+            $liburNasional = \DB::table('m_libur_nasional')
+                ->where('is_active', true)
+                ->whereBetween('tanggal', [$firstDayOfMonth, $lastDayOfMonth])
+                ->pluck('tanggal')
+                ->map(function($t) { return date('Y-m-d', strtotime($t)); })
+                ->toArray();
+        } catch (\Throwable $e) {
+            $liburNasional = [];
+        }
+
+        // Hitung total hari kalender, hari minggu, tanggal merah, dan hari kerja efektif
+        $diffKalender = 0;
+        $totalHariLibur = 0;
+        $hariKerjaEfektif = 0;
+
+        if ($firstDayOfMonth && $lastDayOfMonth) {
+            $currDate = new \DateTime($firstDayOfMonth);
+            $endDateObj = new \DateTime($lastDayOfMonth);
+
+            $daysMapIdn = [
+                0 => 'minggu',
+                1 => 'senin',
+                2 => 'selasa',
+                3 => 'rabu',
+                4 => 'kamis',
+                5 => 'jumat',
+                6 => 'sabtu',
+            ];
+
+            while ($currDate <= $endDateObj) {
+                $diffKalender++;
+                $tglStr = $currDate->format('Y-m-d');
+                $dayOfWeek = (int) $currDate->format('w'); // 0 = Minggu
+                $namaHariIdn = $daysMapIdn[$dayOfWeek] ?? '';
+
+                $isHariLiburMingguan = ($dayOfWeek === 0 || in_array($namaHariIdn, $hariLiburNama));
+                $isTanggalMerah = in_array($tglStr, $liburNasional);
+
+                if ($isHariLiburMingguan || $isTanggalMerah) {
+                    $totalHariLibur++;
+                } else {
+                    $hariKerjaEfektif++;
+                }
+
+                $currDate->modify('+1 day');
+            }
+        } else {
+            $diffKalender = 25;
+            $hariKerjaEfektif = 25;
+        }
+
+        if ($hariKerjaEfektif <= 0) {
+            $hariKerjaEfektif = max(1, $diffKalender - $totalHariLibur);
+        }
+
+        if ($diffKalender <= 7) {
+            $isPeriodMingguan = true;
+        }
+
+        // Jumlah hari kerja pengali untuk komponen bertipe harian (seperti uang makan harian)
+        $hariKerjaPeriode = $isPeriodMingguan
+            ? (($hariKerjaEfektif > 0) ? $hariKerjaEfektif : 5)
+            : (($hariKerjaEfektif > 0) ? $hariKerjaEfektif : 25);
 
         // Potongan BPJS Resmi Pemerintah (Pekerja: Kesehatan 1%, JHT 2%, JP 1%) berbasis gaji_acuan
         // Jika mingguan, otomatis dibagi 4 (prorata per minggu) agar kalkulasi 1 bulan transparan
@@ -436,80 +641,6 @@ class t_perhitungan_gaji extends \App\Models\BasicModels\t_perhitungan_gaji
         } elseif (!empty($kary->periode_gaji_id)) {
             $val = \DB::table('m_general')->where('id', $kary->periode_gaji_id)->value('value');
             $periodeGajiKary = strtolower(trim($val ?? ''));
-        }
-
-        // Ambil daftar tanggal merah / libur nasional dalam rentang periode
-        $liburNasional = [];
-        try {
-            $liburNasional = \DB::table('m_libur_nasional')
-                ->where('is_active', true)
-                ->whereBetween('tanggal', [$firstDayOfMonth, $lastDayOfMonth])
-                ->pluck('tanggal')
-                ->map(function($t) { return date('Y-m-d', strtotime($t)); })
-                ->toArray();
-        } catch (\Throwable $e) {
-            $liburNasional = [];
-        }
-
-        // Ambil konfigurasi nama hari libur mingguan dari m_general (default: Minggu)
-        $hariLiburNama = ['minggu', 'sunday'];
-        try {
-            $generalLibur = \DB::table('m_general')
-                ->where('group', 'HARI LIBUR')
-                ->where('is_active', true)
-                ->pluck('value')
-                ->map(function($v) { return strtolower(trim($v)); })
-                ->toArray();
-            if (count($generalLibur)) {
-                $hariLiburNama = array_unique(array_merge($hariLiburNama, $generalLibur));
-            }
-        } catch (\Throwable $e) {
-            // default tetap ['minggu', 'sunday']
-        }
-
-        // Hitung total hari kalender, hari minggu, tanggal merah, dan hari kerja efektif
-        $diffKalender = 0;
-        $totalHariLibur = 0;
-        $hariKerjaEfektif = 0;
-
-        if ($firstDayOfMonth && $lastDayOfMonth) {
-            $currDate = new \DateTime($firstDayOfMonth);
-            $endDateObj = new \DateTime($lastDayOfMonth);
-
-            $daysMapIdn = [
-                0 => 'minggu',
-                1 => 'senin',
-                2 => 'selasa',
-                3 => 'rabu',
-                4 => 'kamis',
-                5 => 'jumat',
-                6 => 'sabtu',
-            ];
-
-            while ($currDate <= $endDateObj) {
-                $diffKalender++;
-                $tglStr = $currDate->format('Y-m-d');
-                $dayOfWeek = (int) $currDate->format('w'); // 0 = Minggu
-                $namaHariIdn = $daysMapIdn[$dayOfWeek] ?? '';
-
-                $isHariLiburMingguan = ($dayOfWeek === 0 || in_array($namaHariIdn, $hariLiburNama));
-                $isTanggalMerah = in_array($tglStr, $liburNasional);
-
-                if ($isHariLiburMingguan || $isTanggalMerah) {
-                    $totalHariLibur++;
-                } else {
-                    $hariKerjaEfektif++;
-                }
-
-                $currDate->modify('+1 day');
-            }
-        } else {
-            $diffKalender = 25;
-            $hariKerjaEfektif = 25;
-        }
-
-        if ($hariKerjaEfektif <= 0) {
-            $hariKerjaEfektif = max(1, $diffKalender - $totalHariLibur);
         }
 
         $isMingguan = ($periodeGajiKary === 'mingguan' || str_contains($periodeGajiKary ?? '', 'minggu') || $diffKalender <= 7 || $isPeriodMingguan);

@@ -80,6 +80,11 @@ class PerhitunganGaji
             ? (float) $kary->gaji_acuan
             : $gajiPokok;
         $uangMakan = (float) ($standarGaji->uang_makan ?? 0);
+        $uangMakanPeriode = strtolower(trim($standarGaji->uang_makan_periode ?? 'Bulanan'));
+        $hariKerjaMakan = $options['hari_kerja'] ?? $this->defaultHariKerja;
+        if ($uangMakanPeriode === 'harian' && $uangMakan > 0) {
+            $uangMakan = round($uangMakan * $hariKerjaMakan, 2);
+        }
         $uangSaku = (float) ($standarGaji->uang_saku ?? 0);
         $tunjanganPosisi = (float) ($standarGaji->tunjangan_posisi ?? 0);
         $tunjanganTetap = (float) ($standarGaji->tunjangan_tetap ?? 0);
