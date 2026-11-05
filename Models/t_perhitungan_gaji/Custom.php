@@ -54,6 +54,16 @@ class t_perhitungan_gaji extends \App\Models\BasicModels\t_perhitungan_gaji
         $firstDayOfMonth = $startDate;
         $lastDayOfMonth = $endDate;
 
+        // Deteksi apakah periode penggajian adalah mingguan (<= 7 hari atau periode mingguan)
+        $diffHariPeriod = ($firstDayOfMonth && $lastDayOfMonth)
+            ? (int) ( (strtotime($lastDayOfMonth) - strtotime($firstDayOfMonth)) / 86400 ) + 1
+            : 25;
+        $periodeTextKary = strtolower(trim($kary->periode_text ?? ''));
+        if (empty($periodeTextKary) && !empty($kary->periode_gaji_id)) {
+            $periodeTextKary = strtolower(trim(\DB::table('m_general')->where('id', $kary->periode_gaji_id)->value('value') ?? ''));
+        }
+        $isPeriodMingguan = ($periodeTextKary === 'mingguan' || str_contains($periodeTextKary, 'minggu') || $diffHariPeriod <= 7);
+
         // Cek apakah karyawan mengalami mutasi di tengah periode (Opsi 2 - Prorata Split Tanggal)
         $mutasiData = null;
         if ($kary && $firstDayOfMonth && $lastDayOfMonth) {
@@ -210,16 +220,17 @@ class t_perhitungan_gaji extends \App\Models\BasicModels\t_perhitungan_gaji
                 if(@!$key['table']) {
                     if ($key['name'] === 'gaji_pokok' && !empty($kary->gaji_pokok) && (float)$kary->gaji_pokok > 0) {
                         $defaultColumns[$idx]['value']  = (float)$kary->gaji_pokok;
-                        $defaultColumns[$idx]['type']   = $standart_gaji[$key['type']] ?? 'Bulanan';
+                        $defaultColumns[$idx]['type']   = is_array($standart_gaji) ? ($standart_gaji[$key['type']] ?? ($isPeriodMingguan ? 'Mingguan' : 'Bulanan')) : ($standart_gaji->{$key['type']} ?? ($isPeriodMingguan ? 'Mingguan' : 'Bulanan'));
                     } else {
-                        $defaultColumns[$idx]['value']  = (float)$standart_gaji[$key['name']] ?? 0;
-                        $defaultColumns[$idx]['type']   = $standart_gaji[$key['type']];
+                        $defaultColumns[$idx]['value']  = (float)(is_array($standart_gaji) ? ($standart_gaji[$key['name']] ?? 0) : ($standart_gaji->{$key['name']} ?? 0));
+                        $defaultColumns[$idx]['type']   = is_array($standart_gaji) ? ($standart_gaji[$key['type']] ?? 'Bulanan') : ($standart_gaji->{$key['type']} ?? 'Bulanan');
                     }
                 }else{
                     if($key['table'] == 'm_tunj_kemahalan'){
                         $defaultColumns[$idx]['label']  = "Tunjangan Kemahalan";
-                        $defaultColumns[$idx]['value']  = (float)\DB::table($key['table'])->where('id', $standart_gaji[$key['name']])->pluck('besaran')->first() ?? 0;
-                        $defaultColumns[$idx]['type']   = $standart_gaji[$key['type']];
+                        $kemahalanId = is_array($standart_gaji) ? ($standart_gaji[$key['name']] ?? null) : ($standart_gaji->{$key['name']} ?? null);
+                        $defaultColumns[$idx]['value']  = $kemahalanId ? ((float)\DB::table($key['table'])->where('id', $kemahalanId)->pluck('besaran')->first() ?? 0) : 0;
+                        $defaultColumns[$idx]['type']   = is_array($standart_gaji) ? ($standart_gaji[$key['type']] ?? 'Bulanan') : ($standart_gaji->{$key['type']} ?? 'Bulanan');
                     }
                 }
                 $defaultColumns[$idx]['can_adjust'] = 1;
@@ -230,7 +241,8 @@ class t_perhitungan_gaji extends \App\Models\BasicModels\t_perhitungan_gaji
         }
 
         // faktor lain dari table m_standart_gaji_det
-        $standart_gaji_det = m_standart_gaji_det::where('m_standart_gaji_id', $standart_gaji->id ?? 0)->get();
+        $standartGajiId = is_array($standart_gaji) ? ($standart_gaji['id'] ?? 0) : ($standart_gaji->id ?? 0);
+        $standart_gaji_det = $standartGajiId ? m_standart_gaji_det::where('m_standart_gaji_id', $standartGajiId)->get() : [];
         foreach($standart_gaji_det as $d){
             $defaultColumns[] = [
                 'label'    => $d->komponen,
@@ -377,8 +389,8 @@ class t_perhitungan_gaji extends \App\Models\BasicModels\t_perhitungan_gaji
         // check kehadiran & denda/potongan presensi karyawan (MoM BBS 7 Oktober 2026)
         $gaji_pokok = (!empty($kary->gaji_pokok) && (float)$kary->gaji_pokok > 0)
             ? (float)$kary->gaji_pokok
-            : (float) (@$standart_gaji['gaji_pokok'] ?? ($standart_gaji->gaji_pokok ?? 0));
-        $gajiPokokPeriode = strtolower(trim($standart_gaji->gaji_pokok_periode ?? (@$standart_gaji['gaji_pokok_periode'] ?? 'Bulanan')));
+            : (float) (is_array($standart_gaji) ? ($standart_gaji['gaji_pokok'] ?? 0) : ($standart_gaji->gaji_pokok ?? 0));
+        $gajiPokokPeriode = strtolower(trim(is_array($standart_gaji) ? ($standart_gaji['gaji_pokok_periode'] ?? 'Bulanan') : ($standart_gaji->gaji_pokok_periode ?? 'Bulanan')));
 
         $periodeGajiKary = null;
         if (!empty($kary->periode_text)) {
@@ -462,7 +474,7 @@ class t_perhitungan_gaji extends \App\Models\BasicModels\t_perhitungan_gaji
             $hariKerjaEfektif = max(1, $diffKalender - $totalHariLibur);
         }
 
-        $isMingguan = ($periodeGajiKary === 'mingguan' || str_contains($periodeGajiKary ?? '', 'minggu') || $diffKalender <= 7);
+        $isMingguan = ($periodeGajiKary === 'mingguan' || str_contains($periodeGajiKary ?? '', 'minggu') || $diffKalender <= 7 || $isPeriodMingguan);
         $isHarian = ($gajiPokokPeriode === 'harian' || $periodeGajiKary === 'harian');
 
         if ($isHarian && !$isMingguan) {
@@ -819,8 +831,14 @@ class t_perhitungan_gaji extends \App\Models\BasicModels\t_perhitungan_gaji
     public function salaryOfKary($id, $periode = null, $periodeAkhir = null)
     {
         try{
-            $m_kary_id = $id;
-            $kary = m_kary::find($m_kary_id);
+            if ($id instanceof \Illuminate\Database\Eloquent\Model || is_object($id)) {
+                $m_kary_id = $id->id;
+                $kary = $id;
+            } else {
+                $m_kary_id = $id;
+                $kary = m_kary::find($m_kary_id);
+            }
+
             if (!$kary) {
                 return [
                     'm_kary_id'  => $m_kary_id,
@@ -831,10 +849,65 @@ class t_perhitungan_gaji extends \App\Models\BasicModels\t_perhitungan_gaji
                 ];
             }
 
+            // Selalu pastikan kolom dari DB m_kary terisi penuh (gaji_pokok, gaji_acuan, dsb)
+            $karyDb = \DB::table('m_kary')->where('id', $m_kary_id)->first();
+            if ($karyDb) {
+                if (!isset($kary->gaji_pokok) || $kary->gaji_pokok === null || $kary->gaji_pokok === '') {
+                    $kary->gaji_pokok = $karyDb->gaji_pokok;
+                }
+                if (!isset($kary->gaji_acuan) || $kary->gaji_acuan === null || $kary->gaji_acuan === '') {
+                    $kary->gaji_acuan = $karyDb->gaji_acuan;
+                }
+                if (!isset($kary->m_standart_gaji_id)) {
+                    $kary->m_standart_gaji_id = $karyDb->m_standart_gaji_id;
+                }
+                if (!isset($kary->m_zona_id)) {
+                    $kary->m_zona_id = $karyDb->m_zona_id;
+                }
+                if (!isset($kary->grading_id)) {
+                    $kary->grading_id = $karyDb->grading_id;
+                }
+                if (!isset($kary->periode_gaji_id)) {
+                    $kary->periode_gaji_id = $karyDb->periode_gaji_id;
+                }
+            }
+
+            // Deteksi periode mingguan untuk penyesuaian tipe gaji personal
+            $diffHariPeriod = ($periode && $periodeAkhir)
+                ? (int) ( (strtotime($periodeAkhir) - strtotime($periode)) / 86400 ) + 1
+                : 25;
+            $periodeTextKary = strtolower(trim($kary->periode_text ?? ''));
+            if (empty($periodeTextKary) && !empty($kary->periode_gaji_id)) {
+                $periodeTextKary = strtolower(trim(\DB::table('m_general')->where('id', $kary->periode_gaji_id)->value('value') ?? ''));
+            }
+            $isPeriodMingguan = ($periodeTextKary === 'mingguan' || str_contains($periodeTextKary, 'minggu') || $diffHariPeriod <= 7);
+
             $m_standart_gaji = null;
-            if (@$kary->m_standart_gaji_id) {
+            if (!empty($kary->m_standart_gaji_id)) {
                 $m_standart_gaji = m_standart_gaji::find($kary->m_standart_gaji_id);
             }
+
+            // Jika karyawan memiliki gaji_pokok personal dan tidak memilih template standar gaji,
+            // gunakan set gaji per personal murni (MoM BBS: set gaji per personal, zona & grading hanya catatan)
+            if (!$m_standart_gaji && !empty($kary->gaji_pokok) && (float)$kary->gaji_pokok > 0) {
+                $m_standart_gaji = (object) [
+                    'id'                          => 0,
+                    'gaji_pokok'                  => (float) $kary->gaji_pokok,
+                    'gaji_pokok_periode'          => $isPeriodMingguan ? 'Mingguan' : 'Bulanan',
+                    'uang_saku'                   => 0,
+                    'uang_saku_periode'           => 'Bulanan',
+                    'tunjangan_posisi'            => 0,
+                    'tunjangan_posisi_periode'    => 'Bulanan',
+                    'tunjangan_kemahalan_id'      => null,
+                    'tunjangan_kemahalan_periode' => 'Bulanan',
+                    'uang_makan'                  => 0,
+                    'uang_makan_periode'          => 'Harian',
+                    'tunjangan_tetap'             => 0,
+                    'tunjangan_tetap_periode'     => 'Bulanan',
+                ];
+            }
+
+            // Fallback ke m_standart_gaji berbasis zona & grading HANYA jika karyawan belum punya gaji personal dan standar gaji
             if (!$m_standart_gaji && @$kary->m_zona_id && @$kary->grading_id) {
                 $m_standart_gaji = m_standart_gaji::where('m_zona_id', $kary->m_zona_id)
                     ->where('grading_id', $kary->grading_id)
@@ -911,6 +984,10 @@ class t_perhitungan_gaji extends \App\Models\BasicModels\t_perhitungan_gaji
                              ->whereColumn('s.m_zona_id', 'm_kary.m_zona_id')
                              ->whereColumn('s.grading_id', 'm_kary.grading_id')
                              ->where('s.is_active', true);
+                      })
+                      ->orWhere(function ($sq) {
+                          $sq->whereNotNull('m_kary.gaji_pokok')
+                             ->where('m_kary.gaji_pokok', '>', 0);
                       });
                 });
 
@@ -948,7 +1025,7 @@ class t_perhitungan_gaji extends \App\Models\BasicModels\t_perhitungan_gaji
 
             $data = [];
             foreach ($kary as $key) {
-                $gaji = $this->salaryOfKary($key->id, $strDateFrom, $strDateTo);
+                $gaji = $this->salaryOfKary($key, $strDateFrom, $strDateTo);
                 $nikVal = $key->nik ?: $key->kode;
 
                 // Tambahkan keterangan mutasi jika ada

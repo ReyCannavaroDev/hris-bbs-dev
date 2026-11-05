@@ -61,8 +61,8 @@ class PerhitunganGaji
                 ->first();
         }
 
-        // Fallback berdasarkan zona dan grading karyawan
-        if (!$standarGaji && !empty($kary->m_zona_id) && !empty($kary->grading_id)) {
+        // Fallback berdasarkan zona dan grading karyawan HANYA jika belum ada standar gaji dan gaji pokok personal
+        if (!$standarGaji && (empty($kary->gaji_pokok) || (float)$kary->gaji_pokok <= 0) && !empty($kary->m_zona_id) && !empty($kary->grading_id)) {
             $standarGaji = DB::table('m_standart_gaji')
                 ->where('m_zona_id', $kary->m_zona_id)
                 ->where('grading_id', $kary->grading_id)
