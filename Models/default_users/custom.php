@@ -47,6 +47,27 @@ class default_users extends \App\Models\BasicModels\default_users
                 ->select("r.*")
                 ->where('m_role_access.user_id', $row['id'])
                 ->get();
+
+            // Sediakan nama company secara konsisten (dari m_dir, m_comp, atau relasi m_kary)
+            $companyName = $row['m_dir.nama'] ?? ($row['m_comp.nama'] ?? null);
+            if (empty($companyName) && !empty($row['m_dir_id'])) {
+                $companyName = \DB::table('m_dir')->where('id', $row['m_dir_id'])->value('nama');
+            }
+            if (empty($companyName) && !empty($row['m_comp_id'])) {
+                $companyName = \DB::table('m_comp')->where('id', $row['m_comp_id'])->value('nama');
+            }
+            if (empty($companyName) && !empty($row['m_kary_id'])) {
+                $kary = \DB::table('m_kary')->where('id', $row['m_kary_id'])->first();
+                if ($kary) {
+                    if (!empty($kary->m_dir_id)) {
+                        $companyName = \DB::table('m_dir')->where('id', $kary->m_dir_id)->value('nama');
+                    }
+                    if (empty($companyName) && !empty($kary->m_comp_id)) {
+                        $companyName = \DB::table('m_comp')->where('id', $kary->m_comp_id)->value('nama');
+                    }
+                }
+            }
+            $object['company'] = $companyName ?? '-';
         }
         if($req->withKary){
             $kary = m_kary::find($row['m_kary_id']);

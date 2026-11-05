@@ -31,6 +31,7 @@ onBeforeMount(()=>{
 let initialValues = {}
 const changedValues = []
 let trx_dtl = ref([])
+let initialRoleIds = ''
 
 const onDetailAdd = (rows) => {
   let stop = false
@@ -92,10 +93,11 @@ onBeforeMount(async () => {
       const resultJson = await res.json()
       initialValues = resultJson.data
 
-      resultJson?.data?.detail.forEach((v)=>{
+      resultJson?.data?.detail?.forEach((v)=>{
         v.m_role_id = v.id
       })
-      trx_dtl.value = resultJson?.data.detail ?? []
+      trx_dtl.value = resultJson?.data?.detail ?? []
+      initialRoleIds = trx_dtl.value.map(r => r.m_role_id || r.id).sort().join(',')
 
     } catch (err) {
       isBadForm.value = true
@@ -114,16 +116,20 @@ onBeforeMount(async () => {
   for (const key in initialValues) {
     values[key] = initialValues[key]
   }
+  const companyName = initialValues.company || initialValues['m_dir.nama'] || initialValues['m_comp.nama'] || initialValues.direktorat || '-'
+  values.company = companyName
+  initialValues.company = companyName
 })
 
 function onBack() {
-  let isChanged = false
-  for (const key in initialValues) {
-    if (values[key] !== initialValues[key]) {
-      isChanged = true
-      break;
-    }
+  // Jika sedang dalam mode view (bukan Edit / Tambah), langsung kembali tanpa konfirmasi
+  if (!actionText.value || (actionText.value !== 'Edit' && actionText.value !== 'Tambah')) {
+    router.replace('/' + modulPath)
+    return
   }
+
+  const currentRoleIds = (trx_dtl.value ?? []).map(r => r.m_role_id || r.id).sort().join(',')
+  const isChanged = currentRoleIds !== initialRoleIds
 
   if (!isChanged) {
     router.replace('/' + modulPath)
@@ -151,7 +157,7 @@ function onReset() {
       for (const key in initialValues) {
         values[key] = initialValues[key]
       }
-      values.company = initialValues['m_comp.nama'] || initialValues['m_dir.nama'] || initialValues.company || initialValues.direktorat || ''
+      values.company = initialValues.company || initialValues['m_dir.nama'] || initialValues['m_comp.nama'] || initialValues.direktorat || '-'
       values.username = initialValues.username || ''
       values.email = initialValues.email || ''
     }
@@ -223,21 +229,6 @@ function onSave() {
 }
 
 //  @else----------------------- LANDING
-const activeBtn = ref(null)
-
-function filterShowData(params, noBtn) {
-  if (activeBtn.value === noBtn) {
-    activeBtn.value = null
-    landing.api.params.where = null
-  } else {
-    activeBtn.value = noBtn
-    landing.api.params.where = `this.is_active=${params ? 'true' : 'false'}`
-  }
-
-  if (apiTable.value) {
-    apiTable.value.reload()
-  }
-}
 
 const landing = reactive({
   actions: [
@@ -273,8 +264,7 @@ const landing = reactive({
     onsuccess(response) {
       if (response && response.data) {
         response.data = response.data.map((item) => {
-          item.status = (item.is_active === true || item.is_active === 1 || item.is_active === '1' || item.is_active === 'true' || item.is_active === 't') ? 'Active' : 'Inactive'
-          item.company = item['m_comp.nama'] || item['m_dir.nama'] || item.company || '-'
+          item.company = item.company || item['m_dir.nama'] || item['m_comp.nama'] || '-'
           return item
         })
       }
@@ -322,7 +312,7 @@ const landing = reactive({
     resizable: true,
     cellClass: [ 'border-r', '!border-gray-200'],
     valueGetter: (params) => {
-      return params.data ? (params.data.company || params.data['m_comp.nama'] || params.data['m_dir.nama'] || '-') : '-'
+      return params.data ? (params.data.company || params.data['m_dir.nama'] || params.data['m_comp.nama'] || '-') : '-'
     }
   },
   {
@@ -337,24 +327,7 @@ const landing = reactive({
     valueGetter: (params) => {
       return params.data ? (params.data.role_names || '-') : '-'
     }
-  },
-  {
-    headerName: 'Status',
-    field: 'status',
-    sortable: true,
-    resizable: true,
-    flex: 1,
-    cellClass: [ 'border-r', '!border-gray-200', 'justify-center'],
-    valueGetter: (params) => {
-      const val = params.data ? (params.data.status !== undefined ? params.data.status : params.data.is_active) : params.value
-      return (val === 'Active' || val === true || val === 1 || val === '1' || val === 'true' || val === 't') ? 'Active' : 'Inactive'
-    },
-    cellRenderer: ({ value }) => {
-      return value === 'Active' || value === true
-        ? `<span class="text-green-500 rounded-md text-xs font-medium px-4 py-1 inline-block capitalize">Active</span>`
-        : `<span class="text-gray-500 rounded-md text-xs font-medium px-4 py-1 inline-block capitalize">Inactive</span>`
-    }
-  },
+  }
   ]
 })
 onActivated(() => {
