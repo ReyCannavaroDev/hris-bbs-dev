@@ -54,9 +54,10 @@ class m_kary extends \App\Models\BasicModels\m_kary
         }
 
         $kode = !empty($arrayData['kode']) ? trim((string)$arrayData['kode']) : null;
-        if (empty($kode)) {
-            trigger_error("NIK (Nomor Induk Karyawan) wajib diisi!");
-        }
+        // Mode testing: validasi NIK wajib dinonaktifkan sementara
+        // if (empty($kode)) {
+        //     trigger_error("NIK (Nomor Induk Karyawan) wajib diisi!");
+        // }
 
         $newArrayData = array_merge($arrayData, [
             "kode" => $kode,

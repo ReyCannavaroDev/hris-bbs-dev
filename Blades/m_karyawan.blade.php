@@ -1151,7 +1151,8 @@
                 }" :check="false" />
           </div>
         </div>
-        <div v-if="!isProfile" class="col-span-8 md:col-span-6">
+        <!-- Field Metode Pembayaran di-hide karena belum diperlukan -->
+        <div v-if="false" class="col-span-8 md:col-span-6">
           <div class="grid grid-cols-12 items-center">
             <label class="col-span-12">Metode Pembayaran<label class="text-red-500 space-x-0 pl-0">*</label></label>
             <FieldSelect :bind="{ disabled: !actionText && !isProfile, clearable:false }"

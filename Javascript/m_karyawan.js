@@ -1378,6 +1378,8 @@ async function onSave() {
     formErrors.value = {}
     const errors = {}
 
+    // --- MODE TESTING: Validasi mandatory dimatikan sementara untuk keperluan testing ---
+    /*
     if (!values.m_dir_id) errors.m_dir_id = ['Company wajib dipilih']
     if (!values.m_divisi_id) errors.m_divisi_id = ['Divisi wajib dipilih']
     if (!values.m_dept_id) errors.m_dept_id = ['Departemen wajib dipilih']
@@ -1418,6 +1420,7 @@ async function onSave() {
       })
       return
     }
+    */
 
     values.nik = values.ktp_no || (values.nik && values.nik !== values.kode ? values.nik : null)
     values.nama_lengkap = (values.nama_depan ?? '') + ' ' + (values.nama_belakang ?? '')

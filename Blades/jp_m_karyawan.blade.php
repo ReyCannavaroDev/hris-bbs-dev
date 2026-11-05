@@ -964,7 +964,8 @@
 						}
 						}" :check="false" />
 					</div>
-					<div v-if="!isProfile">
+					<!-- Field Metode Pembayaran di-hide karena belum diperlukan -->
+					<div v-if="false">
 						<FieldSelect :bind="{ disabled: !actionText, clearable:false }" class="w-full mt-3"
 						:value="values.metode_id" @input="v=>values.metode_id=v" :errorText="formErrors.metode_id?'failed':''"
 						:hints="formErrors.metode_id" label="Pembayaran" placeholder="Pilih Metode Pembayaran" valueField="id"
