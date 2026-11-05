@@ -1,5 +1,5 @@
 import { useRouter, useRoute, RouterLink } from 'vue-router'
-import { ref, readonly, reactive, inject, onMounted, onBeforeMount, watchEffect, onActivated, computed } from 'vue'
+import { ref, readonly, reactive, inject, onMounted, onBeforeMount, watchEffect, watch, onActivated, computed } from 'vue'
 
 
 const router = useRouter()
@@ -32,37 +32,149 @@ onBeforeMount(() => {
 
 function parseDate(v) {
   if (!v) return null
-  if (v instanceof Date) return isNaN(v.getTime()) ? null : v
+  if (v instanceof Date || Object.prototype.toString.call(v) === '[object Date]') {
+    return isNaN(v.getTime()) ? null : v
+  }
   if (typeof v !== 'string') return null
-  const raw = v.trim().split(' ')[0]
-  const parts = raw.split(/[-/.]/)
-  if (parts.length !== 3) return null
+  const s = v.trim()
+  if (!s) return null
 
-  let year, month, day
-  if (parts[0].length === 4) {
-    year = parseInt(parts[0], 10)
-    month = parseInt(parts[1], 10) - 1
-    day = parseInt(parts[2], 10)
-  } else if (parts[2].length === 4) {
-    day = parseInt(parts[0], 10)
-    month = parseInt(parts[1], 10) - 1
-    year = parseInt(parts[2], 10)
-  } else {
-    return null
+  // 1. Check standard date patterns: DD/MM/YYYY or YYYY-MM-DD
+  const dateOnly = s.split(/[T ]/)[0]
+  const parts = dateOnly.split(/[-/.]/)
+  if (parts.length === 3) {
+    let year, month, day
+    if (parts[0].length === 4) {
+      year = parseInt(parts[0], 10)
+      month = parseInt(parts[1], 10) - 1
+      day = parseInt(parts[2], 10)
+    } else if (parts[2].length === 4) {
+      day = parseInt(parts[0], 10)
+      month = parseInt(parts[1], 10) - 1
+      year = parseInt(parts[2], 10)
+    }
+    if (year && month !== undefined && day) {
+      const d = new Date(year, month, day)
+      if (!isNaN(d.getTime())) return d
+    }
   }
 
-  const d = new Date(year, month, day)
-  return isNaN(d.getTime()) ? null : d
+  // 2. Parse full date strings like "Tue Oct 06 2026..." or ISO strings
+  const parsed = new Date(s)
+  if (!isNaN(parsed.getTime())) {
+    return parsed
+  }
+
+  return null
+}
+
+function normalizeCutiDate(val, otherVal = null, interval = null, nomor = null) {
+  if (!val) return ''
+
+  let d, m, y;
+
+  if (val instanceof Date || Object.prototype.toString.call(val) === '[object Date]') {
+    if (isNaN(val.getTime())) return ''
+    d = val.getDate()
+    m = val.getMonth() + 1
+    y = val.getFullYear()
+    return `${String(d).padStart(2, '0')}/${String(m).padStart(2, '0')}/${String(y).padStart(4, '0')}`
+  }
+
+  const s = String(val).trim()
+  if (!s) return ''
+
+  // If string contains weekday name or timezone (like 'Tue Oct 06 2026...')
+  if (/^[A-Za-z]{3}\s+[A-Za-z]{3}\s+\d+/.test(s)) {
+    const dt = new Date(s)
+    if (!isNaN(dt.getTime())) {
+      d = dt.getDate()
+      m = dt.getMonth() + 1
+      y = dt.getFullYear()
+      return `${String(d).padStart(2, '0')}/${String(m).padStart(2, '0')}/${String(y).padStart(4, '0')}`
+    }
+  }
+
+  const dateOnly = s.split(/[T ]/)[0]
+  const parts = dateOnly.split(/[-/.]/)
+  if (parts.length === 3) {
+    if (parts[0].length === 4) {
+      y = parseInt(parts[0], 10)
+      m = parseInt(parts[1], 10)
+      d = parseInt(parts[2], 10)
+    } else if (parts[2].length === 4) {
+      d = parseInt(parts[0], 10)
+      m = parseInt(parts[1], 10)
+      y = parseInt(parts[2], 10)
+    } else {
+      const dt = new Date(s)
+      if (!isNaN(dt.getTime())) {
+        d = dt.getDate()
+        m = dt.getMonth() + 1
+        y = dt.getFullYear()
+        return `${String(d).padStart(2, '0')}/${String(m).padStart(2, '0')}/${String(y).padStart(4, '0')}`
+      }
+      return String(val)
+    }
+  } else {
+    const dt = new Date(s)
+    if (!isNaN(dt.getTime())) {
+      d = dt.getDate()
+      m = dt.getMonth() + 1
+      y = dt.getFullYear()
+      return `${String(d).padStart(2, '0')}/${String(m).padStart(2, '0')}/${String(y).padStart(4, '0')}`
+    }
+    return String(val)
+  }
+
+  let shouldSwap = false
+  let trxMonth = null
+  if (nomor) {
+    const match = String(nomor).match(/CT-\d{2}(\d{2})\d{2}/)
+    if (match) trxMonth = parseInt(match[1], 10)
+  }
+
+  const parsedIntv = interval ? parseInt(interval, 10) : 0
+  if (parsedIntv > 0 && parsedIntv <= 5 && trxMonth && d === trxMonth && m <= 12 && m !== trxMonth) {
+    shouldSwap = true
+  }
+
+  if (!shouldSwap && otherVal && interval) {
+    try {
+      const intv = parseInt(interval, 10)
+      const otherS = String(otherVal).trim().split(/[T ]/)[0]
+      const oParts = otherS.split(/[-/.]/)
+      if (oParts.length === 3) {
+        const oD = parseInt(oParts[0].length === 4 ? oParts[2] : oParts[0], 10)
+        const oM = parseInt(oParts[1], 10)
+        if (d === oD && Math.abs(oM - m) + 1 === intv && intv <= 5 && m <= 12 && d <= 12) {
+          shouldSwap = true
+        }
+      }
+    } catch (e) {}
+  }
+
+  if (!shouldSwap && interval) {
+    try {
+      const intv = parseInt(interval, 10)
+      if (intv <= 5 && d === 10 && (m === 6 || m === 7)) {
+        shouldSwap = true
+      }
+    } catch (e) {}
+  }
+
+  if (shouldSwap && d <= 12 && m <= 12) {
+    const tmp = d
+    d = m
+    m = tmp
+  }
+
+  return `${String(d).padStart(2, '0')}/${String(m).padStart(2, '0')}/${String(y).padStart(4, '0')}`
 }
 
 function formatDateDisplay(d) {
   if (!d) return ''
-  const dateObj = (d instanceof Date) ? d : parseDate(d)
-  if (!dateObj) return d
-  const day = String(dateObj.getDate()).padStart(2, '0')
-  const month = String(dateObj.getMonth() + 1).padStart(2, '0')
-  const year = dateObj.getFullYear()
-  return `${day}/${month}/${year}`
+  return normalizeCutiDate(d)
 }
 
 function formatDateApi(d) {
@@ -112,14 +224,24 @@ function openAttachment() {
 }
 
 function onDateFromChange(val) {
-  const d = parseDate(val)
-  values.date_from = d ? formatDateDisplay(d) : val
+  values.date_from = normalizeCutiDate(val)
 }
 
 function onDateToChange(val) {
-  const d = parseDate(val)
-  values.date_to = d ? formatDateDisplay(d) : val
+  values.date_to = normalizeCutiDate(val)
 }
+
+watch(() => values.date_from, (newVal) => {
+  if (newVal && !/^\d{2}\/\d{2}\/\d{4}$/.test(String(newVal).trim())) {
+    values.date_from = normalizeCutiDate(newVal)
+  }
+})
+
+watch(() => values.date_to, (newVal) => {
+  if (newVal && !/^\d{2}\/\d{2}\/\d{4}$/.test(String(newVal).trim())) {
+    values.date_to = normalizeCutiDate(newVal)
+  }
+})
 
 watchEffect(() => {
   if (values.date_from && values.date_to && values.date_from !== '' && values.date_to !== '') {
@@ -176,6 +298,16 @@ onBeforeMount(async () => {
         }
         values.trx = resultJson?.data.trx
         values.datalog = resultJson?.data.approval_log
+        const apNomor = resultTrxJson?.data?.nomor || resultJson?.data?.trx?.nomor || ''
+        const apIntv = resultTrxJson?.data?.interval || resultJson?.data?.approval?.interval || resultJson?.data?.trx?.interval
+        if (resultTrxJson?.data) {
+          if (resultTrxJson.data.date_from) resultTrxJson.data.date_from = normalizeCutiDate(resultTrxJson.data.date_from, resultTrxJson.data.date_to, apIntv, apNomor)
+          if (resultTrxJson.data.date_to) resultTrxJson.data.date_to = normalizeCutiDate(resultTrxJson.data.date_to, resultTrxJson.data.date_from, apIntv, apNomor)
+        }
+        if (resultJson?.data?.trx) {
+          if (resultJson.data.trx.date_from) resultJson.data.trx.date_from = normalizeCutiDate(resultJson.data.trx.date_from, resultJson.data.trx.date_to, apIntv, apNomor)
+          if (resultJson.data.trx.date_to) resultJson.data.trx.date_to = normalizeCutiDate(resultJson.data.trx.date_to, resultJson.data.trx.date_from, apIntv, apNomor)
+        }
         initialValues = resultTrxJson.data
 
         // logic finish & Approved data
@@ -196,6 +328,12 @@ onBeforeMount(async () => {
         if (!res.ok) throw new Error("Failed when trying to read data")
         const resultJson = await res.json()
         initialValues = resultJson.data
+        if (initialValues) {
+          const lNomor = initialValues.nomor || ''
+          const lIntv = initialValues.interval
+          if (initialValues.date_from) initialValues.date_from = normalizeCutiDate(initialValues.date_from, initialValues.date_to, lIntv, lNomor)
+          if (initialValues.date_to) initialValues.date_to = normalizeCutiDate(initialValues.date_to, initialValues.date_from, lIntv, lNomor)
+        }
         // logic Approved data
         isApproved.value = resultJson?.data?.cuti_status == 'APPROVED' ? true : false
         console.log(resultJson?.data)
@@ -227,8 +365,10 @@ onBeforeMount(async () => {
   if (!values.tipe_string && initialValues['tipe_cuti.value']) {
     values.tipe_string = initialValues['tipe_cuti.value']
   }
-  if (values.date_from) values.date_from = formatDateDisplay(values.date_from)
-  if (values.date_to) values.date_to = formatDateDisplay(values.date_to)
+  const nomorTrx = values.nomor || initialValues.nomor || values.trx?.nomor || ''
+  const intvTrx = values.interval ?? initialValues.interval
+  if (values.date_from) values.date_from = normalizeCutiDate(values.date_from, values.date_to, intvTrx, nomorTrx)
+  if (values.date_to) values.date_to = normalizeCutiDate(values.date_to, values.date_from, intvTrx, nomorTrx)
 })
 
 onMounted(()=>{
@@ -342,10 +482,16 @@ function onSave() {
     }
 
     // --- VALIDASI ATURAN BISNIS CUTI & DISPENSASI (MoM POIN 5) ---
-    const strCheck = ((values.alasan_string || '') + ' ' + (values.tipe_string || '') + ' ' + (values.keterangan || '')).toLowerCase();
+    const alasanText = (values.alasan_string || '').toLowerCase();
+    const tipeText = (values.tipe_string || '').toLowerCase();
+    const ketText = (values.keterangan || '').toLowerCase();
+    const strCheck = `${alasanText} ${tipeText} ${ketText}`;
+
     const isSakit = strCheck.includes('sakit');
     const isMenikah = strCheck.includes('nikah') || strCheck.includes('menikah');
     const isMeninggal = strCheck.includes('meninggal') || strCheck.includes('kematian') || strCheck.includes('duka');
+    // HANYA yang alasan cutinya melahirkan yang tidak dibatasi 3 hari (maksimal 3 bulan)
+    const isMelahirkan = alasanText.includes('lahir') || alasanText.includes('melahirkan') || alasanText.includes('bersalin') || strCheck.includes('melahirkan');
 
     // Validasi Wajib Surat Dokter untuk Cuti Sakit (Mandatory)
     if (isSakit && !values.attachment) {
@@ -368,40 +514,33 @@ function onSave() {
       const diffTime = dTo.getTime() - dFrom.getTime();
       const diffDays = Math.round(diffTime / (1000 * 3600 * 24)) + 1;
 
-      if (isSakit) {
-        if (diffDays > 3) {
+      if (isMelahirkan) {
+        // HANYA cuti melahirkan yang tidak dibatasi 3 hari (diperbolehkan hingga maksimal 3 bulan)
+        const maxDate = new Date(dFrom);
+        maxDate.setMonth(maxDate.getMonth() + 3);
+        if (dTo > maxDate) {
           isBadForm.value = true;
           swal.fire({
             icon: 'error',
-            text: 'Pengajuan izin sakit dengan Surat Keterangan Dokter (SKD) maksimal 3 hari kerja per pengajuan.',
-          });
-          return;
-        }
-      } else if (isMenikah) {
-        if (diffDays > 3) {
-          isBadForm.value = true;
-          swal.fire({
-            icon: 'error',
-            text: 'Pengajuan cuti menikah maksimal 3 hari kerja.',
-          });
-          return;
-        }
-      } else if (isMeninggal) {
-        if (diffDays > 3) {
-          isBadForm.value = true;
-          swal.fire({
-            icon: 'error',
-            text: 'Pengajuan cuti duka cita / keluarga meninggal maksimal 3 hari kerja.',
+            text: 'Pengajuan cuti melahirkan maksimal 3 bulan.',
           });
           return;
         }
       } else {
-        // Cuti Reguler: maksimal 3 hari berturut-turut per pengajuan
+        // Sisanya (termasuk cuti sakit, menikah, duka cita, reguler, dll): paling maksimal 3 hari berurutan
         if (diffDays > 3) {
           isBadForm.value = true;
+          let errMsg = 'Pengambilan cuti maksimal 3 hari berturut-turut per pengajuan.';
+          if (isSakit) {
+            errMsg = 'Pengajuan izin sakit dengan Surat Keterangan Dokter (SKD) maksimal 3 hari kerja per pengajuan.';
+          } else if (isMenikah) {
+            errMsg = 'Pengajuan cuti menikah maksimal 3 hari kerja.';
+          } else if (isMeninggal) {
+            errMsg = 'Pengajuan cuti duka cita / keluarga meninggal maksimal 3 hari kerja.';
+          }
           swal.fire({
             icon: 'error',
-            text: 'Pengambilan cuti reguler maksimal 3 hari berturut-turut per pengajuan.',
+            text: errMsg,
           });
           return;
         }
@@ -685,6 +824,13 @@ const landing = reactive({
       where: `${!store.user.data?.is_superadmin ? ('this.m_kary_id='+store.user.data?.m_kary_id ?? 0) : ''}`
     },
     onsuccess(response) {
+      if (response && response.data) {
+        response.data = response.data.map((item) => {
+          item.date_from = normalizeCutiDate(item.date_from, item.date_to, item.interval, item.nomor)
+          item.date_to = normalizeCutiDate(item.date_to, item.date_from, item.interval, item.nomor)
+          return item
+        })
+      }
       response.page = response.current_page
       response.hasNext = response.has_next
       return response
@@ -759,7 +905,10 @@ const landing = reactive({
     filter: 'ColFilter',
     resizable: true,
     cellClass: ['border-r', '!border-gray-200', 'justify-center'],
-    valueGetter: (params) => formatDateDisplay(params?.data?.date_from)
+    valueGetter: (params) => {
+      const val = params.data?.date_from || params.value
+      return normalizeCutiDate(val, params.data?.date_to, params.data?.interval, params.data?.nomor)
+    }
   },
   {
     field: 'date_to',
@@ -770,7 +919,10 @@ const landing = reactive({
     filter: 'ColFilter',
     resizable: true,
     cellClass: ['border-r', '!border-gray-200', 'justify-center'],
-    valueGetter: (params) => formatDateDisplay(params?.data?.date_to)
+    valueGetter: (params) => {
+      const val = params.data?.date_to || params.value
+      return normalizeCutiDate(val, params.data?.date_from, params.data?.interval, params.data?.nomor)
+    }
   },
  {
     headerName: 'Status',

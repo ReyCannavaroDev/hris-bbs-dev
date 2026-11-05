@@ -37,6 +37,65 @@ class t_cuti extends \App\Models\BasicModels\t_cuti
         }
     }
 
+    public function formatDisplayDateSafe($val, $otherVal = null, $interval = null, $nomor = null)
+    {
+        if (empty($val)) return '';
+        $raw = trim(explode(' ', explode('T', (string) $val)[0])[0]);
+        $parts = preg_split('/[-\/.]/', $raw);
+        if (count($parts) !== 3) return (string) $val;
+
+        if (strlen($parts[0]) === 4) {
+            $y = (int) $parts[0];
+            $m = (int) $parts[1];
+            $d = (int) $parts[2];
+        } else if (strlen($parts[2]) === 4) {
+            $d = (int) $parts[0];
+            $m = (int) $parts[1];
+            $y = (int) $parts[2];
+        } else {
+            return (string) $val;
+        }
+
+        $shouldSwap = false;
+        $trxMonth = null;
+        if (!empty($nomor) && preg_match('/CT-\d{2}(\d{2})\d{2}/', (string) $nomor, $mNomor)) {
+            $trxMonth = (int) $mNomor[1];
+        }
+
+        $intv = !empty($interval) ? (int) $interval : 0;
+        if ($intv > 0 && $intv <= 5 && $trxMonth && $d === $trxMonth && $m <= 12 && $m !== $trxMonth) {
+            $shouldSwap = true;
+        }
+
+        if (!$shouldSwap && !empty($otherVal) && !empty($interval)) {
+            $intv = (int) $interval;
+            $otherRaw = trim(explode(' ', explode('T', (string) $otherVal)[0])[0]);
+            $oParts = preg_split('/[-\/.]/', $otherRaw);
+            if (count($oParts) === 3) {
+                $oD = (int) (strlen($oParts[0]) === 4 ? $oParts[2] : $oParts[0]);
+                $oM = (int) $oParts[1];
+                if ($d === $oD && (abs($oM - $m) + 1) === $intv && $intv <= 5 && $m <= 12 && $d <= 12) {
+                    $shouldSwap = true;
+                }
+            }
+        }
+
+        if (!$shouldSwap && !empty($interval)) {
+            $intv = (int) $interval;
+            if ($intv <= 5 && $d === 10 && ($m === 6 || $m === 7)) {
+                $shouldSwap = true;
+            }
+        }
+
+        if ($shouldSwap && $d <= 12 && $m <= 12) {
+            $tmp = $d;
+            $d = $m;
+            $m = $tmp;
+        }
+
+        return sprintf('%02d/%02d/%04d', $d, $m, $y);
+    }
+
     public function transformRowData( array $row )
     {
         $approval = generate_approval_log::where('trx_table', 't_cuti')->where('trx_id', $row['id']) ->orderBy('created_at', 'desc')->value('action_note');
@@ -54,9 +113,8 @@ class t_cuti extends \App\Models\BasicModels\t_cuti
 
         foreach (['date_from', 'date_to'] as $col) {
             if (!empty($row[$col])) {
-                try {
-                    $row[$col] = Carbon::parse($row[$col])->format('d/m/Y');
-                } catch (\Exception $e) {}
+                $other = ($col === 'date_from') ? ($row['date_to'] ?? null) : ($row['date_from'] ?? null);
+                $row[$col] = $this->formatDisplayDateSafe($row[$col], $other, $row['interval'] ?? null, $row['nomor'] ?? null);
             }
         }
 
@@ -134,18 +192,17 @@ class t_cuti extends \App\Models\BasicModels\t_cuti
         $alasanObj = !empty($arrayData['alasan_id']) ? \DB::table('m_general')->where('id', $arrayData['alasan_id'])->first() : null;
         $tipeObj   = !empty($arrayData['tipe_cuti_id']) ? \DB::table('m_general')->where('id', $arrayData['tipe_cuti_id'])->first() : null;
 
-        $checkStr = strtolower(trim(
-            ($alasanObj->value ?? '') . ' ' .
-            ($alasanObj->code ?? '') . ' ' .
-            ($tipeObj->value ?? '') . ' ' .
-            ($tipeObj->code ?? '') . ' ' .
-            ($arrayData['keterangan'] ?? '')
-        ));
+        $alasanStr = strtolower(trim(($alasanObj->value ?? '') . ' ' . ($alasanObj->code ?? '')));
+        $tipeStr   = strtolower(trim(($tipeObj->value ?? '') . ' ' . ($tipeObj->code ?? '')));
+        $ketStr    = strtolower(trim((string)($arrayData['keterangan'] ?? '')));
+        $checkStr  = "{$alasanStr} {$tipeStr} {$ketStr}";
 
         $isP24 = (!empty($arrayData['time_from']) && !empty($arrayData['time_to'])) || str_contains($checkStr, 'p24');
         $isSakit = str_contains($checkStr, 'sakit');
         $isMenikah = str_contains($checkStr, 'nikah') || str_contains($checkStr, 'menikah');
         $isMeninggal = str_contains($checkStr, 'meninggal') || str_contains($checkStr, 'kematian') || str_contains($checkStr, 'duka');
+        // HANYA yang alasan cutinya melahirkan yang tidak mempunyai validasi 3 hari
+        $isMelahirkan = str_contains($alasanStr, 'lahir') || str_contains($alasanStr, 'melahirkan') || str_contains($alasanStr, 'bersalin') || str_contains($checkStr, 'melahirkan');
 
         if ($isP24) {
             // Izin parsial jam-jaman (P24) tidak dibatasi 3 hari harian
@@ -154,7 +211,30 @@ class t_cuti extends \App\Models\BasicModels\t_cuti
 
         $durasiHari = (int) ($interval ?? 1);
 
-        // 1. Izin Khusus: Sakit (SKD) - maksimal 3 hari kerja & wajib upload surat dokter
+        // 1. Izin Khusus: Melahirkan - maksimal 3 bulan & tidak memotong kuota cuti tahunan
+        if ($isMelahirkan) {
+            $dateFrom = $this->parseCarbonDate($arrayData['date_from'] ?? null);
+            $dateTo   = $this->parseCarbonDate($arrayData['date_to'] ?? null);
+            if ($dateFrom && $dateTo) {
+                $maxDate = (clone $dateFrom)->addMonths(3);
+                if ($dateTo->gt($maxDate)) {
+                    return response([
+                        "status"  => "error",
+                        "message" => "Pengajuan cuti melahirkan maksimal 3 bulan.",
+                        "errors"  => ["date_to" => ["Pengajuan cuti melahirkan maksimal 3 bulan."]]
+                    ], 422);
+                }
+            } elseif ($durasiHari > 95) {
+                return response([
+                    "status"  => "error",
+                    "message" => "Pengajuan cuti melahirkan maksimal 3 bulan.",
+                    "errors"  => ["interval" => ["Pengajuan cuti melahirkan maksimal 3 bulan."]]
+                ], 422);
+            }
+            return null; // Cuti melahirkan tidak memotong kuota cuti tahunan
+        }
+
+        // 2. Izin Khusus: Sakit (SKD) - maksimal 3 hari kerja & wajib upload surat dokter
         if ($isSakit) {
             if ($durasiHari > 3) {
                 return response([
@@ -201,8 +281,8 @@ class t_cuti extends \App\Models\BasicModels\t_cuti
         if ($durasiHari > 3) {
             return response([
                 "status"  => "error",
-                "message" => "Pengambilan cuti reguler maksimal 3 hari berturut-turut per pengajuan.",
-                "errors"  => ["interval" => ["Pengambilan cuti reguler maksimal 3 hari berturut-turut per pengajuan."]]
+                "message" => "Pengambilan cuti selain melahirkan maksimal 3 hari berturut-turut per pengajuan.",
+                "errors"  => ["interval" => ["Pengambilan cuti selain melahirkan maksimal 3 hari berturut-turut per pengajuan."]]
             ], 422);
         }
 
@@ -497,6 +577,10 @@ class t_cuti extends \App\Models\BasicModels\t_cuti
                                     str_contains($checkStr, 'meninggal') ||
                                     str_contains($checkStr, 'kematian') ||
                                     str_contains($checkStr, 'duka') ||
+                                    str_contains($checkStr, 'lahir') ||
+                                    str_contains($checkStr, 'melahirkan') ||
+                                    str_contains($checkStr, 'bersalin') ||
+                                    str_contains($checkStr, 'persalinan') ||
                                     str_contains($checkStr, 'p24') ||
                                     (!empty($data->time_from) && !empty($data->time_to));
 
@@ -530,6 +614,17 @@ class t_cuti extends \App\Models\BasicModels\t_cuti
     {
         $id = $req->id ?? 66;
         $data = $this->helper->approvalDetail($id);
+        if ($data && isset($data->trx)) {
+            $trx = $data->trx;
+            $nomor = $trx->nomor ?? null;
+            $intv = $trx->interval ?? ($data->approval->interval ?? null);
+            if (!empty($trx->date_from)) {
+                $trx->date_from = $this->formatDisplayDateSafe($trx->date_from, $trx->date_to ?? null, $intv, $nomor);
+            }
+            if (!empty($trx->date_to)) {
+                $trx->date_to = $this->formatDisplayDateSafe($trx->date_to, $trx->date_from ?? null, $intv, $nomor);
+            }
+        }
         return $this->helper->customResponse("OK", 200, $data);
     }
     public function custom_log($req)

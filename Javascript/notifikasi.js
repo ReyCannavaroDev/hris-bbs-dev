@@ -16,26 +16,26 @@ const currentUser = store.user.data
 // ------------------------------ PERSIAPAN
 
 const endpointApi = '/generate_approval/outstanding'
-onBeforeMount(()=>{
+onBeforeMount(() => {
   document.title = 'Notification'
 })
 
 let initialValues = {}
 const changedValues = []
 
-let dataLanding = reactive({items:[]})
+let dataLanding = reactive({ items: [] })
 const values = reactive({})
-let params = { join: false, transform: false, single:true }
+let params = { join: false, transform: false, single: true }
 
 onBeforeMount(async () => {
-   
-    
+
+
 })
 
 function formatDate(dateStr) {
   if (!dateStr) return '-'
   if (typeof dateStr === 'string') {
-    const raw = dateStr.trim().split(' ')[0]
+    const raw = dateStr.trim().split(/[T ]/)[0]
     const parts = raw.split(/[-/]/)
     if (parts.length === 3) {
       if (parts[0].length === 4) {
@@ -55,67 +55,70 @@ function formatDate(dateStr) {
 
 async function loadTable() {
   try {
-      // reset landing
-      dataLanding.items = []
+    // reset landing
+    dataLanding.items = []
 
-      const editedId = route.params.id
-      const dataURL = `${store.server.url_backend}/operation${endpointApi}`
-      isRequesting.value = true
+    const editedId = route.params.id
+    const dataURL = `${store.server.url_backend}/operation${endpointApi}`
+    isRequesting.value = true
 
-      const fixedParams = new URLSearchParams(params)
-      const res = await fetch(dataURL + '?' + fixedParams, {
-        headers: {
-          'Content-Type': 'Application/json',
-          Authorization: `${store.user.token_type} ${store.user.token}`
-        },
-      })
-      if (!res.ok) throw new Error("Failed when trying to read data")
-      const resultJson = await res.json()
-      let data = resultJson.data
+    const fixedParams = new URLSearchParams(params)
+    const res = await fetch(dataURL + '?' + fixedParams, {
+      headers: {
+        'Content-Type': 'Application/json',
+        Authorization: `${store.user.token_type} ${store.user.token}`
+      },
+    })
+    if (!res.ok) throw new Error("Failed when trying to read data")
+    const resultJson = await res.json()
+    let data = resultJson.data
 
-      if (Array.isArray(data)) {
-        data.forEach(item => {
-          if (item.trx_date) {
-            item.trx_date = formatDate(item.trx_date)
-          }
-        })
-      }
-
-      const groupedData = data.reduce((result, item) => {
-        const key = item.trx_name;
-        if (!result[key]) {
-            result[key] = [];
+    if (Array.isArray(data)) {
+      data.forEach(item => {
+        if (item.trx_date) {
+          item.trx_date = formatDate(item.trx_date)
         }
-        result[key].push(item);
-        return result;
-      }, {});
-
-      data = groupedData
-      let counter = 0
-      for(const item in data){
-        let active = false
-        if(counter === 0) active = true
-        dataLanding.items.push({
-          'active' : active,
-          'name' : item,
-          'data' : data[item]
-        })
-        counter++
-      }
-      
-    } catch (err) {
-      isBadForm.value = true
-      swal.fire({
-        icon: 'error',
-        text: err,
-        allowOutsideClick: false,
-        confirmButtonText: 'Kembali',
-      }).then(() => {
-        
+        if (item.created_at) {
+          item.created_at = formatDate(item.created_at)
+        }
       })
     }
-    isRequesting.value = false
-    // console.log(dataLanding.items)
+
+    const groupedData = data.reduce((result, item) => {
+      const key = item.trx_name;
+      if (!result[key]) {
+        result[key] = [];
+      }
+      result[key].push(item);
+      return result;
+    }, {});
+
+    data = groupedData
+    let counter = 0
+    for (const item in data) {
+      let active = false
+      if (counter === 0) active = true
+      dataLanding.items.push({
+        'active': active,
+        'name': item,
+        'data': data[item]
+      })
+      counter++
+    }
+
+  } catch (err) {
+    isBadForm.value = true
+    swal.fire({
+      icon: 'error',
+      text: err,
+      allowOutsideClick: false,
+      confirmButtonText: 'Kembali',
+    }).then(() => {
+
+    })
+  }
+  isRequesting.value = false
+  // console.log(dataLanding.items)
 }
 
 
@@ -142,8 +145,8 @@ function paginate() {
 }
 
 function detail(i, idx) {
-  const dt =  dataLanding.items[i]['data'][idx]
+  const dt = dataLanding.items[i]['data'][idx]
   console.log(dt)
-  const url = (dt.form_name ?? dt.trx_table)+`/${dt.id}?is_approval=true`
+  const url = (dt.form_name ?? dt.trx_table) + `/${dt.id}?is_approval=true`
   return router.replace('/' + url)
 }
