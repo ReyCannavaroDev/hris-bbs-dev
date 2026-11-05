@@ -237,7 +237,7 @@
                   {{ item.karyawan || item.nama_lengkap }}
                 </td>
                 <td class="text-left border border-[#CACACA] px-2 text-sm">
-                  {{ item.divisi_nama || item['m_kary_divisi.nama'] || '-' }} / {{ item.dept_nama || item['m_kary_dept.nama'] || '-' }}
+                  {{ item.divisi_nama || item.m_divisi_nama || item['m_kary_divisi.nama'] || '-' }} / {{ item.dept_nama || item.m_dept_nama || item['m_kary_dept.nama'] || '-' }}
                 </td>
                 <td class="text-center border border-[#CACACA] px-2">
                   {{ item.grading || '-' }}

@@ -201,8 +201,8 @@ onBeforeMount(async () => {
     const itemData = { ...initialValues }
     itemData.karyawan = itemData['m_kary.nama_lengkap'] || itemData.karyawan || itemData.nama_lengkap || '-'
     itemData.nik = itemData['m_kary.nik'] || itemData.nik || itemData.kode || '-'
-    itemData.divisi_nama = itemData['m_kary_divisi.nama'] || '-'
-    itemData.dept_nama = itemData['m_kary_dept.nama'] || '-'
+    itemData.divisi_nama = itemData['m_kary_divisi.nama'] || itemData.divisi_nama || itemData.m_divisi_nama || '-'
+    itemData.dept_nama = itemData['m_kary_dept.nama'] || itemData.dept_nama || itemData.m_dept_nama || '-'
     if (typeof itemData.detail_lembur === 'string') {
       try { itemData.detail_lembur = JSON.parse(itemData.detail_lembur) } catch (e) { itemData.detail_lembur = [] }
     }
@@ -265,7 +265,9 @@ async function generatePerhitungan() {
     }
     resultData.forEach((item) => {
       item.id = ++_id
-      item.karyawan = item.nama_lengkap
+      item.karyawan = item.nama_lengkap || item['m_kary.nama_lengkap'] || item.karyawan
+      item.divisi_nama = item.divisi_nama || item.m_divisi_nama || item['m_kary_divisi.nama'] || '-'
+      item.dept_nama = item.dept_nama || item.m_dept_nama || item['m_kary_dept.nama'] || '-'
       detailArr.value.push(item)
     })
   } catch (err) {

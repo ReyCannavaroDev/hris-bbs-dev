@@ -211,8 +211,9 @@ class t_perhitungan_lembur extends \App\Models\BasicModels\t_perhitungan_lembur
             // Query karyawan aktif
             $karyQuery = \DB::table('m_kary')
                 ->leftJoin('m_dir', 'm_dir.id', '=', 'm_kary.m_dir_id')
-                ->leftJoin('m_divisi', 'm_divisi.id', '=', 'm_kary.m_divisi_id')
                 ->leftJoin('m_dept', 'm_dept.id', '=', 'm_kary.m_dept_id')
+                ->leftJoin('m_divisi', 'm_divisi.id', '=', 'm_kary.m_divisi_id')
+                ->leftJoin('m_divisi as m_div_dept', 'm_div_dept.id', '=', 'm_dept.m_divisi_id')
                 ->leftJoin('m_general as mg_grade', 'mg_grade.id', '=', 'm_kary.grading_id')
                 ->select(
                     'm_kary.id',
@@ -223,8 +224,9 @@ class t_perhitungan_lembur extends \App\Models\BasicModels\t_perhitungan_lembur
                     'm_kary.m_dir_id',
                     'm_kary.m_divisi_id',
                     'm_kary.m_dept_id',
+                    'm_dept.m_divisi_id as m_dept_divisi_id',
                     'm_dir.nama as dir_nama',
-                    'm_divisi.nama as divisi_nama',
+                    \DB::raw('COALESCE(m_divisi.nama, m_div_dept.nama) as divisi_nama'),
                     'm_dept.nama as dept_nama',
                     'mg_grade.value as grading_nama'
                 )
@@ -313,6 +315,11 @@ class t_perhitungan_lembur extends \App\Models\BasicModels\t_perhitungan_lembur
                 }
 
                 $nikVal = $emp->nik ?: $emp->kode;
+                $divisiVal = $emp->divisi_nama ?? null;
+                $deptVal   = $emp->dept_nama ?? null;
+                $dirVal    = $emp->dir_nama ?? null;
+                $divisiId  = $emp->m_divisi_id ?: ($emp->m_dept_divisi_id ?? null);
+
                 $data[] = [
                     'm_kary_id'           => $emp->id,
                     'm_kary.nik'          => $nikVal,
@@ -320,13 +327,20 @@ class t_perhitungan_lembur extends \App\Models\BasicModels\t_perhitungan_lembur
                     'nik'                 => $nikVal,
                     'kode'                => $emp->kode,
                     'nama_lengkap'        => $emp->nama_lengkap,
+                    'karyawan'            => $emp->nama_lengkap,
                     'grading'             => $emp->grading_nama ?? '-',
                     'm_kary_dir_id'       => $emp->m_dir_id,
-                    'm_dir_nama'          => $emp->dir_nama,
-                    'm_kary_divisi_id'    => $emp->m_divisi_id,
-                    'm_divisi_nama'       => $emp->divisi_nama,
+                    'm_dir_nama'          => $dirVal,
+                    'dir_nama'            => $dirVal,
+                    'm_kary_dir.nama'     => $dirVal,
+                    'm_kary_divisi_id'    => $divisiId,
+                    'm_divisi_nama'       => $divisiVal,
+                    'divisi_nama'         => $divisiVal,
+                    'm_kary_divisi.nama'  => $divisiVal,
                     'm_kary_dept_id'      => $emp->m_dept_id,
-                    'm_dept_nama'         => $emp->dept_nama,
+                    'm_dept_nama'         => $deptVal,
+                    'dept_nama'           => $deptVal,
+                    'm_kary_dept.nama'    => $deptVal,
                     'periode'             => $periodeLabel,
                     'periode_awal'        => $strDateFrom,
                     'periode_akhir'       => $strDateTo,
