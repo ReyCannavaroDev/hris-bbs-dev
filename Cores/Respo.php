@@ -9,54 +9,7 @@ class Respo
     public function formatMenu()
     {
         $req = app()->request;
-        $fixedMenu = [
-            [
-                "modul"       => "Dashboard",
-                "text"        => "Dashboard",
-                "path"        => "/dashboard",
-                "truncatable" => true,
-                "icon"        => "dashboard",
-                "description" => null,
-                "endpoint"    => "/dashboard",
-                "type"        => "single",
-                "can_read"    => true,
-                "can_create"  => true,
-                "can_update"  => true,
-                "can_delete"  => true,
-                "own_data"    => false,
-            ],
-            [
-                "modul"       => "Notifikasi",
-                "text"        => "Notifikasi",
-                "path"        => "/notifikasi",
-                "truncatable" => false,
-                "icon"        => "bell",
-                "description" => null,
-                "endpoint"    => "/notifikasi",
-                "type"        => "single",
-                "can_read"    => true,
-                "can_create"  => true,
-                "can_update"  => true,
-                "can_delete"  => true,
-                "own_data"    => false,
-            ],
-            [
-                "modul"       => "Absen Online",
-                "text"        => "Absen Online",
-                "path"        => "/presensi_absen_online",
-                "truncatable" => false,
-                "icon"        => "camera",
-                "description" => null,
-                "endpoint"    => "/presensi_absen_online",
-                "type"        => "single",
-                "can_read"    => true,
-                "can_create"  => true,
-                "can_update"  => true,
-                "can_delete"  => true,
-                "own_data"    => false,
-            ],
-            ["separator" => true],
-        ];
+        $fixedMenu = [];
 
         $user_id = @auth()->user()->id ?? 0;
         $user = \DB::table("default_users")->where("id", $user_id)->first();

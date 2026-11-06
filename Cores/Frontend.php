@@ -145,15 +145,6 @@ class Frontend
         $app->router->get('/frontend-menu', [
             'middleware' => ['auth:api'],
             function () use ($instance, $fix_default_menu) {
-                try {
-                    $respo = getCore('Respo');
-                    $menu = $respo->formatMenu();
-                    if (!empty($menu) && count($menu) > 4) {
-                        return $menu;
-                    }
-                } catch (\Throwable $e) {
-                    // Fallback aman ke formatMenu legacy jika tabel respo belum ada/kosong
-                }
                 return count($instance->formatMenu($instance->getMenu())) ? $instance->formatMenu($instance->getMenu()) : $fix_default_menu;
             }
         ]);
