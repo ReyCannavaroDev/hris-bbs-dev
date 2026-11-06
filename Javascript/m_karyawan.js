@@ -24,11 +24,154 @@ const formErrorsBhs = ref({})
 const formErrorsPK = ref({})
 const activeTabIndex = ref(0)
 const tsId = `ts=` + (Date.parse(new Date()))
+const isStaffHrd = ref(false)
+
+const checkIsStaffHrd = async () => {
+  try {
+    const userData = store.user?.data || {}
+    const isSuper = (
+      userData.is_superadmin === true ||
+      userData.is_superadmin === 1 ||
+      userData.is_superadmin === '1' ||
+      userData.is_superadmin === 'true' ||
+      userData.username === 'developer'
+    )
+    if (isSuper) {
+      isStaffHrd.value = false
+      return
+    }
+
+    const matchesStaffHrd = (name) => /staff\s*hrd/i.test(String(name || '').trim())
+
+    // 1. Cek langsung dari store.user atau localStorage
+    let rolesList = []
+    if (Array.isArray(userData.roles)) {
+      userData.roles.forEach(r => rolesList.push(typeof r === 'string' ? r : (r.name || '')))
+    }
+    if (userData.role) rolesList.push(userData.role)
+    if (userData.role_name) rolesList.push(userData.role_name)
+    if (userData.role_names) rolesList.push(userData.role_names)
+
+    if (typeof window !== 'undefined' && window.localStorage?.user) {
+      try {
+        const localUser = JSON.parse(window.localStorage.user)
+        const localData = localUser?.data || {}
+        if (Array.isArray(localData.roles)) {
+          localData.roles.forEach(r => rolesList.push(typeof r === 'string' ? r : (r.name || '')))
+        }
+        if (localData.role) rolesList.push(localData.role)
+        if (localData.role_name) rolesList.push(localData.role_name)
+        if (localData.role_names) rolesList.push(localData.role_names)
+      } catch (e) {}
+    }
+
+    if (rolesList.some(matchesStaffHrd)) {
+      isStaffHrd.value = true
+      return
+    }
+
+    const userId = userData.id || (typeof window !== 'undefined' && window.localStorage?.user ? JSON.parse(window.localStorage.user)?.data?.id : null)
+    if (!userId) return
+
+    // 2. Fetch endpoint default_users/{userId}?from=role_access&detail=true
+    try {
+      const resUser = await fetch(`${store.server.url_backend}/operation/default_users/${userId}?from=role_access&detail=true`, {
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `${store.user.token_type} ${store.user.token}`
+        }
+      })
+      if (resUser.ok) {
+        const jsonUser = await resUser.json()
+        const uData = jsonUser.data || {}
+        if (uData.role_names && matchesStaffHrd(uData.role_names)) {
+          isStaffHrd.value = true
+          return
+        }
+        if (Array.isArray(uData.detail)) {
+          const hasRole = uData.detail.some(r => matchesStaffHrd(r.name))
+          if (hasRole) {
+            isStaffHrd.value = true
+            return
+          }
+        }
+      }
+    } catch (e) {
+      console.warn('Check default_users role_access failed:', e)
+    }
+
+    // 3. Fallback: Fetch endpoint m_role_access?join=true&where=this.user_id={userId}
+    try {
+      const resRole = await fetch(`${store.server.url_backend}/operation/m_role_access?join=true&where=this.user_id=${userId}`, {
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `${store.user.token_type} ${store.user.token}`
+        }
+      })
+      if (resRole.ok) {
+        const jsonRole = await resRole.json()
+        const userRoles = jsonRole.data || []
+        const hasStaff = userRoles.some(item => {
+          const roleName = item['m_role.name'] || item.m_role?.name || item.name || ''
+          return matchesStaffHrd(roleName)
+        })
+        if (hasStaff) {
+          isStaffHrd.value = true
+          return
+        }
+      }
+    } catch (e) {
+      console.warn('Check m_role_access failed:', e)
+    }
+
+    // 4. Fallback 2: Fetch m_role_access tanpa join, lalu cek id di m_role
+    try {
+      const resRaw = await fetch(`${store.server.url_backend}/operation/m_role_access?where=this.user_id=${userId}`, {
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `${store.user.token_type} ${store.user.token}`
+        }
+      })
+      if (resRaw.ok) {
+        const jsonRaw = await resRaw.json()
+        const listAccess = jsonRaw.data || []
+        const roleIds = listAccess.map(a => a.m_role_id).filter(Boolean)
+        if (roleIds.length > 0) {
+          const resRoles = await fetch(`${store.server.url_backend}/operation/m_role?where=this.id in (${roleIds.join(',')})`, {
+            headers: {
+              'Content-Type': 'application/json',
+              Authorization: `${store.user.token_type} ${store.user.token}`
+            }
+          })
+          if (resRoles.ok) {
+            const jsonRoles = await resRoles.json()
+            const rolesData = jsonRoles.data || []
+            if (rolesData.some(r => matchesStaffHrd(r.name))) {
+              isStaffHrd.value = true
+              return
+            }
+          }
+        }
+      }
+    } catch (e) {
+      console.warn('Check m_role fallback failed:', e)
+    }
+  } catch (err) {
+    console.error('Failed to check Staff HRD role:', err)
+  }
+}
+
+// Jalankan segera
+checkIsStaffHrd()
 
 // ------------------------------ PERSIAPAN
 const endpointApi = '/m_kary'
-onBeforeMount(() => {
+onBeforeMount(async () => {
   document.title = 'Master Karyawan'
+  await checkIsStaffHrd()
+})
+onMounted(() => {
+  checkIsStaffHrd()
 })
 
 function parseDate(v) {
@@ -1535,11 +1678,16 @@ async function onSave() {
     if (payload.lama_kontrak_awal) payload.lama_kontrak_awal = formatDateApi(payload.lama_kontrak_awal)
     if (payload.lama_kontrak_akhir) payload.lama_kontrak_akhir = formatDateApi(payload.lama_kontrak_akhir)
 
-    if (payload.gaji_pokok !== null && payload.gaji_pokok !== undefined && payload.gaji_pokok !== '') {
-      payload.gaji_pokok = Number(String(payload.gaji_pokok).replace(/\D/g, ''))
-    }
-    if (payload.gaji_acuan !== null && payload.gaji_acuan !== undefined && payload.gaji_acuan !== '') {
-      payload.gaji_acuan = Number(String(payload.gaji_acuan).replace(/\D/g, ''))
+    if (isStaffHrd.value) {
+      delete payload.gaji_pokok
+      delete payload.gaji_acuan
+    } else {
+      if (payload.gaji_pokok !== null && payload.gaji_pokok !== undefined && payload.gaji_pokok !== '') {
+        payload.gaji_pokok = Number(String(payload.gaji_pokok).replace(/\D/g, ''))
+      }
+      if (payload.gaji_acuan !== null && payload.gaji_acuan !== undefined && payload.gaji_acuan !== '') {
+        payload.gaji_acuan = Number(String(payload.gaji_acuan).replace(/\D/g, ''))
+      }
     }
 
     const dataURL = `${store.server.url_backend}/operation${endpointApi}${isCreating ? '' : ('/' + route.params.id)}`

@@ -20,6 +20,14 @@ class Response
                     ", [auth()->user()->id]);
                     $model['is_superadmin'] = @count($is_superadmin) ? true : false;
             }
+            $roles = \DB::table('m_role')
+                ->join('m_role_access', 'm_role.id', '=', 'm_role_access.m_role_id')
+                ->where('m_role_access.user_id', auth()->user()->id)
+                ->pluck('m_role.name')
+                ->toArray();
+            $model['roles'] = $roles;
+            $model['role_names'] = implode(', ', $roles);
+
             if(!$model['m_dir_id']){
                 $model['direktorat'] = 'ADMIN INSTANSI';
             }else{

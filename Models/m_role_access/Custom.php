@@ -7,6 +7,12 @@ class m_role_access extends \App\Models\BasicModels\m_role_access
     public function __construct()
     {
         parent::__construct();
+        $this->joins = [
+            "m_comp.id=m_role_access.m_comp_id",
+            "m_dir.id=m_role_access.m_dir_id",
+            "default_users.id=m_role_access.user_id",
+            "m_role.id=m_role_access.m_role_id"
+        ];
     }
     
     public $fileColumns    = [ /*file_column*/ ];

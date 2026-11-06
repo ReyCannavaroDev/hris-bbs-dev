@@ -67,6 +67,26 @@ class m_kary extends \App\Models\BasicModels\m_kary
             "cuti_sisa_reguler" => $arrayData['cuti_sisa_reguler'] ?? ((!empty($arrayData['tgl_masuk']) && Carbon::parse($arrayData['tgl_masuk'])->diffInYears(Carbon::now()) >= 1) ? 12 : 0),
         ]);
 
+        // Proteksi role Staff HRD: tidak boleh memodifikasi gaji_pokok & gaji_acuan
+        $userAuth = auth()->user();
+        if ($userAuth) {
+            $isSuper = ($userAuth->username === 'developer') || \DB::table('m_role')
+                ->join('m_role_access', 'm_role.id', '=', 'm_role_access.m_role_id')
+                ->where('m_role_access.user_id', $userAuth->id)
+                ->where('m_role.is_superadmin', true)
+                ->exists();
+            if (!$isSuper) {
+                $isStaffHrd = \DB::table('m_role')
+                    ->join('m_role_access', 'm_role.id', '=', 'm_role_access.m_role_id')
+                    ->where('m_role_access.user_id', $userAuth->id)
+                    ->whereRaw('LOWER(m_role.name) LIKE ?', ['%staff%hrd%'])
+                    ->exists();
+                if ($isStaffHrd) {
+                    unset($newArrayData['gaji_pokok'], $newArrayData['gaji_acuan']);
+                }
+            }
+        }
+
         if (isset($newArrayData['gaji_pokok']) && $newArrayData['gaji_pokok'] !== '' && $newArrayData['gaji_pokok'] !== null) {
             $newArrayData['gaji_pokok'] = (float) preg_replace('/[^0-9.]/', '', str_replace('.', '', (string)$newArrayData['gaji_pokok']));
         }
@@ -147,6 +167,26 @@ class m_kary extends \App\Models\BasicModels\m_kary
                 $val = trim($newArrayData[$df]);
                 if (preg_match('/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/', $val, $m)) {
                     $newArrayData[$df] = sprintf('%04d-%02d-%02d', $m[3], $m[2], $m[1]);
+                }
+            }
+        }
+
+        // Proteksi role Staff HRD: tidak boleh memodifikasi gaji_pokok & gaji_acuan
+        $userAuth = auth()->user();
+        if ($userAuth) {
+            $isSuper = ($userAuth->username === 'developer') || \DB::table('m_role')
+                ->join('m_role_access', 'm_role.id', '=', 'm_role_access.m_role_id')
+                ->where('m_role_access.user_id', $userAuth->id)
+                ->where('m_role.is_superadmin', true)
+                ->exists();
+            if (!$isSuper) {
+                $isStaffHrd = \DB::table('m_role')
+                    ->join('m_role_access', 'm_role.id', '=', 'm_role_access.m_role_id')
+                    ->where('m_role_access.user_id', $userAuth->id)
+                    ->whereRaw('LOWER(m_role.name) LIKE ?', ['%staff%hrd%'])
+                    ->exists();
+                if ($isStaffHrd) {
+                    unset($newArrayData['gaji_pokok'], $newArrayData['gaji_acuan']);
                 }
             }
         }
