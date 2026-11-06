@@ -122,79 +122,84 @@ class t_potongan extends \App\Models\BasicModels\t_potongan
 
     public function custom_getHistoryBayar($request)
     {
-        $id = $request->id ?? $request->input('id');
-        $potongan = t_potongan::find($id);
+        try {
+            $req = $request instanceof \Illuminate\Http\Request ? $request : app()->request;
+            $id = $req->id ?? ($req->input ? $req->input('id') : null) ?? $req->query('id');
+            $potongan = $this->find($id);
 
-        if (!$potongan) {
-            return response()->json(['error' => 'Data piutang tidak ditemukan.'], 404);
+            if (!$potongan) {
+                return response()->json(['error' => 'Data piutang tidak ditemukan.'], 404);
+            }
+
+            $history = \DB::table('t_potongan_det_bayar as pdb')
+                ->leftJoin('t_final_gaji as fg', 'fg.id', '=', 'pdb.t_final_gaji_id')
+                ->where('pdb.t_potongan_id', $potongan->id)
+                ->select([
+                    'pdb.id',
+                    'pdb.t_potongan_id',
+                    'pdb.t_final_gaji_id',
+                    'pdb.nilai',
+                    'pdb.paid_at',
+                    'pdb.created_at',
+                    'fg.nomor as nomor_final_gaji',
+                    'fg.desc as desc_final_gaji'
+                ])
+                ->orderBy('pdb.paid_at', 'asc')
+                ->orderBy('pdb.id', 'asc')
+                ->get();
+
+            $totalBayar = 0;
+            $items = [];
+            $no = 1;
+
+            foreach ($history as $row) {
+                $nilai = (float) ($row->nilai ?? 0);
+                $totalBayar += $nilai;
+                $isPayroll = !empty($row->t_final_gaji_id);
+                $metode = $isPayroll ? 'POTONG GAJI' : 'PELUNASAN MANUAL';
+                $keterangan = $isPayroll 
+                    ? ('Pemotongan Payroll (' . ($row->nomor_final_gaji ?: 'Final Gaji #' . $row->t_final_gaji_id) . ')')
+                    : 'Pelunasan Tunai / Luar Sistem';
+
+                $items[] = [
+                    'no'               => $no++,
+                    'id'               => $row->id,
+                    'paid_at'          => !empty($row->paid_at) ? \Carbon\Carbon::parse($row->paid_at)->format('d/m/Y H:i') : '-',
+                    'paid_date'        => !empty($row->paid_at) ? \Carbon\Carbon::parse($row->paid_at)->format('d/m/Y') : '-',
+                    'nilai'            => $nilai,
+                    'nilai_formatted'  => 'Rp ' . number_format($nilai, 0, ',', '.'),
+                    'metode'           => $metode,
+                    'keterangan'       => $keterangan,
+                    'nomor_final_gaji' => $row->nomor_final_gaji ?? null,
+                ];
+            }
+
+            $nilaiTotal = (float) ($potongan->nilai ?? 0);
+            $sisa = max(0, $nilaiTotal - $totalBayar);
+            $isLunas = $potongan->is_lunas || ($totalBayar >= $nilaiTotal && $nilaiTotal > 0);
+
+            return response()->json([
+                'potongan' => [
+                    'id'                    => $potongan->id,
+                    'nomor'                 => $potongan->nomor,
+                    'nilai'                 => $nilaiTotal,
+                    'nilai_formatted'       => 'Rp ' . number_format($nilaiTotal, 0, ',', '.'),
+                    'total_bayar'           => $totalBayar,
+                    'total_bayar_formatted' => 'Rp ' . number_format($totalBayar, 0, ',', '.'),
+                    'sisa_angsuran'         => $sisa,
+                    'sisa_formatted'        => 'Rp ' . number_format($sisa, 0, ',', '.'),
+                    'is_lunas'              => (bool) $isLunas,
+                    'status'                => $potongan->status,
+                    'status_bayar'          => $potongan->status_bayar ?? ($isLunas ? 'LUNAS' : ($totalBayar > 0 ? 'SEBAGIAN' : 'BELUM BAYAR')),
+                ],
+                'history'  => $items,
+                'count'    => count($items)
+            ]);
+        } catch (\Throwable $e) {
+            return response()->json([
+                'error' => 'Gagal memuat riwayat pembayaran: ' . $e->getMessage()
+            ], 500);
         }
-
-        $history = \DB::table('t_potongan_det_bayar as pdb')
-            ->leftJoin('t_final_gaji as fg', 'fg.id', '=', 'pdb.t_final_gaji_id')
-            ->leftJoin('default_users as u', 'u.id', '=', 'pdb.creator_id')
-            ->where('pdb.t_potongan_id', $potongan->id)
-            ->select([
-                'pdb.id',
-                'pdb.t_potongan_id',
-                'pdb.t_final_gaji_id',
-                'pdb.nilai',
-                'pdb.paid_at',
-                'pdb.created_at',
-                'fg.nomor as nomor_final_gaji',
-                'fg.keterangan as ket_final_gaji',
-                'u.name as creator_name'
-            ])
-            ->orderBy('pdb.paid_at', 'asc')
-            ->orderBy('pdb.id', 'asc')
-            ->get();
-
-        $totalBayar = 0;
-        $items = [];
-        $no = 1;
-
-        foreach ($history as $row) {
-            $nilai = (float) $row->nilai;
-            $totalBayar += $nilai;
-            $metode = !empty($row->t_final_gaji_id) ? 'POTONG GAJI' : 'PELUNASAN MANUAL';
-            $keterangan = !empty($row->t_final_gaji_id) 
-                ? ('Pemotongan Payroll (' . ($row->nomor_final_gaji ?: 'Final Gaji #' . $row->t_final_gaji_id) . ')')
-                : 'Pelunasan Tunai / Luar Sistem';
-
-            $items[] = [
-                'no'               => $no++,
-                'id'               => $row->id,
-                'paid_at'          => !empty($row->paid_at) ? \Carbon\Carbon::parse($row->paid_at)->format('d/m/Y H:i') : '-',
-                'paid_date'        => !empty($row->paid_at) ? \Carbon\Carbon::parse($row->paid_at)->format('d/m/Y') : '-',
-                'nilai'            => $nilai,
-                'nilai_formatted'  => 'Rp ' . number_format($nilai, 0, ',', '.'),
-                'metode'           => $metode,
-                'keterangan'       => $keterangan,
-                'nomor_final_gaji' => $row->nomor_final_gaji ?? null,
-                'creator_name'     => $row->creator_name ?? 'Sistem',
-            ];
-        }
-
-        $nilaiTotal = (float) ($potongan->nilai ?? 0);
-        $sisa = max(0, $nilaiTotal - $totalBayar);
-        $isLunas = $potongan->is_lunas || ($totalBayar >= $nilaiTotal && $nilaiTotal > 0);
-
-        return response()->json([
-            'potongan' => [
-                'id'                    => $potongan->id,
-                'nomor'                 => $potongan->nomor,
-                'nilai'                 => $nilaiTotal,
-                'nilai_formatted'       => 'Rp ' . number_format($nilaiTotal, 0, ',', '.'),
-                'total_bayar'           => $totalBayar,
-                'total_bayar_formatted' => 'Rp ' . number_format($totalBayar, 0, ',', '.'),
-                'sisa_angsuran'         => $sisa,
-                'sisa_formatted'        => 'Rp ' . number_format($sisa, 0, ',', '.'),
-                'is_lunas'              => (bool) $isLunas,
-                'status'                => $potongan->status,
-                'status_bayar'          => $potongan->status_bayar ?? ($isLunas ? 'LUNAS' : ($totalBayar > 0 ? 'SEBAGIAN' : 'BELUM BAYAR')),
-            ],
-            'history'  => $items,
-            'count'    => count($items)
-        ]);
     }
 
     public function custom_postData($request)
