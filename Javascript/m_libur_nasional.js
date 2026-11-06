@@ -34,6 +34,12 @@ const values = reactive({
    is_potong_cuti: false
 })
 
+watch(() => values.is_cuti_bersama, (newVal) => {
+  if (newVal) {
+    values.is_potong_cuti = true
+  }
+})
+
 onBeforeMount(async () => {
   // tampilkan default direktorat dengan store user comp.nama
   values.direktorat = store.user.data?.direktorat
@@ -72,6 +78,9 @@ onBeforeMount(async () => {
 
   for (const key in initialValues) {
     values[key] = initialValues[key]
+  }
+  if (values.tanggal && typeof values.tanggal === 'string' && values.tanggal.includes('T')) {
+    values.tanggal = values.tanggal.split('T')[0]
   }
 })
 
@@ -165,7 +174,13 @@ function filterShowData(params, noBtn) {
     landing.api.params.where = null
   } else {
     activeBtn.value = noBtn
-    landing.api.params.where = `this.is_active=${params ? 'true' : 'false'}`
+    if (noBtn === 1) {
+      landing.api.params.where = `this.is_active=true`
+    } else if (noBtn === 2) {
+      landing.api.params.where = `this.is_active=false`
+    } else if (noBtn === 3) {
+      landing.api.params.where = `this.is_cuti_bersama=true`
+    }
   }
 
   if (apiTable.value) {
@@ -251,12 +266,13 @@ const landing = reactive({
     },
     params: {
       simplest: true,
-      searchfield:'this.id, this.kode, this.desc, this.tanggal, this.is_active',
+      searchfield:'this.id, this.kode, this.desc, this.tanggal, this.is_active, this.is_cuti_bersama, this.is_potong_cuti',
     },
     onsuccess(response) {
       if (response && response.data) {
         response.data = response.data.map((item) => {
           item.status = (item.is_active === true || item.is_active === 1 || item.is_active === '1' || item.is_active === 'true' || item.is_active === 't') ? 'Active' : 'Inactive'
+          item.tipe_libur = (item.is_cuti_bersama === true || item.is_cuti_bersama === 1 || item.is_cuti_bersama === '1' || item.is_cuti_bersama === 'true') ? 'Cuti Bersama' : 'Libur Nasional'
           return item
         })
       }
@@ -274,42 +290,63 @@ const landing = reactive({
     filter: true,
     cellClass: ['justify-center', 'bg-gray-50', 'border-r', '!border-gray-200']
   },
-  // {
-  //   field: 'm_dir.nama',
-  //   headerName: 'Direktorat',
-  //   filter: true,
-  //   sortable: true,
-  //   flex:1,
-  //   filter: 'ColFilter',
-  //   resizable: true,
-  //   cellClass: [ 'border-r', '!border-gray-200', 'justify-left']
-  // },
   {
     field: 'kode',
     headerName: 'Kode',
     filter: true,
     sortable: true,
-    flex:1,
+    width: 130,
     filter: 'ColFilter',
     resizable: true,
-    cellClass: [ 'border-r', '!border-gray-200', 'justify-left']
+    cellClass: [ 'border-r', '!border-gray-200', 'justify-center']
   },
   {
     field: 'tanggal',
     headerName: 'Tanggal',
     filter: true,
     sortable: true,
-    flex:1,
+    width: 130,
     filter: 'ColFilter',
     resizable: true,
-    cellClass: [ 'border-r', '!border-gray-200', 'justify-center']
+    cellClass: [ 'border-r', '!border-gray-200', 'justify-center'],
+    valueGetter: (params) => {
+      const val = params?.data?.tanggal || params?.value
+      if (!val) return '-'
+      if (/^\d{2}\/\d{2}\/\d{4}$/.test(String(val))) return val
+      const parts = String(val).split('T')[0].split('-')
+      if (parts.length === 3) {
+        return `${parts[2]}/${parts[1]}/${parts[0]}`
+      }
+      return val
+    }
+  },
+  {
+    headerName: 'Tipe Libur',
+    field: 'is_cuti_bersama',
+    sortable: true,
+    resizable: true,
+    width: 200,
+    filter: 'ColFilter',
+    cellClass: [ 'border-r', '!border-gray-200', 'justify-center'],
+    valueGetter: (params) => {
+      const val = params?.data ? (params.data.is_cuti_bersama !== undefined ? params.data.is_cuti_bersama : params.data.is_potong_cuti) : params?.value
+      const isCuti = val === true || val === 1 || val === '1' || val === 'true' || val === 't'
+      return isCuti ? 'Cuti Bersama' : 'Libur Nasional'
+    },
+    cellRenderer: (params) => {
+      const val = params?.data ? (params.data.is_cuti_bersama !== undefined ? params.data.is_cuti_bersama : params.data.is_potong_cuti) : params?.value
+      const isCuti = val === true || val === 1 || val === '1' || val === 'true' || val === 't'
+      return isCuti
+        ? `<span class="bg-amber-100 text-amber-800 border border-amber-300 rounded-md text-xs font-semibold px-2.5 py-1 inline-block">Cuti Bersama (Potong Cuti)</span>`
+        : `<span class="bg-blue-100 text-blue-800 border border-blue-300 rounded-md text-xs font-semibold px-2.5 py-1 inline-block">Libur Nasional</span>`
+    }
   },
   {
     field: 'desc',
     headerName: 'Keterangan',
     filter: true,
     sortable: true,
-    flex:1,
+    flex: 1,
     filter: 'ColFilter',
     resizable: true,
     cellClass: [ 'border-r', '!border-gray-200', 'justify-left']
@@ -319,7 +356,7 @@ const landing = reactive({
     field: 'status',
     sortable: true,
     resizable: true,
-    flex: 1,
+    width: 110,
     cellClass: [ 'border-r', '!border-gray-200', 'justify-center'],
     valueGetter: (params) => {
       const val = params?.data ? (params.data.status !== undefined ? params.data.status : params.data.is_active) : params?.value
