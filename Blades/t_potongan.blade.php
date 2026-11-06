@@ -325,6 +325,10 @@
             <icon fa="check-circle" />
             Pelunasan Manual
           </button>
+          <button v-show="isRead && values.status === 'POSTED'" @click="onShowHistoryBayarForm" class="bg-blue-600 hover:bg-blue-700 text-white px-[24px] py-[12px] rounded-[6px] flex items-center gap-2">
+            <icon fa="history" />
+            Riwayat Pembayaran
+          </button>
           <button v-show="actionText" @click="onSave" class="bg-[#10B981] hover:bg-[#0ea774] text-white px-[36.5px] py-[12px] rounded-[6px] ">
             Simpan
           </button>
