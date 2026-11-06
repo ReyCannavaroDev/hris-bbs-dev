@@ -231,18 +231,18 @@
         <div v-if="!isProfile" class="col-span-8 md:col-span-6">
           <div class="grid grid-cols-12 items-center">
             <label class="col-span-12">Gaji Pokok (Personal)</label>
-            <FieldX :bind="{ readonly: !actionText && !isProfile }" type="number" class="col-span-12 !mt-0 w-full"
+            <FieldX :bind="{ readonly: !actionText && !isProfile }" class="col-span-12 !mt-0 w-full"
               :value="values.gaji_pokok" label="" placeholder="Auto dari Standar Gaji atau sesuaikan"
-              :errorText="formErrors.gaji_pokok ? 'failed' : ''" @input="v => values.gaji_pokok = v"
+              :errorText="formErrors.gaji_pokok ? 'failed' : ''" @input="v => onInputGajiPokok(v)"
               :hints="formErrors.gaji_pokok" :check="false" />
           </div>
         </div>
         <div v-if="!isProfile" class="col-span-8 md:col-span-6">
           <div class="grid grid-cols-12 items-center">
             <label class="col-span-12">Gaji Acuan (Basis BPJS)</label>
-            <FieldX :bind="{ readonly: !actionText && !isProfile }" type="number" class="col-span-12 !mt-0 w-full"
+            <FieldX :bind="{ readonly: !actionText && !isProfile }" class="col-span-12 !mt-0 w-full"
               :value="values.gaji_acuan" label="" placeholder="Auto dari Gaji Pokok atau sesuaikan"
-              :errorText="formErrors.gaji_acuan ? 'failed' : ''" @input="v => values.gaji_acuan = v"
+              :errorText="formErrors.gaji_acuan ? 'failed' : ''" @input="v => onInputGajiAcuan(v)"
               :hints="formErrors.gaji_acuan" :check="false" />
           </div>
         </div>

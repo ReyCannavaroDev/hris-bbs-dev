@@ -67,6 +67,13 @@ class m_kary extends \App\Models\BasicModels\m_kary
             "cuti_sisa_reguler" => $arrayData['cuti_sisa_reguler'] ?? ((!empty($arrayData['tgl_masuk']) && Carbon::parse($arrayData['tgl_masuk'])->diffInYears(Carbon::now()) >= 1) ? 12 : 0),
         ]);
 
+        if (isset($newArrayData['gaji_pokok']) && $newArrayData['gaji_pokok'] !== '' && $newArrayData['gaji_pokok'] !== null) {
+            $newArrayData['gaji_pokok'] = (float) preg_replace('/[^0-9.]/', '', str_replace('.', '', (string)$newArrayData['gaji_pokok']));
+        }
+        if (isset($newArrayData['gaji_acuan']) && $newArrayData['gaji_acuan'] !== '' && $newArrayData['gaji_acuan'] !== null) {
+            $newArrayData['gaji_acuan'] = (float) preg_replace('/[^0-9.]/', '', str_replace('.', '', (string)$newArrayData['gaji_acuan']));
+        }
+
         // Sinkronisasi status resign & inaktif
         if (!empty($newArrayData['tgl_berhenti'])) {
             $newArrayData['is_active'] = false;
@@ -142,6 +149,13 @@ class m_kary extends \App\Models\BasicModels\m_kary
                     $newArrayData[$df] = sprintf('%04d-%02d-%02d', $m[3], $m[2], $m[1]);
                 }
             }
+        }
+
+        if (isset($newArrayData['gaji_pokok']) && $newArrayData['gaji_pokok'] !== '' && $newArrayData['gaji_pokok'] !== null) {
+            $newArrayData['gaji_pokok'] = (float) preg_replace('/[^0-9.]/', '', str_replace('.', '', (string)$newArrayData['gaji_pokok']));
+        }
+        if (isset($newArrayData['gaji_acuan']) && $newArrayData['gaji_acuan'] !== '' && $newArrayData['gaji_acuan'] !== null) {
+            $newArrayData['gaji_acuan'] = (float) preg_replace('/[^0-9.]/', '', str_replace('.', '', (string)$newArrayData['gaji_acuan']));
         }
 
         // Sinkronisasi Dua Arah (Two-Way Trigger) Status Resign & Inactive Karyawan

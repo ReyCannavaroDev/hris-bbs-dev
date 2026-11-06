@@ -107,23 +107,38 @@ const setStandartGaji = async () => {
 
     // Auto-populate gaji_pokok & gaji_acuan jika belum diisi atau 0
     if (data && data.length > 0 && data[0]?.gaji_pokok) {
-      if (values.gaji_pokok === null || values.gaji_pokok === undefined || values.gaji_pokok === '' || Number(values.gaji_pokok) === 0) {
-        values.gaji_pokok = data[0].gaji_pokok
+      if (values.gaji_pokok === null || values.gaji_pokok === undefined || values.gaji_pokok === '' || Number(String(values.gaji_pokok).replace(/\D/g, '')) === 0) {
+        values.gaji_pokok = formatThousand(data[0].gaji_pokok)
       }
-      if (values.gaji_acuan === null || values.gaji_acuan === undefined || values.gaji_acuan === '' || Number(values.gaji_acuan) === 0) {
-        values.gaji_acuan = values.gaji_pokok || data[0].gaji_pokok
+      if (values.gaji_acuan === null || values.gaji_acuan === undefined || values.gaji_acuan === '' || Number(String(values.gaji_acuan).replace(/\D/g, '')) === 0) {
+        values.gaji_acuan = values.gaji_pokok || formatThousand(data[0].gaji_pokok)
       }
     }
   }
 }
 
+const formatThousand = (val) => {
+  if (val === null || val === undefined || val === '') return ''
+  const numStr = String(val).replace(/\D/g, '')
+  if (!numStr) return ''
+  return parseInt(numStr, 10).toLocaleString('id-ID')
+}
+
+const onInputGajiPokok = (v) => {
+  values.gaji_pokok = formatThousand(v)
+}
+
+const onInputGajiAcuan = (v) => {
+  values.gaji_acuan = formatThousand(v)
+}
+
 const onStandartGajiSelect = (item) => {
   if (item && item.gaji_pokok) {
-    if (values.gaji_pokok === null || values.gaji_pokok === undefined || values.gaji_pokok === '' || Number(values.gaji_pokok) === 0) {
-      values.gaji_pokok = item.gaji_pokok
+    if (values.gaji_pokok === null || values.gaji_pokok === undefined || values.gaji_pokok === '' || Number(String(values.gaji_pokok).replace(/\D/g, '')) === 0) {
+      values.gaji_pokok = formatThousand(item.gaji_pokok)
     }
-    if (values.gaji_acuan === null || values.gaji_acuan === undefined || values.gaji_acuan === '' || Number(values.gaji_acuan) === 0) {
-      values.gaji_acuan = values.gaji_pokok || item.gaji_pokok
+    if (values.gaji_acuan === null || values.gaji_acuan === undefined || values.gaji_acuan === '' || Number(String(values.gaji_acuan).replace(/\D/g, '')) === 0) {
+      values.gaji_acuan = values.gaji_pokok || formatThousand(item.gaji_pokok)
     }
   }
 }
@@ -492,6 +507,14 @@ onBeforeMount(async () => {
   if (values.tgl_berhenti) values.tgl_berhenti = formatDateDisplay(values.tgl_berhenti)
   if (values.tgl_lahir) values.tgl_lahir = formatDateDisplay(values.tgl_lahir)
   if (values.npwp_tgl_berlaku) values.npwp_tgl_berlaku = formatDateDisplay(values.npwp_tgl_berlaku)
+
+  // Format gaji_pokok & gaji_acuan with thousand separator
+  if (values.gaji_pokok !== null && values.gaji_pokok !== undefined && values.gaji_pokok !== '') {
+    values.gaji_pokok = formatThousand(values.gaji_pokok)
+  }
+  if (values.gaji_acuan !== null && values.gaji_acuan !== undefined && values.gaji_acuan !== '') {
+    values.gaji_acuan = formatThousand(values.gaji_acuan)
+  }
   if (values.lama_kontrak_awal) values.lama_kontrak_awal = formatDateDisplay(values.lama_kontrak_awal)
   if (values.lama_kontrak_akhir) values.lama_kontrak_akhir = formatDateDisplay(values.lama_kontrak_akhir)
 
@@ -1369,6 +1392,12 @@ function onReset() {
       for (const key in initialValues) {
         values[key] = initialValues[key]
       }
+      if (values.gaji_pokok !== null && values.gaji_pokok !== undefined && values.gaji_pokok !== '') {
+        values.gaji_pokok = formatThousand(values.gaji_pokok)
+      }
+      if (values.gaji_acuan !== null && values.gaji_acuan !== undefined && values.gaji_acuan !== '') {
+        values.gaji_acuan = formatThousand(values.gaji_acuan)
+      }
     }
   })
 }
@@ -1505,6 +1534,13 @@ async function onSave() {
     if (payload.npwp_tgl_berlaku) payload.npwp_tgl_berlaku = formatDateApi(payload.npwp_tgl_berlaku)
     if (payload.lama_kontrak_awal) payload.lama_kontrak_awal = formatDateApi(payload.lama_kontrak_awal)
     if (payload.lama_kontrak_akhir) payload.lama_kontrak_akhir = formatDateApi(payload.lama_kontrak_akhir)
+
+    if (payload.gaji_pokok !== null && payload.gaji_pokok !== undefined && payload.gaji_pokok !== '') {
+      payload.gaji_pokok = Number(String(payload.gaji_pokok).replace(/\D/g, ''))
+    }
+    if (payload.gaji_acuan !== null && payload.gaji_acuan !== undefined && payload.gaji_acuan !== '') {
+      payload.gaji_acuan = Number(String(payload.gaji_acuan).replace(/\D/g, ''))
+    }
 
     const dataURL = `${store.server.url_backend}/operation${endpointApi}${isCreating ? '' : ('/' + route.params.id)}`
     isRequesting.value = true
