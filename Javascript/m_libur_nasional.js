@@ -325,7 +325,7 @@ const landing = reactive({
     field: 'is_cuti_bersama',
     sortable: true,
     resizable: true,
-    width: 200,
+    width: 140,
     filter: 'ColFilter',
     cellClass: [ 'border-r', '!border-gray-200', 'justify-center'],
     valueGetter: (params) => {
@@ -337,8 +337,8 @@ const landing = reactive({
       const val = params?.data ? (params.data.is_cuti_bersama !== undefined ? params.data.is_cuti_bersama : params.data.is_potong_cuti) : params?.value
       const isCuti = val === true || val === 1 || val === '1' || val === 'true' || val === 't'
       return isCuti
-        ? `<span class="bg-amber-100 text-amber-800 border border-amber-300 rounded-md text-xs font-semibold px-2.5 py-1 inline-block">Cuti Bersama (Potong Cuti)</span>`
-        : `<span class="bg-blue-100 text-blue-800 border border-blue-300 rounded-md text-xs font-semibold px-2.5 py-1 inline-block">Libur Nasional</span>`
+        ? `<span class="text-amber-600 rounded-md text-xs font-medium px-4 py-1 inline-block">Cuti Bersama</span>`
+        : `<span class="text-blue-600 rounded-md text-xs font-medium px-4 py-1 inline-block">Libur Nasional</span>`
     }
   },
   {
