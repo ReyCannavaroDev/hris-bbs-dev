@@ -48,7 +48,16 @@ class t_lembur extends \App\Models\BasicModels\t_lembur
 
     public function transformRowData( array $row )
     {
-        $approval = generate_approval_log::where('trx_table', 't_lembur')->where('trx_id', $row['id'])->orderBy('created_at', 'desc')->value('action_note');
+        try {
+            $approval = \DB::table('generate_approval_log')
+                ->where('trx_table', 't_lembur')
+                ->where('trx_id', $row['id'] ?? 0)
+                ->orderBy('created_at', 'desc')
+                ->value('action_note');
+        } catch (\Throwable $e) {
+            $approval = '';
+        }
+
         $compNama = $row['m_dir.nama'] ?? null;
         if (empty($compNama) && !empty($row['m_dir_id'])) {
             $compNama = \DB::table('m_dir')->where('id', $row['m_dir_id'])->value('nama');
@@ -56,6 +65,27 @@ class t_lembur extends \App\Models\BasicModels\t_lembur
         if (empty($compNama) && !empty($row['m_kary_id'])) {
             $compNama = \DB::table('m_kary as k')->join('m_dir as d', 'd.id', '=', 'k.m_dir_id')->where('k.id', $row['m_kary_id'])->value('d.nama');
         }
+
+        // HIDE REALISASI DI SISI USER / KARYAWAN / PENGAJU:
+        try {
+            $userAuth = auth()->user();
+            if ($userAuth && !$userAuth->is_superadmin) {
+                $userKaryId = $userAuth->m_kary_id ?? null;
+                $userId = $userAuth->id ?? null;
+
+                $isApplicant = ($userKaryId && !empty($row['m_kary_id']) && $row['m_kary_id'] == $userKaryId)
+                            || ($userId && !empty($row['creator_id']) && $row['creator_id'] == $userId);
+
+                if ($isApplicant) {
+                    $row['jam_mulai_realisasi'] = null;
+                    $row['jam_selesai_realisasi'] = null;
+                    $row['realisasi_min'] = null;
+                    $row['diakui_min'] = null;
+                    $row['total_lembur'] = null;
+                }
+            }
+        } catch (\Throwable $e) {}
+
         return array_merge( $row, [
             'approval_note' => $approval ?? '',
             'm_dir.nama'    => $compNama ?? ($row['m_dir.nama'] ?? '-'),
@@ -137,6 +167,194 @@ class t_lembur extends \App\Models\BasicModels\t_lembur
         ];
     }
 
+    /**
+     * Sinkronisasi Realisasi Lembur dari Presensi Absensi (Checkout Absen)
+     * Mengambil jam checkout yang terhitung setelah jam selesai kerja hingga absen checkout dilakukan.
+     * Untuk hari Minggu / Tanggal Merah / Libur: seluruh jam kerja dihitung sebagai lembur.
+     */
+    public function sinkronkanRealisasiDariAbsen($trx)
+    {
+        try {
+            if (!$trx) return $trx;
+
+            $id = is_array($trx) ? ($trx['id'] ?? null) : ($trx->id ?? null);
+            $mKaryId = is_array($trx) ? ($trx['m_kary_id'] ?? null) : ($trx->m_kary_id ?? null);
+            $tanggal = is_array($trx) ? ($trx['tanggal'] ?? null) : ($trx->tanggal ?? null);
+            $statusTrx = strtoupper(trim(is_array($trx) ? ($trx['status'] ?? '') : ($trx->status ?? '')));
+
+            if (!$id || !$mKaryId || !$tanggal) {
+                return $trx;
+            }
+
+            // Realisasi HANYA disinkronkan setelah persetujuan dari Atasan (status 'HALF APPROVED' atau 'APPROVED')
+            if (!in_array($statusTrx, ['HALF APPROVED', 'APPROVED'])) {
+                return $trx;
+            }
+
+            $creatorId = is_array($trx) ? ($trx['creator_id'] ?? null) : ($trx->creator_id ?? null);
+            $jamMulai = is_array($trx) ? ($trx['jam_mulai'] ?? null) : ($trx->jam_mulai ?? null);
+            $jamSelesai = is_array($trx) ? ($trx['jam_selesai'] ?? null) : ($trx->jam_selesai ?? null);
+            $intervalMin = is_array($trx) ? ($trx['interval_min'] ?? null) : ($trx->interval_min ?? null);
+            $tarifLembur = is_array($trx) ? ($trx['tarif_lembur'] ?? 0) : ($trx->tarif_lembur ?? 0);
+
+            // Cari user ID karyawan
+            $userIds = \DB::table('default_users')->where('m_kary_id', $mKaryId)->pluck('id')->toArray();
+            if (!empty($creatorId) && !in_array($creatorId, $userIds)) {
+                $userIds[] = $creatorId;
+            }
+
+            if (empty($userIds)) {
+                return $trx;
+            }
+
+            // Cari data absensi pada tanggal tersebut
+            $absen = \DB::table('presensi_absensi')
+                ->whereIn('default_user_id', $userIds)
+                ->where('tanggal', $tanggal)
+                ->orderBy('id', 'desc')
+                ->first();
+
+            if (!$absen || empty($absen->checkout_time)) {
+                return $trx;
+            }
+
+            $checkoutTime = substr($absen->checkout_time, 0, 5);
+            $checkinTime  = !empty($absen->checkin_time) ? substr($absen->checkin_time, 0, 5) : null;
+
+            // Cek apakah tanggal lembur adalah Hari Minggu atau Hari Libur Nasional (Tanggal Merah)
+            $tglObj = Carbon::parse($tanggal);
+            $isMinggu = ($tglObj->dayOfWeek === 0);
+            $isLiburNasional = \DB::table('m_libur_nasional')
+                ->where('tanggal', $tanggal)
+                ->where('is_active', true)
+                ->exists();
+
+            // Cek jadwal kerja karyawan untuk mencari jam selesai kerja reguler (jam pulang kerja)
+            $kary = \DB::table('m_kary')->where('id', $mKaryId)->first();
+            $jamSelesaiKerja = null;
+
+            if ($kary) {
+                $daysMap = [0 => 'minggu', 1 => 'senin', 2 => 'selasa', 3 => 'rabu', 4 => 'kamis', 5 => 'jumat', 6 => 'sabtu'];
+                $namaHari = $daysMap[$tglObj->dayOfWeek] ?? '';
+                $dayNum = $tglObj->dayOfWeekIso; // 1 = Senin, ..., 7 = Minggu
+
+                // 1. Cek dari t_jadwal_kerja_det spesifik karyawan
+                $jadwalDetKary = \DB::table('t_jadwal_kerja_det as d')
+                    ->join('t_jadwal_kerja_det_hari as h', 'h.id', '=', 'd.t_jadwal_kerja_det_hari_id')
+                    ->where('d.m_kary_id', $mKaryId)
+                    ->where(function($q) use ($tanggal, $dayNum, $namaHari) {
+                        $q->where('h.tanggal', $tanggal)
+                          ->orWhere('h.day_num', $dayNum)
+                          ->orWhereRaw("lower(h.day) = ?", [$namaHari]);
+                    })
+                    ->select('h.waktu_akhir', 'h.tipe_hari')
+                    ->first();
+
+                if ($jadwalDetKary && !empty($jadwalDetKary->waktu_akhir) && strtolower($jadwalDetKary->tipe_hari ?? '') !== 'libur') {
+                    $jamSelesaiKerja = substr($jadwalDetKary->waktu_akhir, 0, 5);
+                }
+
+                // 2. Cek dari t_jadwal_kerja_id pada m_kary
+                if (!$jamSelesaiKerja && !empty($kary->t_jadwal_kerja_id)) {
+                    $jadwalDet = \DB::table('t_jadwal_kerja_det_hari')
+                        ->where('t_jadwal_kerja_id', $kary->t_jadwal_kerja_id)
+                        ->where(function($q) use ($tanggal, $dayNum, $namaHari) {
+                            $q->where('tanggal', $tanggal)
+                              ->orWhere('day_num', $dayNum)
+                              ->orWhereRaw("lower(day) = ?", [$namaHari]);
+                        })
+                        ->select('waktu_akhir', 'tipe_hari')
+                        ->first();
+
+                    if ($jadwalDet && !empty($jadwalDet->waktu_akhir) && strtolower($jadwalDet->tipe_hari ?? '') !== 'libur') {
+                        $jamSelesaiKerja = substr($jadwalDet->waktu_akhir, 0, 5);
+                    }
+                }
+
+                // 3. Cek dari m_jam_kerja_id pada m_kary
+                if (!$jamSelesaiKerja && !empty($kary->m_jam_kerja_id)) {
+                    $jamKerja = \DB::table('m_jam_kerja')->where('id', $kary->m_jam_kerja_id)->first();
+                    if ($jamKerja && !empty($jamKerja->waktu_akhir)) {
+                        $jamSelesaiKerja = substr($jamKerja->waktu_akhir, 0, 5);
+                    }
+                }
+            }
+
+            // Tentukan Jam Mulai Realisasi & Jam Selesai Realisasi:
+            // Sesuai aturan lembur: realisasi lembur terhitung setelah jam pulang kerja (selesai kerja normal) hingga absen checkout dilakukan.
+            // Jika jam pulang kerja normal tidak ada (misal lembur di hari libur murni / Minggu tanpa shift), gunakan jam_mulai rencana SPK.
+            if (!empty($jamSelesaiKerja)) {
+                $jamMulaiReal = $jamSelesaiKerja;
+            } elseif (!empty($jamMulai)) {
+                $jamMulaiReal = substr($jamMulai, 0, 5);
+            } else {
+                $jamMulaiReal = '00:00';
+            }
+
+            $jamSelesaiReal = $checkoutTime;
+
+            // Hitung durasi realisasi (menit)
+            $durasiReal = $this->hitungMenit($jamMulaiReal, $jamSelesaiReal);
+            $durasiSpk  = $intervalMin ?: $this->hitungMenit($jamMulai, $jamSelesai);
+
+            // Durasi diakui: min(durasi_spk, durasi_realisasi)
+            $diakuiMin = ($durasiReal > 0) ? min($durasiSpk, $durasiReal) : $durasiSpk;
+
+            // Cari tarif lembur
+            $tarif = floatval($tarifLembur ?? 0);
+            if ($tarif <= 0 && $kary) {
+                $rate = \DB::table('m_lembur')
+                    ->where('is_active', 1)
+                    ->where(function($q) use ($kary) {
+                        $q->where('grading_id', $kary->grading_id)
+                          ->orWhereNull('grading_id');
+                    })
+                    ->orderByRaw("case when grading_id = " . intval($kary->grading_id ?? 0) . " then 0 else 1 end")
+                    ->orderBy('id', 'desc')
+                    ->first();
+                if ($rate) {
+                    $tarif = floatval($rate->besaran);
+                }
+            }
+
+            $totalLembur = round(($diakuiMin / 60) * $tarif, 2);
+
+            // Update record t_lembur di database
+            \DB::table('t_lembur')->where('id', $id)->update([
+                'jam_mulai_realisasi'   => $jamMulaiReal,
+                'jam_selesai_realisasi' => $jamSelesaiReal,
+                'interval_min'          => $durasiSpk,
+                'realisasi_min'         => $durasiReal,
+                'diakui_min'            => $diakuiMin,
+                'tarif_lembur'          => $tarif,
+                'total_lembur'          => $totalLembur,
+                'updated_at'            => date('Y-m-d H:i:s'),
+            ]);
+
+            if (is_array($trx)) {
+                $trx['jam_mulai_realisasi']   = $jamMulaiReal;
+                $trx['jam_selesai_realisasi'] = $jamSelesaiReal;
+                $trx['interval_min']          = $durasiSpk;
+                $trx['realisasi_min']         = $durasiReal;
+                $trx['diakui_min']            = $diakuiMin;
+                $trx['tarif_lembur']          = $tarif;
+                $trx['total_lembur']          = $totalLembur;
+            } else {
+                $trx->jam_mulai_realisasi   = $jamMulaiReal;
+                $trx->jam_selesai_realisasi = $jamSelesaiReal;
+                $trx->interval_min          = $durasiSpk;
+                $trx->realisasi_min         = $durasiReal;
+                $trx->diakui_min            = $diakuiMin;
+                $trx->tarif_lembur          = $tarif;
+                $trx->total_lembur          = $totalLembur;
+            }
+
+            return $trx;
+        } catch (\Throwable $e) {
+            return $trx;
+        }
+    }
+
     public function createBefore($model, $arrayData, $metaData, $id = null)
     {
         $kalkulasi = $this->hitungDurasiDanTarif($arrayData);
@@ -144,8 +362,10 @@ class t_lembur extends \App\Models\BasicModels\t_lembur
         $newArrayData = array_merge($arrayData, [
             "nomor"                 => $this->helper->generateNomor("KODE LEMBUR"),
             "interval_min"          => $kalkulasi['interval_min'],
-            "realisasi_min"         => $kalkulasi['realisasi_min'],
-            "diakui_min"            => $kalkulasi['diakui_min'],
+            "jam_mulai_realisasi"   => null,
+            "jam_selesai_realisasi" => null,
+            "realisasi_min"         => null,
+            "diakui_min"            => $kalkulasi['interval_min'],
             "tarif_lembur"          => $kalkulasi['tarif_lembur'],
             "total_lembur"          => $kalkulasi['total_lembur'],
             "pic_id"                => @app()->request->pic_id ?? auth()->user()->id,
@@ -180,12 +400,15 @@ class t_lembur extends \App\Models\BasicModels\t_lembur
         }
 
         $kalkulasi = $this->hitungDurasiDanTarif($arrayData, $existing);
+        $statusUpper = strtoupper(trim($status));
 
         $newArrayData  = array_merge( $arrayData,[
             'status'                => $status,
             'interval_min'          => $kalkulasi['interval_min'],
-            'realisasi_min'         => $kalkulasi['realisasi_min'],
-            'diakui_min'            => $kalkulasi['diakui_min'],
+            'jam_mulai_realisasi'   => in_array($statusUpper, ['HALF APPROVED', 'APPROVED']) ? ($arrayData['jam_mulai_realisasi'] ?? ($existing->jam_mulai_realisasi ?? null)) : null,
+            'jam_selesai_realisasi' => in_array($statusUpper, ['HALF APPROVED', 'APPROVED']) ? ($arrayData['jam_selesai_realisasi'] ?? ($existing->jam_selesai_realisasi ?? null)) : null,
+            'realisasi_min'         => in_array($statusUpper, ['HALF APPROVED', 'APPROVED']) ? $kalkulasi['realisasi_min'] : null,
+            'diakui_min'            => in_array($statusUpper, ['HALF APPROVED', 'APPROVED']) ? $kalkulasi['diakui_min'] : $kalkulasi['interval_min'],
             'tarif_lembur'          => $kalkulasi['tarif_lembur'],
             'total_lembur'          => $kalkulasi['total_lembur'],
             'pic_id'                => @app()->request->pic_id ?? ($existing->pic_id ?? auth()->user()->id),
@@ -418,6 +641,14 @@ class t_lembur extends \App\Models\BasicModels\t_lembur
             $atasanKaryId = \DB::table('m_kary')->where('id', $trx->m_kary_id)->value('atasan_id');
             $isAtasan = ($atasanKaryId && !empty($userAuth->m_kary_id) && $atasanKaryId == $userAuth->m_kary_id);
 
+            // Cek apakah user yang login adalah karyawan pemohon lembur itu sendiri
+            $isApplicant = (!empty($userAuth->m_kary_id) && $trx->m_kary_id == $userAuth->m_kary_id)
+                        || ($trx->creator_id == $userAuth->id);
+
+            if ($isApplicant && !$isSuperadmin) {
+                return $this->helper->customResponse("Anda tidak dapat melakukan persetujuan (approval) terhadap pengajuan lembur Anda sendiri.", 403);
+            }
+
             // Identifikasi Role user
             $userRoleIds = \DB::table('m_role_access')->where('user_id', $userAuth->id)->pluck('m_role_id')->toArray();
             $userRoleNames = \DB::table('m_role')->whereIn('id', $userRoleIds)->pluck('name')->map(function($n) {
@@ -468,7 +699,30 @@ class t_lembur extends \App\Models\BasicModels\t_lembur
                 ->exists();
 
             if ($alreadyApprovedByMe && !$isSuperadmin) {
-                return $this->helper->customResponse("Anda sudah memberikan persetujuan sebelumnya untuk pengajuan ini. Tahap persetujuan kedua harus dilakukan oleh pihak lain (Atasan/HRD).", 403);
+                return $this->helper->customResponse("Anda sudah memberikan persetujuan sebelumnya untuk pengajuan ini. Tahap persetujuan berikutnya harus dilakukan oleh pihak lain (Atasan/HRD).", 403);
+            }
+
+            // Validasi peran approval berdasarkan tahap transaksi:
+            // Tahap 1 (IN APPROVAL): Persetujuan Pengajuan Rencana oleh Atasan Langsung
+            // Tahap 2 (HALF APPROVED): Persetujuan Realisasi Lembur oleh HRD
+            if ($trx->status === 'IN APPROVAL') {
+                if (!$isAtasan && !$isSuperadmin) {
+                    return $this->helper->customResponse("Persetujuan Tahap 1 (Pengajuan Rencana Lembur) hanya dapat dilakukan oleh Atasan langsung dari karyawan.", 403);
+                }
+                if ($appType === 'APPROVED' && (empty($appNote) || $appNote === '-')) {
+                    $appNote = 'Persetujuan Pengajuan Rencana Lembur (Tahap 1 - Atasan)';
+                }
+            } elseif ($trx->status === 'HALF APPROVED') {
+                if (!$isHrd && !$isSuperadmin) {
+                    return $this->helper->customResponse("Persetujuan Tahap 2 (Realisasi Lembur) hanya dapat dilakukan oleh HRD.", 403);
+                }
+                // Sebelum HRD approve realisasi, sinkronkan otomatis data realisasi dari checkout absensi
+                $this->sinkronkanRealisasiDariAbsen($trx);
+                $trx = $this->find($generateApproval->trx_id);
+
+                if ($appType === 'APPROVED' && (empty($appNote) || $appNote === '-')) {
+                    $appNote = 'Persetujuan Realisasi Lembur (Tahap 2 - HRD)';
+                }
             }
 
             // Tentukan target slot yang diproses oleh user secara fleksibel / paralel
@@ -479,31 +733,22 @@ class t_lembur extends \App\Models\BasicModels\t_lembur
                 return !empty($d->default_user_id) && $d->default_user_id == $userAuth->id;
             });
 
-            // 1. Jika Atasan langsung, cari slot Atasan (urutan_level 1 atau nama role atasan)
-            if (!$targetSlot && $isAtasan) {
+            // 1. Jika pada tahap 1 (IN APPROVAL) dan Atasan langsung / role atasan
+            if (!$targetSlot && $trx->status === 'IN APPROVAL' && ($isAtasan || $isSuperadmin)) {
                 $targetSlot = $undoneDetails->first(function($d) {
                     return $d->urutan_level == 1 || stripos(strtolower($d->role_name ?? ''), 'atasan') !== false;
                 });
             }
 
-            // 2. Jika HRD atau role cocok, cari slot HRD / urutan_level >= 2
-            if (!$targetSlot && ($isHrd || !empty(array_intersect($userRoleIds, $undoneDetails->pluck('m_role_id')->toArray())))) {
-                $targetSlot = $undoneDetails->first(function($d) use ($userRoleIds) {
-                    $rnLower = strtolower($d->role_name ?? '');
-                    $nameMatch = (stripos($rnLower, 'hr') !== false) || (stripos($rnLower, 'personalia') !== false) || (stripos($rnLower, 'sdm') !== false);
-                    $roleIdMatch = in_array($d->m_role_id, $userRoleIds);
-                    return $nameMatch || $roleIdMatch || $d->urutan_level >= 2;
-                });
-            }
-
-            // 3. Jika status HALF APPROVED dan user bukan approver tahap 1, ambil slot level >= 2
-            if (!$targetSlot && $trx->status === 'HALF APPROVED' && ($isHrd || !empty($userRoleIds))) {
+            // 2. Jika pada tahap 2 (HALF APPROVED) dan HRD / Superadmin
+            if (!$targetSlot && $trx->status === 'HALF APPROVED' && ($isHrd || $isSuperadmin)) {
                 $targetSlot = $undoneDetails->first(function($d) {
-                    return $d->urutan_level >= 2;
+                    $rnLower = strtolower($d->role_name ?? '');
+                    return $d->urutan_level >= 2 || (stripos($rnLower, 'hr') !== false) || (stripos($rnLower, 'personalia') !== false) || (stripos($rnLower, 'sdm') !== false);
                 });
             }
 
-            // 4. Jika approver umum yang cocok dengan m_role_id slot
+            // 3. Fallback pencocokan role
             if (!$targetSlot) {
                 foreach ($undoneDetails as $d) {
                     if (in_array($d->m_role_id, $userRoleIds)) {
@@ -513,7 +758,7 @@ class t_lembur extends \App\Models\BasicModels\t_lembur
                 }
             }
 
-            // 5. Fallback Superadmin: ambil slot pertama yang tersedia
+            // 4. Fallback Superadmin: ambil slot pertama yang tersedia
             if (!$targetSlot && $isSuperadmin) {
                 $targetSlot = $undoneDetails->first();
             }
@@ -564,14 +809,9 @@ class t_lembur extends \App\Models\BasicModels\t_lembur
                 ]);
                 \DB::table('t_lembur')->where('id', $generateApproval->trx_id)->update(['status' => $appType]);
             } else {
-                // Jika APPROVED -> cek sisa slot yang belum selesai
-                $remainingCount = \DB::table('generate_approval_det')
-                    ->where('generate_approval_id', $generateApproval->id)
-                    ->where('is_done', false)
-                    ->count();
-
-                if ($remainingCount > 0) {
-                    // Baru 1 approval (masih ada sisa) -> ubah status transaksi menjadi HALF APPROVED
+                // Jika APPROVED -> cek tahap approval saat ini
+                if ($trx->status === 'IN APPROVAL') {
+                    // Tahap 1 selesai (Approved oleh Atasan) -> ubah status menjadi HALF APPROVED
                     $nextSlotId = \DB::table('generate_approval_det')
                         ->where('generate_approval_id', $generateApproval->id)
                         ->where('is_done', false)
@@ -586,7 +826,21 @@ class t_lembur extends \App\Models\BasicModels\t_lembur
                     ]);
                     \DB::table('t_lembur')->where('id', $generateApproval->trx_id)->update(['status' => 'HALF APPROVED']);
                 } else {
-                    // Sudah 2 approval (semua slot selesai) -> ubah status transaksi menjadi APPROVED
+                    // Tahap 2 selesai (Approved oleh HRD terhadap realisasi lembur) -> ubah status menjadi APPROVED
+                    $this->sinkronkanRealisasiDariAbsen($trx);
+
+                    // Tandai semua sisa slot approval menjadi done
+                    \DB::table('generate_approval_det')
+                        ->where('generate_approval_id', $generateApproval->id)
+                        ->where('is_done', false)
+                        ->update([
+                            'action_at' => $timestamp,
+                            'action_type' => 'APPROVED',
+                            'action_user_id' => $userAuth->id,
+                            'action_note' => $appNote,
+                            'is_done' => true,
+                        ]);
+
                     \DB::table('generate_approval')->where('id', $generateApproval->id)->update([
                         'status' => 'APPROVED',
                         'last_approve_id' => null,
@@ -689,8 +943,17 @@ class t_lembur extends \App\Models\BasicModels\t_lembur
             $isSuperadmin = (bool) ($userAuth->is_superadmin ?? false);
 
             $trx = \DB::table('t_lembur')->where('id', $app->trx_id)->first();
-            if ($trx && !empty($trx->status) && isset($data->approval)) {
-                $data->approval->status = $trx->status;
+            if ($trx) {
+                // Sinkronkan realisasi otomatis dari absensi jika status sudah HALF APPROVED atau APPROVED
+                $statusTrx = strtoupper(trim($trx->status ?? ''));
+                if (in_array($statusTrx, ['HALF APPROVED', 'APPROVED'])) {
+                    $this->sinkronkanRealisasiDariAbsen($trx);
+                    $trx = \DB::table('t_lembur')->where('id', $app->trx_id)->first();
+                }
+                $data->trx = $trx;
+                if (!empty($trx->status) && isset($data->approval)) {
+                    $data->approval->status = $trx->status;
+                }
             }
             $isAtasan = false;
             if ($trx && $trx->m_kary_id) {
@@ -761,38 +1024,52 @@ class t_lembur extends \App\Models\BasicModels\t_lembur
             }
 
             $canApprove = false;
-            if ($undoneDetails->isNotEmpty()) {
+            if ($undoneDetails->isNotEmpty() && $trx && in_array($trx->status, ['IN APPROVAL', 'HALF APPROVED'])) {
                 if ($isSuperadmin) {
                     $canApprove = true;
                 } elseif (!$alreadyApprovedByMe) {
-                    // 1. Cek jika slot ditugaskan secara spesifik ke default_user_id
-                    $hasAssignedSlot = $undoneDetails->contains(function($d) use ($userId) {
-                        return !empty($d->default_user_id) && $d->default_user_id == $userId;
-                    });
-
-                    // 2. Cek jika slot Atasan masih belum selesai dan user adalah Atasan
-                    $hasAtasanSlot = $undoneDetails->contains(function($d) {
-                        return $d->urutan_level == 1 || stripos(strtolower($d->role_name ?? ''), 'atasan') !== false;
-                    });
-
-                    // 3. Cek jika role user cocok dengan salah satu slot yang belum selesai
-                    $hasRoleMatch = !empty(array_intersect($userRoleIds, $undoneDetails->pluck('m_role_id')->toArray()));
-
-                    // 4. Cek jika slot HRD / Level 2+ belum selesai dan user adalah HRD
-                    $hasHrdSlot = $undoneDetails->contains(function($d) {
-                        $rn = strtolower($d->role_name ?? '');
-                        return $d->urutan_level >= 2 || stripos($rn, 'hr') !== false || stripos($rn, 'personalia') !== false || stripos($rn, 'sdm') !== false;
-                    });
-
-                    if ($hasAssignedSlot) {
-                        $canApprove = true;
-                    } elseif ($isAtasan && $hasAtasanSlot) {
-                        $canApprove = true;
-                    } elseif (($isHrd || $hasRoleMatch) && $hasHrdSlot) {
-                        $canApprove = true;
-                    } elseif ($trx && in_array($trx->status, ['HALF APPROVED', 'IN APPROVAL']) && ($isHrd || $hasRoleMatch || !empty($userRoleIds))) {
-                        $canApprove = true;
+                    if ($trx->status === 'IN APPROVAL') {
+                        // Tahap 1: Hanya Atasan langsung dari karyawan
+                        if ($isAtasan) {
+                            $canApprove = true;
+                        }
+                    } elseif ($trx->status === 'HALF APPROVED') {
+                        // Tahap 2: Hanya HRD
+                        if ($isHrd) {
+                            $canApprove = true;
+                        }
                     }
+                }
+            }
+
+            // Cek apakah user yang melihat adalah karyawan pemohon lembur itu sendiri
+            $isApplicant = ($userKaryId && !empty($trx->m_kary_id) && $trx->m_kary_id == $userKaryId)
+                        || ($userId && !empty($trx->creator_id) && $trx->creator_id == $userId);
+
+            if ($isApplicant && !$isSuperadmin) {
+                // User yang melihat adalah pemohon/karyawan:
+                // HIDE REALISASI dan matikan tombol approve untuk dirinya sendiri
+                $isAtasan = false;
+                $isHrd = false;
+                $canApprove = false;
+                $isApproverOrAdmin = false;
+                if ($data->trx) {
+                    $data->trx->jam_mulai_realisasi = null;
+                    $data->trx->jam_selesai_realisasi = null;
+                    $data->trx->realisasi_min = null;
+                    $data->trx->diakui_min = null;
+                    $data->trx->total_lembur = null;
+                }
+            } else {
+                $isApproverOrAdmin = ($isSuperadmin || $isAtasan || $isHrd);
+            }
+
+            // Jika status masih DRAFT / IN APPROVAL (menunggu persetujuan Atasan), realisasi belum diisi
+            if ($trx && !in_array(strtoupper(trim($trx->status ?? '')), ['HALF APPROVED', 'APPROVED'])) {
+                if ($data->trx) {
+                    $data->trx->jam_mulai_realisasi = null;
+                    $data->trx->jam_selesai_realisasi = null;
+                    $data->trx->realisasi_min = null;
                 }
             }
 
@@ -800,6 +1077,7 @@ class t_lembur extends \App\Models\BasicModels\t_lembur
             $data->is_atasan = $isAtasan;
             $data->is_hrd = $isHrd;
             $data->is_superadmin = $isSuperadmin;
+            $data->is_approver_or_admin = $isApproverOrAdmin;
             $data->already_approved = $alreadyApprovedByMe;
 
             return response()->json([
@@ -813,6 +1091,7 @@ class t_lembur extends \App\Models\BasicModels\t_lembur
                 'is_atasan' => $data->is_atasan ?? false,
                 'is_hrd' => $data->is_hrd ?? false,
                 'is_superadmin' => $data->is_superadmin ?? false,
+                'is_approver_or_admin' => $data->is_approver_or_admin ?? false,
                 'already_approved' => $data->already_approved ?? false,
             ], 200);
         } catch (\Throwable $e) {
@@ -922,5 +1201,26 @@ class t_lembur extends \App\Models\BasicModels\t_lembur
             ->get();
 
         return response($data);
+    }
+
+    public function custom_sync_realisasi($req)
+    {
+        $id = $req->id ?? $req->trx_id;
+        if (!$id) {
+            return $this->helper->customResponse("ID transaksi lembur diperlukan", 400);
+        }
+
+        $trx = $this->find($id);
+        if (!$trx) {
+            return $this->helper->customResponse("Data transaksi lembur tidak ditemukan", 404);
+        }
+
+        $synced = $this->sinkronkanRealisasiDariAbsen($trx);
+
+        return response()->json([
+            'status'  => true,
+            'message' => 'Realisasi lembur berhasil disinkronkan dari absensi',
+            'data'    => $synced,
+        ]);
     }
 }

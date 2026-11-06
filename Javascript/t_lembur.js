@@ -35,14 +35,35 @@ const isReadOnly = computed(() => {
   return !actionText.value
 })
 
+const isApproverOrAdmin = computed(() => {
+  if (store.user.data?.is_superadmin) return true
+  // Jika user yang sedang login adalah karyawan pemohon itu sendiri -> selalu HIDE realisasi
+  const myKaryId = store.user.data?.m_kary_id
+  const myUserId = store.user.data?.id
+  if (myKaryId && values.m_kary_id && myKaryId == values.m_kary_id) {
+    return false
+  }
+  if (myUserId && values.creator_id && myUserId == values.creator_id) {
+    return false
+  }
+  if (values.is_approver_or_admin !== undefined) {
+    return Boolean(values.is_approver_or_admin)
+  }
+  if (values.is_hrd || values.is_atasan) return true
+  if (is_approval) return true
+  return false
+})
+
 const canApprove = computed(() => {
   if (!['IN APPROVAL', 'HALF APPROVED'].includes(values.status) && !is_approval) return false
   if (values.can_approve !== undefined) return Boolean(values.can_approve)
   if (store.user.data?.is_superadmin) return true
-  const userKaryId = store.user.data?.m_kary_id
-  const atasanKaryId = values['m_kary.atasan_id'] || values.m_kary?.atasan_id || values.atasan_id
-  if (values.status === 'IN APPROVAL' && userKaryId && atasanKaryId && userKaryId == atasanKaryId) return true
-  if (values.is_hrd || values.is_atasan) return true
+  if (values.status === 'IN APPROVAL') {
+    return Boolean(values.is_atasan)
+  }
+  if (values.status === 'HALF APPROVED') {
+    return Boolean(values.is_hrd)
+  }
   return false
 })
 
@@ -51,6 +72,14 @@ const endpointApi = '/t_lembur'
 onBeforeMount(() => {
   document.title = is_approval ? 'Approval Lembur' : 'Transaksi Lembur'
   is_superadmin.value = store.user.data?.is_superadmin ?? false
+
+  // Sembunyikan kolom realisasi di landing table untuk karyawan biasa (bukan superadmin / HRD)
+  const isSuper = store.user.data?.is_superadmin ?? false
+  const userRoles = (store.user.data?.roles || []).map(r => (typeof r === 'string' ? r : (r.name || '')).toLowerCase())
+  const isHrdOrAdminRole = userRoles.some(rn => /hr|personalia|sdm|admin|human capital/i.test(rn))
+  if (!isSuper && !isHrdOrAdminRole) {
+    landing.columns = landing.columns.filter(c => !['realisasi', 'diakui_min', 'total_lembur'].includes(c.field))
+  }
 })
 
 //  @if( $id )------------------- VALUES FORM ! PENTING JANGAN DIHAPUS
@@ -107,27 +136,35 @@ onBeforeMount(async () => {
         const appPayload = resultJson?.data || resultJson
         const trxId = appPayload?.approval?.trx_id || appPayload?.trx?.id || route.params.id
 
-        const apiTrx = await fetch(`${store.server.url_backend}/operation${endpointApi}/${trxId}`, {
-          headers: {
-            'Content-Type': 'Application/json',
-            Authorization: `${store.user.token_type} ${store.user.token}`
-          },
-        })
-        if (!apiTrx.ok) throw new Error("Failed when trying to read transaction data")
-        const resultTrxJson = await apiTrx.json()
+        let resultTrxJson = null
+        try {
+          const apiTrx = await fetch(`${store.server.url_backend}/operation${endpointApi}/${trxId}?join=true&transform=false`, {
+            headers: {
+              'Content-Type': 'Application/json',
+              Authorization: `${store.user.token_type} ${store.user.token}`
+            },
+          })
+          if (apiTrx.ok) {
+            resultTrxJson = await apiTrx.json()
+          }
+        } catch (e) {
+          console.warn("apiTrx fetch failed, using approval detail trx", e)
+        }
+
         values.approval = appPayload?.approval || {}
         if (values.approval?.created_at) {
           values.approval.created_at = formatDateTime(values.approval.created_at)
         }
         values.trx = appPayload?.trx || {}
         values.datalog = appPayload?.approval_log || []
-        initialValues = resultTrxJson?.data || {}
+        initialValues = resultTrxJson?.data || appPayload?.trx || {}
         for (const key in initialValues) {
           values[key] = initialValues[key]
         }
         values.can_approve = appPayload?.can_approve ?? resultJson?.can_approve
         values.is_atasan = appPayload?.is_atasan ?? resultJson?.is_atasan
         values.is_hrd = appPayload?.is_hrd ?? resultJson?.is_hrd
+        values.is_approver_or_admin = appPayload?.is_approver_or_admin ?? resultJson?.is_approver_or_admin
 
         // logic finish & Approved data
         isApproved.value = resultTrxJson?.data?.lembur_status == 'APPROVED' ? true : false
@@ -174,6 +211,7 @@ onBeforeMount(async () => {
               values.can_approve = resAppJson.data?.can_approve ?? resAppJson?.can_approve
               values.is_atasan = resAppJson.data?.is_atasan ?? resAppJson?.is_atasan
               values.is_hrd = resAppJson.data?.is_hrd ?? resAppJson?.is_hrd
+              values.is_approver_or_admin = resAppJson.data?.is_approver_or_admin ?? resAppJson?.is_approver_or_admin
             }
           } catch (e) {
             console.error('Failed to load approval detail for IN APPROVAL status', e)
@@ -196,6 +234,28 @@ onBeforeMount(async () => {
 
   for (const key in initialValues) {
     values[key] = initialValues[key]
+  }
+
+  // Jika status belum HALF APPROVED / APPROVED, pastikan realisasi null (menunggu approval atasan)
+  if (!['HALF APPROVED', 'APPROVED'].includes(values.status)) {
+    values.jam_mulai_realisasi = null
+    values.jam_selesai_realisasi = null
+    values.realisasi_min = null
+  }
+
+  // Jika user yang sedang login adalah pemohon itu sendiri, sembunyikan realisasi di form
+  const myKaryId = store.user.data?.m_kary_id
+  const myUserId = store.user.data?.id
+  if (!store.user.data?.is_superadmin && (
+      (myKaryId && values.m_kary_id && myKaryId == values.m_kary_id) ||
+      (myUserId && values.creator_id && myUserId == values.creator_id)
+  )) {
+    values.jam_mulai_realisasi = null
+    values.jam_selesai_realisasi = null
+    values.realisasi_min = null
+    values.diakui_min = null
+    values.total_lembur = null
+    values.is_approver_or_admin = false
   }
 
   if (!values.m_comp_id) {
@@ -392,6 +452,51 @@ function onSave() {
   }
 }
 
+const syncRealisasi = async () => {
+  const trxId = values.trx?.id || values.id || route.params.id
+  if (!trxId) return
+  try {
+    isRequesting.value = true
+    const res = await fetch(`${store.server.url_backend}/operation/t_lembur/sync_realisasi?id=${trxId}`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'Application/json',
+        Authorization: `${store.user.token_type} ${store.user.token}`
+      }
+    })
+    const resJson = await res.json()
+    if (res.ok && resJson.status) {
+      if (resJson.data) {
+        values.jam_mulai_realisasi = resJson.data.jam_mulai_realisasi
+        values.jam_selesai_realisasi = resJson.data.jam_selesai_realisasi
+        values.realisasi_min = resJson.data.realisasi_min
+        values.diakui_min = resJson.data.diakui_min
+        values.total_lembur = resJson.data.total_lembur
+      }
+      swal.fire({
+        icon: 'success',
+        title: 'Sinkronisasi Berhasil',
+        text: 'Data realisasi berhasil diperbarui dari checkout presensi.',
+        timer: 1500,
+        showConfirmButton: false
+      })
+    } else {
+      swal.fire({
+        icon: 'warning',
+        title: 'Perhatian',
+        text: resJson.message || 'Belum ada data checkout absensi pada tanggal lembur ini.'
+      })
+    }
+  } catch (e) {
+    swal.fire({
+      icon: 'error',
+      title: 'Gagal',
+      text: e.message || 'Gagal menyinkronkan data realisasi'
+    })
+  } finally {
+    isRequesting.value = false
+  }
+}
 
 function onProcess(typePar) {
   if (typePar === 'revise') {

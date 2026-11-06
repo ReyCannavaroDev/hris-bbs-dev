@@ -33,10 +33,10 @@
             {{actionText==='Edit'?'Ubah':actionText}} Lembur
           </h2>
           <h2 v-else-if="['IN APPROVAL', 'HALF APPROVED'].includes(values.status) && canApprove" class="mx-4 font-sans text-xl flex justify-left font-bold text-blue-700">
-            Approval Pengajuan Lembur ({{ values.status === 'HALF APPROVED' ? 'Tahap 2' : 'Tahap 1' }})
+            Approval {{ values.status === 'HALF APPROVED' ? 'Realisasi Lembur (Tahap 2 - HRD)' : 'Pengajuan Rencana Lembur (Tahap 1 - Atasan)' }}
           </h2>
           <h2 v-else-if="['IN APPROVAL', 'HALF APPROVED'].includes(values.status)" class="mx-4 font-sans text-xl flex justify-left font-bold text-gray-700">
-            Detail Lembur ({{ values.status === 'HALF APPROVED' ? 'Half Approved' : 'In Approval' }} - Read Only)
+            Detail Lembur ({{ values.status === 'HALF APPROVED' ? 'Menunggu Approval Realisasi HRD' : 'Menunggu Approval Rencana Atasan' }} - Read Only)
           </h2>
           <h2 v-else class="mx-4 font-sans text-xl flex justify-left font-bold">
             Notifikasi Approval Lembur
@@ -187,43 +187,48 @@
             @input="v => { values.jam_selesai = v; hitungDurasi(); }" :hints="formErrors.jam_selesai" :check="false" />
         </div>
 
-        <div>
-          <label class="font-semibold">Jam Mulai (Realisasi)</label>
-          <FieldX :bind="{ readonly: isReadOnly }" class="w-full py-2 !mt-0" type="time" fa-icon="clock"
-            :value="values.jam_mulai_realisasi" :errorText="formErrors.jam_mulai_realisasi ? 'failed' : ''"
-            @input="v => { values.jam_mulai_realisasi = v; hitungDurasi(); }" :hints="formErrors.jam_mulai_realisasi" :check="false" />
-        </div>
-        <div>
-          <label class="font-semibold">Jam Selesai (Realisasi)</label>
-          <FieldX :bind="{ readonly: isReadOnly }" class="w-full py-2 !mt-0" type="time" fa-icon="clock"
-            :value="values.jam_selesai_realisasi" :errorText="formErrors.jam_selesai_realisasi ? 'failed' : ''"
-            @input="v => { values.jam_selesai_realisasi = v; hitungDurasi(); }" :hints="formErrors.jam_selesai_realisasi" :check="false" />
-        </div>
-
-        <div>
-          <label class="font-semibold">Durasi SPK</label>
+        <div class="col-span-2">
+          <label class="font-semibold">Durasi Rencana SPK</label>
           <FieldX :bind="{ readonly: true }" class="w-full py-2 !mt-0"
             :value="values.interval_min ? values.interval_min + ' menit (' + (values.interval_min/60).toFixed(1) + ' jam)' : '-'"
             :check="false" label="" placeholder="-" />
         </div>
-        <div>
-          <label class="font-semibold">Durasi Realisasi</label>
-          <FieldX :bind="{ readonly: true }" class="w-full py-2 !mt-0"
-            :value="values.realisasi_min ? values.realisasi_min + ' menit (' + (values.realisasi_min/60).toFixed(1) + ' jam)' : '-'"
-            :check="false" label="" placeholder="-" />
-        </div>
 
-        <div>
-          <label class="font-semibold">Durasi Diakui</label>
-          <FieldX :bind="{ readonly: true }" class="w-full py-2 !mt-0"
-            :value="values.diakui_min ? values.diakui_min + ' menit (' + (values.diakui_min/60).toFixed(1) + ' jam)' : '-'"
-            :check="false" label="" placeholder="-" />
-        </div>
-        <div>
-          <label class="font-semibold">Estimasi Total Lembur</label>
-          <FieldX :bind="{ readonly: true }" class="w-full py-2 !mt-0"
-            :value="values.total_lembur ? 'Rp ' + Number(values.total_lembur).toLocaleString('id-ID') : '-'"
-            :check="false" label="" placeholder="-" />
+        <!-- REALISASI LEMBUR (HANYA UNTUK ATASAN / HRD / ADMIN - DI-HIDE UNTUK PENGAJU/KARYAWAN DAN HANYA MUNCUL SETELAH APPROVAL ATASAN) -->
+        <div v-if="isApproverOrAdmin && ['HALF APPROVED', 'APPROVED'].includes(values.status)" class="col-span-2 grid <md:grid-cols-1 grid-cols-2 gap-x-4 gap-y-2 p-3 bg-blue-50/40 border border-blue-200 rounded-lg my-1">
+          <div class="col-span-2 pb-1 border-b border-blue-200">
+            <span class="font-bold text-sm text-blue-900 flex items-center gap-1.5">
+              <icon fa="clock" size="sm" class="text-blue-600"/> Data Realisasi Lembur (Otomatis dari Checkout Presensi)
+            </span>
+          </div>
+          <div>
+            <label class="font-semibold text-xs text-gray-700">Jam Mulai (Jam Pulang Kerja)</label>
+            <FieldX :bind="{ readonly: true }" label="" class="w-full py-2 !mt-0" type="time" fa-icon="clock"
+              :value="values.jam_mulai_realisasi" :check="false" />
+          </div>
+          <div>
+            <label class="font-semibold text-xs text-gray-700">Jam Selesai (Checkout Absen)</label>
+            <FieldX :bind="{ readonly: true }" label="" class="w-full py-2 !mt-0" type="time" fa-icon="clock"
+              :value="values.jam_selesai_realisasi" :check="false" />
+          </div>
+          <div>
+            <label class="font-semibold text-xs text-gray-700">Durasi Realisasi</label>
+            <FieldX :bind="{ readonly: true }" class="w-full py-2 !mt-0"
+              :value="values.realisasi_min ? values.realisasi_min + ' menit (' + (values.realisasi_min/60).toFixed(1) + ' jam)' : 'Belum checkout absen'"
+              :check="false" label="" placeholder="Belum checkout absen" />
+          </div>
+          <div>
+            <label class="font-semibold text-xs text-gray-700">Durasi Diakui (min: SPK vs Realisasi)</label>
+            <FieldX :bind="{ readonly: true }" class="w-full py-2 !mt-0"
+              :value="values.diakui_min ? values.diakui_min + ' menit (' + (values.diakui_min/60).toFixed(1) + ' jam)' : '-'"
+              :check="false" label="" placeholder="-" />
+          </div>
+          <div class="col-span-2">
+            <label class="font-semibold text-xs text-gray-700">Estimasi Total Lembur</label>
+            <FieldX :bind="{ readonly: true }" class="w-full py-2 !mt-0"
+              :value="values.total_lembur ? 'Rp ' + Number(values.total_lembur).toLocaleString('id-ID') : '-'"
+              :check="false" label="" placeholder="-" />
+          </div>
         </div>
 
         <div>
