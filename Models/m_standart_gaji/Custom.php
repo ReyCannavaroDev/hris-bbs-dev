@@ -9,6 +9,8 @@ class m_standart_gaji extends \App\Models\BasicModels\m_standart_gaji
     {
         parent::__construct();
         $this->helper = getCore('Helper');
+        // Gaji pokok tidak lagi dikelola pada standar gaji (dipindahkan murni ke master karyawan)
+        $this->required = array_values(array_diff($this->required, ['gaji_pokok']));
     }
     
     public $fileColumns    = [ /*file_column*/ ];
@@ -26,6 +28,9 @@ class m_standart_gaji extends \App\Models\BasicModels\m_standart_gaji
                 "errors" => ['Detail komponen gaji wajib diisi minimal 1 data']
             ];
         }
+
+        $arrayData['gaji_pokok'] = isset($arrayData['gaji_pokok']) && $arrayData['gaji_pokok'] !== '' && $arrayData['gaji_pokok'] !== null ? $arrayData['gaji_pokok'] : 0;
+        $arrayData['gaji_pokok_periode'] = $arrayData['gaji_pokok_periode'] ?? 'Bulanan';
 
         return [
             "model"  => $model,
@@ -45,6 +50,10 @@ class m_standart_gaji extends \App\Models\BasicModels\m_standart_gaji
                 "data"   => $arrayData,
                 "errors" => ['Detail komponen gaji wajib diisi minimal 1 data']
             ];
+        }
+
+        if (array_key_exists('gaji_pokok', $arrayData) && ($arrayData['gaji_pokok'] === '' || $arrayData['gaji_pokok'] === null)) {
+            $arrayData['gaji_pokok'] = 0;
         }
 
         return [

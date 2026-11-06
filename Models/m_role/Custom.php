@@ -7,6 +7,9 @@ class m_role extends \App\Models\BasicModels\m_role
     public function __construct()
     {
         parent::__construct();
+        // Override $required agar boolean is_superadmin (0/false) dan is_active (0/false)
+        // tidak dianggap 'kosong' oleh generic validator generator Core
+        $this->required = ["name"];
     }
     
     public $fileColumns    = [ /*file_column*/ ];
@@ -170,7 +173,37 @@ class m_role extends \App\Models\BasicModels\m_role
             ];
         }
 
-        $details = $arrayData['m_role_det'] ?? [];
+        $compId = !empty($arrayData['m_comp_id']) ? (int)$arrayData['m_comp_id'] : ((auth()->check() && !empty(auth()->user()->m_comp_id)) ? (int)auth()->user()->m_comp_id : 1);
+        $dirId = !empty($arrayData['m_dir_id']) ? (int)$arrayData['m_dir_id'] : ((auth()->check() && !empty(auth()->user()->m_dir_id)) ? (int)auth()->user()->m_dir_id : null);
+
+        $arrayData['m_comp_id'] = $compId;
+        $arrayData['m_dir_id'] = $dirId;
+        $arrayData['is_superadmin'] = !empty($arrayData['is_superadmin']) ? 1 : 0;
+        $arrayData['is_active'] = isset($arrayData['is_active']) ? (!empty($arrayData['is_active']) ? 1 : 0) : 1;
+
+        $req = app()->request;
+        $details = $arrayData['m_role_det'] 
+            ?? ($req ? $req->m_role_det : null) 
+            ?? ($req ? $req->input('m_role_det') : null) 
+            ?? ($req && method_exists($req, 'json') ? $req->json('m_role_det') : null)
+            ?? null;
+
+        if (empty($details) && $req && method_exists($req, 'getContent')) {
+            $rawContent = $req->getContent();
+            if (!empty($rawContent)) {
+                $decoded = json_decode($rawContent, true);
+                if (is_array($decoded) && isset($decoded['m_role_det'])) {
+                    $details = $decoded['m_role_det'];
+                }
+            }
+        }
+
+        if (is_string($details)) {
+            $details = json_decode($details, true) ?? [];
+        }
+
+        $details = is_array($details) ? $details : [];
+
         if (empty($details) || count($details) === 0) {
             return [
                 "status" => "error",
@@ -178,6 +211,65 @@ class m_role extends \App\Models\BasicModels\m_role
                 "errors" => ["m_role_det" => ["Detail hak akses menu wajib diisi minimal 1 menu"]]
             ];
         }
+
+        // Filter hanya menu yang berstatus aktif (is_active = true)
+        $activeMenuIds = [];
+        try {
+            $activeMenuIds = \DB::table('m_menu')->where('is_active', true)->pluck('id')->toArray();
+        } catch (\Throwable $th) {
+            $activeMenuIds = [];
+        }
+
+        // Sanitize detail rows: pastikan hanya kolom yang valid pada tabel m_role_det dan hanya menu yang aktif
+        $cleanedDetails = [];
+        foreach ($details as $d) {
+            $row = is_array($d) ? $d : (array)$d;
+            $menuId = !empty($row['m_menu_id']) ? (int)$row['m_menu_id'] : (!empty($row['id']) ? (int)$row['id'] : null);
+            if (!$menuId || (!empty($activeMenuIds) && !in_array($menuId, $activeMenuIds))) {
+                continue;
+            }
+            $cleanedDetails[] = [
+                'm_comp_id'   => $compId,
+                'm_dir_id'    => $dirId,
+                'm_menu_id'   => $menuId,
+                'can_create'  => !empty($row['can_create']) ? 1 : 0,
+                'can_read'    => isset($row['can_read']) ? (!empty($row['can_read']) ? 1 : 0) : 1,
+                'can_update'  => !empty($row['can_update']) ? 1 : 0,
+                'can_delete'  => !empty($row['can_delete']) ? 1 : 0,
+                'can_verify'  => !empty($row['can_verify']) ? 1 : 0,
+            ];
+        }
+
+        if (empty($cleanedDetails)) {
+            return [
+                "status" => "error",
+                "message" => "Detail hak akses menu wajib diisi minimal 1 menu",
+                "errors" => ["m_role_det" => ["Detail hak akses menu wajib diisi minimal 1 menu"]]
+            ];
+        }
+
+        if ($req && method_exists($req, 'merge')) {
+            $req->merge(['m_role_det' => $cleanedDetails]);
+            if (isset($req->request) && method_exists($req->request, 'set')) {
+                $req->request->set('m_role_det', $cleanedDetails);
+            }
+        }
+
+        $arrayData['m_role_det'] = $cleanedDetails;
+
+        // Bersihkan atribut non-kolom database dari payload utama
+        unset(
+            $arrayData['id'],
+            $arrayData['direktorat'],
+            $arrayData['created_at'],
+            $arrayData['updated_at'],
+            $arrayData['creator_id'],
+            $arrayData['last_editor_id'],
+            $arrayData['m_comp'],
+            $arrayData['m_dir'],
+            $arrayData['creator'],
+            $arrayData['last_editor']
+        );
 
         return [
             "model" => $model,
@@ -195,8 +287,45 @@ class m_role extends \App\Models\BasicModels\m_role
             ];
         }
 
-        if (isset($arrayData['m_role_det'])) {
-            $details = $arrayData['m_role_det'];
+        $compId = !empty($arrayData['m_comp_id']) ? (int)$arrayData['m_comp_id'] : ((auth()->check() && !empty(auth()->user()->m_comp_id)) ? (int)auth()->user()->m_comp_id : 1);
+        $dirId = !empty($arrayData['m_dir_id']) ? (int)$arrayData['m_dir_id'] : ((auth()->check() && !empty(auth()->user()->m_dir_id)) ? (int)auth()->user()->m_dir_id : null);
+
+        if (isset($arrayData['m_comp_id'])) {
+            $arrayData['m_comp_id'] = $compId;
+        }
+        if (isset($arrayData['m_dir_id'])) {
+            $arrayData['m_dir_id'] = $dirId;
+        }
+        if (isset($arrayData['is_superadmin'])) {
+            $arrayData['is_superadmin'] = !empty($arrayData['is_superadmin']) ? 1 : 0;
+        }
+        if (isset($arrayData['is_active'])) {
+            $arrayData['is_active'] = !empty($arrayData['is_active']) ? 1 : 0;
+        }
+
+        $req = app()->request;
+        $details = $arrayData['m_role_det'] 
+            ?? ($req ? $req->m_role_det : null) 
+            ?? ($req ? $req->input('m_role_det') : null) 
+            ?? ($req && method_exists($req, 'json') ? $req->json('m_role_det') : null)
+            ?? null;
+
+        if (empty($details) && $req && method_exists($req, 'getContent')) {
+            $rawContent = $req->getContent();
+            if (!empty($rawContent)) {
+                $decoded = json_decode($rawContent, true);
+                if (is_array($decoded) && isset($decoded['m_role_det'])) {
+                    $details = $decoded['m_role_det'];
+                }
+            }
+        }
+
+        if (is_string($details)) {
+            $details = json_decode($details, true) ?? [];
+        }
+
+        if ($details !== null) {
+            $details = is_array($details) ? $details : [];
             if (empty($details) || count($details) === 0) {
                 return [
                     "status" => "error",
@@ -204,11 +333,147 @@ class m_role extends \App\Models\BasicModels\m_role
                     "errors" => ["m_role_det" => ["Detail hak akses menu wajib diisi minimal 1 menu"]]
                 ];
             }
+
+            $existingDetIds = [];
+            if ($id) {
+                try {
+                    $existingDetIds = \DB::table('m_role_det')->where('m_role_id', $id)->pluck('id')->toArray();
+                } catch (\Throwable $th) {
+                    $existingDetIds = [];
+                }
+            }
+
+            // Filter hanya menu yang berstatus aktif (is_active = true)
+            $activeMenuIds = [];
+            try {
+                $activeMenuIds = \DB::table('m_menu')->where('is_active', true)->pluck('id')->toArray();
+            } catch (\Throwable $th) {
+                $activeMenuIds = [];
+            }
+
+            $cleanedDetails = [];
+            foreach ($details as $d) {
+                $row = is_array($d) ? $d : (array)$d;
+                $menuId = !empty($row['m_menu_id']) ? (int)$row['m_menu_id'] : null;
+                if (!$menuId && !empty($row['id']) && !in_array($row['id'], $existingDetIds)) {
+                    $menuId = (int)$row['id'];
+                }
+                if (!$menuId || (!empty($activeMenuIds) && !in_array($menuId, $activeMenuIds))) {
+                    continue;
+                }
+
+                $cleanRow = [
+                    'm_comp_id'   => $compId,
+                    'm_dir_id'    => $dirId,
+                    'm_menu_id'   => $menuId,
+                    'can_create'  => !empty($row['can_create']) ? 1 : 0,
+                    'can_read'    => isset($row['can_read']) ? (!empty($row['can_read']) ? 1 : 0) : 1,
+                    'can_update'  => !empty($row['can_update']) ? 1 : 0,
+                    'can_delete'  => !empty($row['can_delete']) ? 1 : 0,
+                    'can_verify'  => !empty($row['can_verify']) ? 1 : 0,
+                ];
+
+                if (!empty($row['id']) && in_array($row['id'], $existingDetIds)) {
+                    $cleanRow['id'] = (int)$row['id'];
+                    $cleanRow['m_role_id'] = (int)$id;
+                }
+
+                $cleanedDetails[] = $cleanRow;
+            }
+
+            if (empty($cleanedDetails)) {
+                return [
+                    "status" => "error",
+                    "message" => "Detail hak akses menu wajib diisi minimal 1 menu",
+                    "errors" => ["m_role_det" => ["Detail hak akses menu wajib diisi minimal 1 menu"]]
+                ];
+            }
+
+            // Hapus data m_role_det lama di database jika menu tersebut telah dihapus oleh pengguna dari tabel detail atau jika menu sudah inactive
+            $submittedMenuIds = array_filter(array_column($cleanedDetails, 'm_menu_id'));
+            if ($id) {
+                try {
+                    $delQuery = \DB::table('m_role_det')->where('m_role_id', $id);
+                    if (!empty($submittedMenuIds)) {
+                        $delQuery->where(function($q) use ($submittedMenuIds) {
+                            $q->whereNotIn('m_menu_id', $submittedMenuIds)
+                              ->orWhereIn('m_menu_id', function($sub) {
+                                  $sub->select('id')->from('m_menu')->where('is_active', false);
+                              });
+                        });
+                    } else {
+                        $delQuery->whereIn('m_menu_id', function($sub) {
+                            $sub->select('id')->from('m_menu')->where('is_active', false);
+                        });
+                    }
+                    $delQuery->delete();
+                } catch (\Throwable $th) {}
+            }
+
+            if ($req && method_exists($req, 'merge')) {
+                $req->merge(['m_role_det' => $cleanedDetails]);
+                if (isset($req->request) && method_exists($req->request, 'set')) {
+                    $req->request->set('m_role_det', $cleanedDetails);
+                }
+            }
+
+            $arrayData['m_role_det'] = $cleanedDetails;
         }
+
+        unset(
+            $arrayData['direktorat'],
+            $arrayData['created_at'],
+            $arrayData['updated_at'],
+            $arrayData['creator_id'],
+            $arrayData['last_editor_id'],
+            $arrayData['m_comp'],
+            $arrayData['m_dir'],
+            $arrayData['creator'],
+            $arrayData['last_editor']
+        );
 
         return [
             "model" => $model,
             "data"  => $arrayData,
         ];
+    }
+
+    public function updateAfter($model, $arrayData, $metaData, $id = null)
+    {
+        $id = $id ?? ($model->id ?? null);
+        if (!$id) return;
+
+        $req = app()->request;
+        $details = $arrayData['m_role_det'] 
+            ?? ($req ? $req->m_role_det : null) 
+            ?? ($req ? $req->input('m_role_det') : null) 
+            ?? null;
+
+        if (is_array($details)) {
+            $submittedMenuIds = [];
+            foreach ($details as $d) {
+                $row = is_array($d) ? $d : (array)$d;
+                $mId = !empty($row['m_menu_id']) ? (int)$row['m_menu_id'] : null;
+                if ($mId) {
+                    $submittedMenuIds[] = $mId;
+                }
+            }
+            try {
+                $delQuery = \DB::table('m_role_det')->where('m_role_id', $id);
+                if (!empty($submittedMenuIds)) {
+                    $delQuery->where(function($q) use ($submittedMenuIds) {
+                        $q->whereNotIn('m_menu_id', $submittedMenuIds)
+                          ->orWhereIn('m_menu_id', function($sub) {
+                              $sub->select('id')->from('m_menu')->where('is_active', false);
+                          });
+                    });
+                } else {
+                    $delQuery->whereIn('m_menu_id', function($sub) {
+                        $sub->select('id')->from('m_menu')->where('is_active', false);
+                    });
+                }
+                $delQuery->delete();
+            } catch (\Throwable $th) {}
+        }
     }
 }

@@ -52,7 +52,16 @@ class PerhitunganGaji
             ];
         }
 
-        // Cari master standar gaji
+        // Validasi: Jika field gaji pada master karyawan kosong atau <= 0, perhitungan tidak dapat dilakukan
+        if (!isset($kary->gaji_pokok) || $kary->gaji_pokok === null || $kary->gaji_pokok === '' || (float)$kary->gaji_pokok <= 0) {
+            $nama = $kary->nama_lengkap ?? $kary->nama_depan ?? "ID {$m_kary_id}";
+            return [
+                'success' => false,
+                'message' => "Perhitungan gaji tidak dapat dilakukan karena field gaji pada Master Karyawan belum diisi untuk {$nama}."
+            ];
+        }
+
+        // Cari master standar gaji untuk tunjangan / fasilitas pendukung
         $standarGaji = null;
         if (!empty($kary->m_standart_gaji_id)) {
             $standarGaji = DB::table('m_standart_gaji')
@@ -61,8 +70,7 @@ class PerhitunganGaji
                 ->first();
         }
 
-        // Fallback berdasarkan zona dan grading karyawan HANYA jika belum ada standar gaji dan gaji pokok personal
-        if (!$standarGaji && (empty($kary->gaji_pokok) || (float)$kary->gaji_pokok <= 0) && !empty($kary->m_zona_id) && !empty($kary->grading_id)) {
+        if (!$standarGaji && !empty($kary->m_zona_id) && !empty($kary->grading_id)) {
             $standarGaji = DB::table('m_standart_gaji')
                 ->where('m_zona_id', $kary->m_zona_id)
                 ->where('grading_id', $kary->grading_id)
@@ -70,10 +78,8 @@ class PerhitunganGaji
                 ->first();
         }
 
-        // Prioritaskan gaji pokok per-personal di m_kary, fallback ke m_standart_gaji jika kosong / 0
-        $gajiPokok = (!empty($kary->gaji_pokok) && (float) $kary->gaji_pokok > 0)
-            ? (float) $kary->gaji_pokok
-            : (float) ($standarGaji->gaji_pokok ?? 0);
+        // Gaji pokok murni bersumber dari Master Karyawan
+        $gajiPokok = (float) $kary->gaji_pokok;
 
         // Gaji acuan (basis perhitungan UMK / BPJS)
         $gajiAcuan = (!empty($kary->gaji_acuan) && (float) $kary->gaji_acuan > 0)

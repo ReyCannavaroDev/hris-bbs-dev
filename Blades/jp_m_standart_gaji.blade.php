@@ -164,36 +164,6 @@
         <div class="col-span-8 md:col-span-6">
           <div class="flex items-center gap-2">
             <div class="flex flex-col w-[161px] items-start gap-y-2">
-              <label class="col-span-12">Gaji Pokok<label class="text-red-500 space-x-0 pl-0">*</label></label>
-                <FieldSelect
-                  :bind="{ disabled: !actionText, clearable:false }" class="col-span-12 !mt-0 w-full"
-                  :value="values.gaji_pokok_periode || 'Bulanan'" @input="v=>values.gaji_pokok_periode=v"
-                  :errorText="formErrors.gaji_pokok_periode?'failed':''" 
-                  :hints="formErrors.gaji_pokok_periode"
-                  valueField="key" displayField="key"
-                  :options="['Bulanan', 'Harian']"
-                  :check="false"
-                  label=""
-                  placeholder="Pilih Periode" 
-                 />            
-            </div>
-            <div class="flex flex-col flex-1 ">
-              <FieldNumber
-                :bind="{ readonly: !actionText }"
-                :value="values.gaji_pokok" @input="(v)=>values.gaji_pokok=v"
-                :errorText="formErrors.gaji_pokok?'failed':''" 
-                :hints="formErrors.gaji_pokok"
-                :check="false"
-                class="col-span-12 !mt-5 w-full"
-                label=""
-                placeholder="0" 
-              />         
-            </div>
-          </div>
-        </div>
-        <div class="col-span-8 md:col-span-6">
-          <div class="flex items-center gap-2">
-            <div class="flex flex-col w-[161px] items-start gap-y-2">
               <label class="col-span-12">Uang Saku</label>
                 <FieldSelect
                   :bind="{ disabled: !actionText, clearable:false }" class="col-span-12 !mt-0 w-full"

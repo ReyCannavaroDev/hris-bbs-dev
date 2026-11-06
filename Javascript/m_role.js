@@ -35,11 +35,23 @@ let trx_dtl = ref([])
 const onDetailAdd = (rows) => {
   const dataArr = [...trx_dtl.value]
   rows.forEach(row => {
-    row.m_menu_id = row.id
-    dataArr.push(row)
+    const menuId = row.m_menu_id || row.id
+    const exists = dataArr.some(d => (d.m_menu_id || d.id) === menuId)
+    if (!exists) {
+      dataArr.push({
+        m_menu_id: menuId,
+        menu: row.menu || row['m_menu.menu'],
+        modul: row.modul,
+        submodul: row.submodul,
+        can_read: true,
+        can_create: true,
+        can_update: true,
+        can_delete: true,
+        can_verify: false
+      })
+    }
   })
   trx_dtl.value = dataArr
-
 }
 
 function deleteAll() {
@@ -74,7 +86,7 @@ onBeforeMount(async () => {
 
       initialValues.username = initialValues['default_user.username']
       initialValues.email = initialValues['default_user.email']
-      const resDet = await fetch(`${store.server.url_backend}/operation/m_role_det?where=m_role_id=${editedId ?? 0}`, {
+      const resDet = await fetch(`${store.server.url_backend}/operation/m_role_det?join=true&where=this.m_role_id=${editedId ?? 0}&paginate=1000`, {
         headers: {
           'Content-Type': 'Application/json',
           Authorization: `${store.user.token_type} ${store.user.token}`
@@ -83,10 +95,14 @@ onBeforeMount(async () => {
 
       const resultJsonDet = await resDet.json()
       console.log(resultJsonDet);
-      resultJsonDet?.data.forEach((d)=>{
+      const activeData = (resultJsonDet?.data ?? []).filter((d) => {
+        const menuActive = d['m_menu.is_active']
+        return !(menuActive === false || menuActive === 0 || menuActive === '0' || menuActive === 'false' || menuActive === 'f')
+      })
+      activeData.forEach((d)=>{
         d.menu = d['m_menu.menu']
       })
-      trx_dtl.value = resultJsonDet?.data ?? []
+      trx_dtl.value = activeData
 
     } catch (err) {
       isBadForm.value = true
@@ -150,8 +166,21 @@ function onReset() {
   })
 }
 
+const removeRowDetail = (targetRow) => {
+  const targetMenuId = targetRow?.m_menu_id || targetRow?.id
+  if (Array.isArray(trx_dtl.value)) {
+    trx_dtl.value = trx_dtl.value.filter(item => {
+      const itemMenuId = item.m_menu_id || item.id
+      return itemMenuId !== targetMenuId
+    })
+  }
+}
+
 function clearAll(){
   trx_dtl.value = []
+  if (detail.value && detail.value.api) {
+    detail.value.api.setRowData([])
+  }
 }
 
 function onSave() {
@@ -167,21 +196,31 @@ function onSave() {
     })
   }
 
-  if (!trx_dtl.value || trx_dtl.value.length === 0) {
+  const isCreating = ['Create','Copy','Tambah'].includes(actionText.value)
+  const detailList = (trx_dtl.value || []).map(row => {
+    const menuId = row.m_menu_id || row.id
+    const item = {
+      m_menu_id: Number(menuId),
+      can_create: (row.can_create === 1 || row.can_create === true) ? 1 : 0,
+      can_read: (row.can_read === 1 || row.can_read === true) ? 1 : 0,
+      can_update: (row.can_update === 1 || row.can_update === true) ? 1 : 0,
+      can_delete: (row.can_delete === 1 || row.can_delete === true) ? 1 : 0,
+      can_verify: (row.can_verify === 1 || row.can_verify === true) ? 1 : 0
+    }
+    if (!isCreating && row.id && row.m_menu_id) {
+      item.id = Number(row.id)
+    }
+    return item
+  }).filter(item => Boolean(item.m_menu_id))
+
+  if (!detailList || detailList.length === 0) {
     return swal.fire({
       icon: 'error',
       text: 'Detail hak akses menu wajib diisi minimal 1 menu'
     })
   }
 
-  values.m_role_det = trx_dtl.value
-  for (const i in values.m_role_det) {
-    for (const k in values.m_role_det[i]) {
-      if (typeof values.m_role_det[i][k] === 'boolean') {
-        values.m_role_det[i][k] = values.m_role_det[i][k] ? 1 : 0
-      }
-    }
-  }
+  values.m_role_det = detailList
 
   swal.fire({
     icon: 'warning',
@@ -190,14 +229,18 @@ function onSave() {
   }).then(async (res) => {
     if (res.isConfirmed) {
       try {
-        const isCreating = ['Create','Copy','Tambah'].includes(actionText.value)
         const dataURL = `${store.server.url_backend}/operation${endpointApi}${isCreating ? '' : ('/' + route.params.id)}`
         isRequesting.value = true
 
         const payload = Object.assign({}, values, {
           is_active: values.is_active ? 1 : 0,
-          is_superadmin: values.is_superadmin ? 1 : 0
+          is_superadmin: values.is_superadmin ? 1 : 0,
+          m_role_det: detailList
         })
+        delete payload.direktorat
+        if (isCreating) {
+          delete payload.id
+        }
 
         const res = await fetch(dataURL, {
           method: isCreating ? 'POST' : 'PUT',
@@ -211,8 +254,21 @@ function onSave() {
           if ([400, 422].includes(res.status)) {
             const responseJson = await res.json()
             formErrors.value = responseJson.errors || {}
-            const errMsg = (Array.isArray(responseJson.errors) ? responseJson.errors[0] : (typeof responseJson.errors === 'string' ? responseJson.errors : responseJson.message)) || "Failed when trying to post data";
-            throw new Error(errMsg)
+            let errMsg = responseJson.message
+            if (responseJson.errors) {
+              if (typeof responseJson.errors === 'string') {
+                errMsg = responseJson.errors
+              } else if (Array.isArray(responseJson.errors) && responseJson.errors.length > 0) {
+                errMsg = responseJson.errors[0]
+              } else if (typeof responseJson.errors === 'object') {
+                const firstKey = Object.keys(responseJson.errors)[0]
+                if (firstKey && responseJson.errors[firstKey]) {
+                  const firstVal = responseJson.errors[firstKey]
+                  errMsg = Array.isArray(firstVal) ? firstVal[0] : firstVal
+                }
+              }
+            }
+            throw new Error(errMsg || "Failed when trying to post data")
           } else {
             throw new Error("Failed when trying to post data")
           }

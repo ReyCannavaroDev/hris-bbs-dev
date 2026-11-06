@@ -110,9 +110,9 @@
           :api="{
             url: `${store.server.url_backend}/operation/m_menu`,
             headers: {'Content-Type': 'Application/json', authorization: `${store.user.token_type} ${store.user.token}`},
-            params: { simplest: true,searchfield: 'modul,submodul,menu' },
+            params: { simplest: true, paginate: 1000, searchfield: 'modul,submodul,menu', where: `this.is_active='true'` },
             onsuccess:(response)=>{
-              response.data = [...response.data].map((dt)=>{
+              response.data = [...response.data].filter(dt => dt.is_active === true || dt.is_active === 1 || dt.is_active === '1' || dt.is_active === 'true' || dt.is_active === 't').map((dt)=>{
                 Object.assign(dt,{
                   can_create: true, can_update: true, can_delete: true, can_read: true, role_id: values.role_id, can_verify : false
                 })
@@ -195,8 +195,10 @@
                         text: `Hapus Baris ${app.params.node.rowIndex-(-1)}?`,
                       }).then((res) => {
                         if (res.isConfirmed) {
-                          app.params.api.applyTransaction({ remove: [app.params.node.data] })
-                          trx_dtl.splice(app.params.node.rowIndex, 1)
+                          if (app.params.api && app.params.node) {
+                            app.params.api.applyTransaction({ remove: [app.params.node.data] })
+                          }
+                          removeRowDetail(app.params.node.data)
                         }
                       })
                     }

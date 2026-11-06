@@ -447,7 +447,7 @@ async function generatePerhitungan() {
       if(!resultData?.length) {
         swal.fire({
           icon: 'warning',
-          text: "Tidak ditemukan data Perhitungan Gaji, pastikan karyawan sudah memiliki standar gaji"
+          text: "Tidak ditemukan data Perhitungan Gaji, pastikan data karyawan aktif dan memiliki gaji pokok pada Master Karyawan"
         })
       }
       resultData.forEach((item) => {

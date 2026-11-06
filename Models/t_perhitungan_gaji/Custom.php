@@ -320,19 +320,14 @@ class t_perhitungan_gaji extends \App\Models\BasicModels\t_perhitungan_gaji
                 // dynamic 
                 if(@!$key['table']) {
                     if ($key['name'] === 'gaji_pokok') {
-                        if (!empty($kary->gaji_pokok) && (float)$kary->gaji_pokok > 0) {
-                            $compVal = (float)$kary->gaji_pokok;
-                            $compType = $isPeriodMingguan ? 'Mingguan' : (is_array($standart_gaji) ? ($standart_gaji[$key['type']] ?? 'Bulanan') : ($standart_gaji->{$key['type']} ?? 'Bulanan'));
+                        // Gaji pokok murni bersumber dari Master Karyawan
+                        $rawVal = (!empty($kary->gaji_pokok) && (float)$kary->gaji_pokok > 0) ? (float)$kary->gaji_pokok : 0;
+                        if ($isPeriodMingguan) {
+                            $compVal = round($rawVal / 4, 2);
+                            $compType = 'Mingguan';
                         } else {
-                            $rawVal = (float)(is_array($standart_gaji) ? ($standart_gaji[$key['name']] ?? 0) : ($standart_gaji->{$key['name']} ?? 0));
-                            $rawType = is_array($standart_gaji) ? ($standart_gaji[$key['type']] ?? 'Bulanan') : ($standart_gaji->{$key['type']} ?? 'Bulanan');
-                            if ($isPeriodMingguan && strtolower($rawType) === 'bulanan') {
-                                $compVal = round($rawVal / 4, 2);
-                                $compType = 'Mingguan';
-                            } else {
-                                $compVal = $rawVal;
-                                $compType = $rawType;
-                            }
+                            $compVal = $rawVal;
+                            $compType = 'Bulanan';
                         }
                     } elseif ($key['name'] === 'uang_makan') {
                         $rawVal = (float)(is_array($standart_gaji) ? ($standart_gaji[$key['name']] ?? 0) : ($standart_gaji->{$key['name']} ?? 0));
@@ -1045,6 +1040,12 @@ class t_perhitungan_gaji extends \App\Models\BasicModels\t_perhitungan_gaji
                 }
             }
 
+            // Validasi: Jika field gaji pada Master Karyawan kosong atau <= 0, perhitungan tidak dapat dilakukan
+            if (!isset($kary->gaji_pokok) || $kary->gaji_pokok === null || $kary->gaji_pokok === '' || (float)$kary->gaji_pokok <= 0) {
+                $namaKary = $kary->nama_lengkap ?: ($kary->nama_depan ?: ($kary->kode ?: "ID {$m_kary_id}"));
+                throw new \Exception("Perhitungan gaji tidak dapat dilakukan karena field gaji pada Master Karyawan belum diisi untuk {$namaKary}.");
+            }
+
             // Deteksi periode mingguan untuk penyesuaian tipe gaji personal
             $diffHariPeriod = ($periode && $periodeAkhir)
                 ? (int) ( (strtotime($periodeAkhir) - strtotime($periode)) / 86400 ) + 1
@@ -1060,9 +1061,16 @@ class t_perhitungan_gaji extends \App\Models\BasicModels\t_perhitungan_gaji
                 $m_standart_gaji = m_standart_gaji::find($kary->m_standart_gaji_id);
             }
 
-            // Jika karyawan memiliki gaji_pokok personal dan tidak memilih template standar gaji,
-            // gunakan set gaji per personal murni (MoM BBS: set gaji per personal, zona & grading hanya catatan)
-            if (!$m_standart_gaji && !empty($kary->gaji_pokok) && (float)$kary->gaji_pokok > 0) {
+            // Fallback ke m_standart_gaji berbasis zona & grading untuk tunjangan/fasilitas
+            if (!$m_standart_gaji && @$kary->m_zona_id && @$kary->grading_id) {
+                $m_standart_gaji = m_standart_gaji::where('m_zona_id', $kary->m_zona_id)
+                    ->where('grading_id', $kary->grading_id)
+                    ->where('is_active', true)
+                    ->first();
+            }
+
+            // Gaji pokok murni bersumber dari Master Karyawan ($kary->gaji_pokok)
+            if (!$m_standart_gaji) {
                 $m_standart_gaji = (object) [
                     'id'                          => 0,
                     'gaji_pokok'                  => (float) $kary->gaji_pokok,
@@ -1078,18 +1086,7 @@ class t_perhitungan_gaji extends \App\Models\BasicModels\t_perhitungan_gaji
                     'tunjangan_tetap'             => 0,
                     'tunjangan_tetap_periode'     => 'Bulanan',
                 ];
-            }
-
-            // Fallback ke m_standart_gaji berbasis zona & grading HANYA jika karyawan belum punya gaji personal dan standar gaji
-            if (!$m_standart_gaji && @$kary->m_zona_id && @$kary->grading_id) {
-                $m_standart_gaji = m_standart_gaji::where('m_zona_id', $kary->m_zona_id)
-                    ->where('grading_id', $kary->grading_id)
-                    ->where('is_active', true)
-                    ->first();
-            }
-
-            // Jika karyawan memiliki gaji_pokok personal di m_kary, nilai personal SELALU menjadi prioritas utama (MoM BBS)
-            if ($m_standart_gaji && !empty($kary->gaji_pokok) && (float)$kary->gaji_pokok > 0) {
+            } else {
                 if (is_object($m_standart_gaji)) {
                     $m_standart_gaji->gaji_pokok = (float) $kary->gaji_pokok;
                     $m_standart_gaji->gaji_pokok_periode = $isPeriodMingguan ? 'Mingguan' : ($m_standart_gaji->gaji_pokok_periode ?? 'Bulanan');
@@ -1154,40 +1151,50 @@ class t_perhitungan_gaji extends \App\Models\BasicModels\t_perhitungan_gaji
     {
         try{
             $req =  app()->request;
-            $kary = m_kary::selectRaw("m_kary.*,m_general.value periode_text, m_dir.nama dir, m_divisi.nama divisi, m_dept.nama dept")
-                ->leftJoin('m_dir','m_dir.id','m_kary.m_dir_id')
-                ->leftJoin('m_divisi','m_divisi.id','m_kary.m_divisi_id')
-                ->leftJoin('m_dept','m_dept.id','m_kary.m_dept_id')
-                ->leftJoin('m_general','m_general.id','m_kary.periode_gaji_id')
-                ->where('m_kary.is_active', true)
-                ->where(function ($q) {
-                    $q->whereRaw('m_kary.m_standart_gaji_id in(select s.id from m_standart_gaji s where s.is_active = true)')
-                      ->orWhereExists(function ($sq) {
-                          $sq->select(\DB::raw(1))
-                             ->from('m_standart_gaji as s')
-                             ->whereColumn('s.m_zona_id', 'm_kary.m_zona_id')
-                             ->whereColumn('s.grading_id', 'm_kary.grading_id')
-                             ->where('s.is_active', true);
-                      })
-                      ->orWhere(function ($sq) {
-                          $sq->whereNotNull('m_kary.gaji_pokok')
-                             ->where('m_kary.gaji_pokok', '>', 0);
-                      });
-                });
-
-            if($req->m_dir_id) $kary = $kary->where('m_kary.m_dir_id', $req->m_dir_id);
-            if($req->m_divisi_id) $kary = $kary->where('m_kary.m_divisi_id', $req->m_divisi_id);
-            if($req->m_dept_id) $kary = $kary->where('m_kary.m_dept_id', $req->m_dept_id);
-            if($req->periode_gaji_id) $kary = $kary->where('m_kary.periode_gaji_id', $req->periode_gaji_id);
-            if($req->m_kary_id) $kary = $kary->where('m_kary.id', $req->m_kary_id);
-
-            $kary = $kary->get();
-            
             $rawAwal = $req->periode_awal;
             $rawAkhir = $req->periode_akhir;
 
             if (!$rawAwal || !$rawAkhir) {
                 return $this->helper->customResponse('Periode awal dan periode akhir wajib diisi', 422);
+            }
+
+            $karyQuery = m_kary::selectRaw("m_kary.*,m_general.value periode_text, m_dir.nama dir, m_divisi.nama divisi, m_dept.nama dept")
+                ->leftJoin('m_dir','m_dir.id','m_kary.m_dir_id')
+                ->leftJoin('m_divisi','m_divisi.id','m_kary.m_divisi_id')
+                ->leftJoin('m_dept','m_dept.id','m_kary.m_dept_id')
+                ->leftJoin('m_general','m_general.id','m_kary.periode_gaji_id')
+                ->where('m_kary.is_active', true);
+
+            if($req->m_dir_id) $karyQuery = $karyQuery->where('m_kary.m_dir_id', $req->m_dir_id);
+            if($req->m_divisi_id) $karyQuery = $karyQuery->where('m_kary.m_divisi_id', $req->m_divisi_id);
+            if($req->m_dept_id) $karyQuery = $karyQuery->where('m_kary.m_dept_id', $req->m_dept_id);
+            if($req->periode_gaji_id) $karyQuery = $karyQuery->where('m_kary.periode_gaji_id', $req->periode_gaji_id);
+            if($req->m_kary_id) $karyQuery = $karyQuery->where('m_kary.id', $req->m_kary_id);
+
+            $kary = $karyQuery->get();
+
+            if ($kary->isEmpty()) {
+                return $this->helper->customResponse('Tidak ada data karyawan aktif yang ditemukan untuk kriteria yang dipilih', 422);
+            }
+
+            // Validasi: Jika field gaji pada Master Karyawan kosong atau <= 0, perhitungan tidak dapat dilakukan
+            $karyTanpaGaji = [];
+            foreach ($kary as $item) {
+                if (!isset($item->gaji_pokok) || $item->gaji_pokok === null || $item->gaji_pokok === '' || (float)$item->gaji_pokok <= 0) {
+                    $karyTanpaGaji[] = $item->nama_lengkap ?: ($item->nama_depan ?: $item->kode);
+                }
+            }
+
+            if (!empty($karyTanpaGaji)) {
+                $count = count($karyTanpaGaji);
+                $names = implode(', ', array_slice($karyTanpaGaji, 0, 5));
+                if ($count > 5) {
+                    $names .= " dan " . ($count - 5) . " karyawan lainnya";
+                }
+                return $this->helper->customResponse(
+                    "Perhitungan gaji tidak dapat dilakukan karena field gaji pada Master Karyawan belum diisi untuk: {$names}. Silakan lengkapi data Gaji Pokok pada Master Karyawan terlebih dahulu.",
+                    422
+                );
             }
 
             // Normalisasi format input (mendukung Y-m-d maupun Y-m)
