@@ -24,6 +24,204 @@ onBeforeMount(()=>{
   document.title = 'Transaksi Potongan'
 })
 
+function pelunasanManual(row) {
+  const target = (Array.isArray(row) ? row[0] : (row?.data || row)) || (typeof values !== 'undefined' && values?.id ? values : null)
+
+  if (!target || !target.id) {
+    swal.fire({
+      icon: 'warning',
+      title: 'Peringatan',
+      text: 'Pilih data transaksi terlebih dahulu untuk melakukan pelunasan manual.'
+    })
+    return
+  }
+
+  const rawSisa = target.sisa_angsuran !== undefined ? target.sisa_angsuran : (target.nilai || 0)
+  const numSisa = Number(String(rawSisa).replace(/[^0-9.-]/g, '')) || 0
+  const nominalStr = 'Rp ' + numSisa.toLocaleString('id-ID')
+  const namaKaryawan = target.is_all_kary ? 'Semua Karyawan' : (target['m_kary.nama_lengkap'] || target['m_kary.nama_depan'] || target.karyawan || target.m_kary_nama || 'Karyawan')
+  const todayStr = new Date().toISOString().split('T')[0]
+
+  swal.fire({
+    title: 'Pelunasan Manual Piutang',
+    html: `<div class="text-left text-sm">
+             <p class="mb-3">Apakah Anda yakin ingin melakukan <b>Pelunasan Manual di Luar Sistem</b> untuk piutang nomor <b>${target.nomor || '-'}</b>?</p>
+             <div class="bg-gray-100 p-3 rounded border space-y-1 mb-3">
+               <div><b>Karyawan:</b> ${namaKaryawan}</div>
+               <div><b>Sisa Angsuran:</b> <span class="text-red-600 font-bold">${nominalStr}</span></div>
+             </div>
+             <div class="mb-3">
+               <label class="block text-xs font-semibold text-gray-700 mb-1">Tanggal Pelunasan (Bisa Disesuaikan):</label>
+               <input type="date" id="swal_paid_at" value="${todayStr}" class="w-full border border-gray-300 rounded px-2.5 py-1.5 text-sm focus:ring-2 focus:ring-emerald-500 focus:outline-none" />
+               <small class="text-gray-500 text-[11px] mt-0.5 block">*Default hari ini, ubah jika pembayaran riil diterima pada tanggal lain.</small>
+             </div>
+             <p class="text-xs text-gray-500 mt-2 leading-relaxed">
+               Aksi ini digunakan apabila karyawan (misal: resign) melunasi sisa kasbon langsung di luar payroll rutin. Status piutang akan langsung berubah menjadi <b>LUNAS</b>.
+             </p>
+           </div>`,
+    icon: 'question',
+    showCancelButton: true,
+    confirmButtonText: 'Ya, Lunasi Sekarang',
+    cancelButtonText: 'Batal',
+    confirmButtonColor: '#10B981',
+    cancelButtonColor: '#EF4444',
+    preConfirm: () => {
+      const paidAtInput = document.getElementById('swal_paid_at')
+      const paidAt = paidAtInput ? paidAtInput.value : ''
+      if (!paidAt) {
+        if (typeof swal.showValidationMessage === 'function') {
+          swal.showValidationMessage('Tanggal pelunasan wajib diisi')
+        }
+        return false
+      }
+      return { paid_at: paidAt }
+    }
+  }).then(async (result) => {
+    if (result.isConfirmed) {
+      try {
+        isRequesting.value = true
+        const paidAtVal = result.value?.paid_at || document.getElementById('swal_paid_at')?.value || todayStr
+        const dataURL = `${store.server.url_backend}/operation${endpointApi}/pelunasanManual`
+        const res = await fetch(dataURL, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'Application/json',
+            Authorization: `${store.user.token_type} ${store.user.token}`
+          },
+          body: JSON.stringify({ 
+            id: target.id,
+            paid_at: paidAtVal
+          })
+        })
+        const resJson = await res.json().catch(() => null)
+        if (!res.ok) {
+          throw (resJson?.error || resJson?.message || 'Gagal melakukan pelunasan manual')
+        }
+        swal.fire({
+          icon: 'success',
+          title: 'Berhasil',
+          text: resJson?.message || 'Piutang berhasil dilunasi secara manual'
+        })
+        if (apiTable.value) {
+          apiTable.value.reload()
+        }
+        if (typeof values !== 'undefined' && values && route.params?.id) {
+          values.is_lunas = 1
+          values.status_bayar = 'LUNAS MANUAL'
+          values.sisa_angsuran = 0
+        }
+      } catch (err) {
+        swal.fire({
+          icon: 'error',
+          title: 'Gagal',
+          text: typeof err === 'string' ? err : (err?.message || 'Terjadi kesalahan sistem')
+        })
+      } finally {
+        isRequesting.value = false
+      }
+    }
+  })
+}
+
+async function showHistoryBayar(row) {
+  const selectedRow = Array.isArray(row) ? row[0] : (row?.data || row)
+  const id = selectedRow?.id || route.params?.id
+
+  if (!id) {
+    swal.fire({
+      icon: 'warning',
+      title: 'Peringatan',
+      text: 'Pilih data transaksi terlebih dahulu untuk melihat riwayat pembayaran.'
+    })
+    return
+  }
+
+  try {
+    isRequesting.value = true
+    const dataURL = `${store.server.url_backend}/operation${endpointApi}/getHistoryBayar?id=${id}`
+    const res = await fetch(dataURL, {
+      method: 'GET',
+      headers: {
+        'Content-Type': 'Application/json',
+        Authorization: `${store.user.token_type} ${store.user.token}`
+      }
+    })
+    const resJson = await res.json().catch(() => null)
+    if (!res.ok) {
+      throw (resJson?.error || resJson?.message || `HTTP ${res.status}: Gagal mengambil riwayat pembayaran`)
+    }
+
+    const { potongan, history } = resJson
+    const fallbackNama = typeof values !== 'undefined' ? (values.m_kary_nama || values['m_kary.nama_lengkap']) : null
+    const namaKaryawan = selectedRow?.is_all_kary ? 'Semua Karyawan' : (selectedRow?.['m_kary.nama_lengkap'] || selectedRow?.['m_kary.nama_depan'] || selectedRow?.karyawan || fallbackNama || 'Karyawan')
+
+    let rowsHtml = ''
+    if (!history || history.length === 0) {
+      rowsHtml = `<tr><td colspan="4" class="text-center py-4 text-gray-500 italic">Belum ada catatan pemotongan atau pembayaran untuk piutang ini.</td></tr>`
+    } else {
+      rowsHtml = history.map((item) => `
+        <tr class="border-b hover:bg-gray-50 text-xs">
+          <td class="py-2.5 px-3 text-center font-medium">${item.no}</td>
+          <td class="py-2.5 px-3 text-center">${item.paid_date}</td>
+          <td class="py-2.5 px-3">
+            <span class="${item.metode === 'POTONG GAJI' ? 'text-blue-700 bg-blue-50 border border-blue-200' : 'text-emerald-700 bg-emerald-50 border border-emerald-200'} px-2 py-0.5 rounded font-semibold text-[11px]">
+              ${item.metode}
+            </span>
+            <div class="text-[11px] text-gray-500 mt-1">${item.keterangan}</div>
+          </td>
+          <td class="py-2.5 px-3 text-right font-bold text-gray-800">${item.nilai_formatted}</td>
+        </tr>
+      `).join('')
+    }
+
+    const modalHtml = `
+      <div class="text-left text-sm space-y-3">
+        <div class="bg-gray-50 p-3.5 rounded-lg border text-xs grid grid-cols-2 gap-2.5">
+          <div><span class="text-gray-500">Nomor Piutang:</span> <b class="text-gray-800">${potongan.nomor || '-'}</b></div>
+          <div><span class="text-gray-500">Karyawan:</span> <b class="text-gray-800">${namaKaryawan}</b></div>
+          <div><span class="text-gray-500">Total Pinjaman:</span> <b class="text-gray-800">${potongan.nilai_formatted}</b></div>
+          <div><span class="text-gray-500">Total Terbayar:</span> <b class="text-emerald-600">${potongan.total_bayar_formatted}</b></div>
+          <div><span class="text-gray-500">Sisa Angsuran:</span> <b class="${potongan.is_lunas ? 'text-gray-500' : 'text-red-600 font-bold'}">${potongan.sisa_formatted}</b></div>
+          <div><span class="text-gray-500">Status Pelunasan:</span> <span class="font-bold ${potongan.is_lunas ? 'text-emerald-600' : 'text-orange-600'}">${potongan.status_bayar}</span></div>
+        </div>
+
+        <div class="border rounded-lg overflow-hidden max-h-64 overflow-y-auto">
+          <table class="w-full text-left border-collapse">
+            <thead class="bg-gray-100 text-gray-700 text-xs font-semibold uppercase sticky top-0">
+              <tr>
+                <th class="py-2.5 px-3 text-center w-12">No</th>
+                <th class="py-2.5 px-3 text-center w-28">Tgl Bayar</th>
+                <th class="py-2.5 px-3">Metode / Keterangan</th>
+                <th class="py-2.5 px-3 text-right w-36">Nominal</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${rowsHtml}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    `
+
+    swal.fire({
+      title: 'Riwayat Pembayaran & Pelunasan',
+      html: modalHtml,
+      width: '620px',
+      showCloseButton: true,
+      confirmButtonText: 'Tutup',
+      confirmButtonColor: '#3B82F6'
+    })
+  } catch (err) {
+    swal.fire({
+      icon: 'error',
+      title: 'Gagal Memuat Riwayat',
+      text: typeof err === 'string' ? err : (err.message || 'Terjadi kesalahan sistem')
+    })
+  } finally {
+    isRequesting.value = false
+  }
+}
+
 //  @if( $id )------------------- VALUES FORM ! PENTING JANGAN DIHAPUS
 let initialValues = {}
 const changedValues = []
@@ -193,204 +391,6 @@ async function onSave() {
     })
   }
   isRequesting.value = false
-}
-
-
-function pelunasanManual(row) {
-  const target = (Array.isArray(row) ? row[0] : (row?.data || row)) || (values?.id ? values : null)
-
-  if (!target || !target.id) {
-    swal.fire({
-      icon: 'warning',
-      title: 'Peringatan',
-      text: 'Pilih data transaksi terlebih dahulu untuk melakukan pelunasan manual.'
-    })
-    return
-  }
-
-  const rawSisa = target.sisa_angsuran !== undefined ? target.sisa_angsuran : (target.nilai || 0)
-  const numSisa = Number(String(rawSisa).replace(/[^0-9.-]/g, '')) || 0
-  const nominalStr = 'Rp ' + numSisa.toLocaleString('id-ID')
-  const namaKaryawan = target.is_all_kary ? 'Semua Karyawan' : (target['m_kary.nama_lengkap'] || target['m_kary.nama_depan'] || target.karyawan || target.m_kary_nama || 'Karyawan')
-  const todayStr = new Date().toISOString().split('T')[0]
-
-  swal.fire({
-    title: 'Pelunasan Manual Piutang',
-    html: `<div class="text-left text-sm">
-             <p class="mb-3">Apakah Anda yakin ingin melakukan <b>Pelunasan Manual di Luar Sistem</b> untuk piutang nomor <b>${target.nomor || '-'}</b>?</p>
-             <div class="bg-gray-100 p-3 rounded border space-y-1 mb-3">
-               <div><b>Karyawan:</b> ${namaKaryawan}</div>
-               <div><b>Sisa Angsuran:</b> <span class="text-red-600 font-bold">${nominalStr}</span></div>
-             </div>
-             <div class="mb-3">
-               <label class="block text-xs font-semibold text-gray-700 mb-1">Tanggal Pelunasan (Bisa Disesuaikan):</label>
-               <input type="date" id="swal_paid_at" value="${todayStr}" class="w-full border border-gray-300 rounded px-2.5 py-1.5 text-sm focus:ring-2 focus:ring-emerald-500 focus:outline-none" />
-               <small class="text-gray-500 text-[11px] mt-0.5 block">*Default hari ini, ubah jika pembayaran riil diterima pada tanggal lain.</small>
-             </div>
-             <p class="text-xs text-gray-500 mt-2 leading-relaxed">
-               Aksi ini digunakan apabila karyawan (misal: resign) melunasi sisa kasbon langsung di luar payroll rutin. Status piutang akan langsung berubah menjadi <b>LUNAS</b>.
-             </p>
-           </div>`,
-    icon: 'question',
-    showCancelButton: true,
-    confirmButtonText: 'Ya, Lunasi Sekarang',
-    cancelButtonText: 'Batal',
-    confirmButtonColor: '#10B981',
-    cancelButtonColor: '#EF4444',
-    preConfirm: () => {
-      const paidAtInput = document.getElementById('swal_paid_at')
-      const paidAt = paidAtInput ? paidAtInput.value : ''
-      if (!paidAt) {
-        if (typeof swal.showValidationMessage === 'function') {
-          swal.showValidationMessage('Tanggal pelunasan wajib diisi')
-        }
-        return false
-      }
-      return { paid_at: paidAt }
-    }
-  }).then(async (result) => {
-    if (result.isConfirmed) {
-      try {
-        isRequesting.value = true
-        const paidAtVal = result.value?.paid_at || document.getElementById('swal_paid_at')?.value || todayStr
-        const dataURL = `${store.server.url_backend}/operation${endpointApi}/pelunasanManual`
-        const res = await fetch(dataURL, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'Application/json',
-            Authorization: `${store.user.token_type} ${store.user.token}`
-          },
-          body: JSON.stringify({ 
-            id: target.id,
-            paid_at: paidAtVal
-          })
-        })
-        const resJson = await res.json().catch(() => null)
-        if (!res.ok) {
-          throw (resJson?.error || resJson?.message || 'Gagal melakukan pelunasan manual')
-        }
-        swal.fire({
-          icon: 'success',
-          title: 'Berhasil',
-          text: resJson?.message || 'Piutang berhasil dilunasi secara manual'
-        })
-        if (apiTable.value) {
-          apiTable.value.reload()
-        }
-        if (route.params.id) {
-          values.is_lunas = 1
-          values.status_bayar = 'LUNAS MANUAL'
-          values.sisa_angsuran = 0
-        }
-      } catch (err) {
-        swal.fire({
-          icon: 'error',
-          title: 'Gagal',
-          text: typeof err === 'string' ? err : (err?.message || 'Terjadi kesalahan sistem')
-        })
-      } finally {
-        isRequesting.value = false
-      }
-    }
-  })
-}
-
-async function showHistoryBayar(row) {
-  const selectedRow = Array.isArray(row) ? row[0] : (row?.data || row)
-  const id = selectedRow?.id || route.params.id
-
-  if (!id) {
-    swal.fire({
-      icon: 'warning',
-      title: 'Peringatan',
-      text: 'Pilih data transaksi terlebih dahulu untuk melihat riwayat pembayaran.'
-    })
-    return
-  }
-
-  try {
-    isRequesting.value = true
-    const dataURL = `${store.server.url_backend}/operation${endpointApi}/getHistoryBayar?id=${id}`
-    const res = await fetch(dataURL, {
-      method: 'GET',
-      headers: {
-        'Content-Type': 'Application/json',
-        Authorization: `${store.user.token_type} ${store.user.token}`
-      }
-    })
-    const resJson = await res.json().catch(() => null)
-    if (!res.ok) {
-      throw (resJson?.error || resJson?.message || `HTTP ${res.status}: Gagal mengambil riwayat pembayaran`)
-    }
-
-    const { potongan, history } = resJson
-    const namaKaryawan = selectedRow?.is_all_kary ? 'Semua Karyawan' : (selectedRow?.['m_kary.nama_lengkap'] || selectedRow?.['m_kary.nama_depan'] || selectedRow?.karyawan || values.m_kary_nama || values['m_kary.nama_lengkap'] || 'Karyawan')
-
-    let rowsHtml = ''
-    if (!history || history.length === 0) {
-      rowsHtml = `<tr><td colspan="4" class="text-center py-4 text-gray-500 italic">Belum ada catatan pemotongan atau pembayaran untuk piutang ini.</td></tr>`
-    } else {
-      rowsHtml = history.map((item) => `
-        <tr class="border-b hover:bg-gray-50 text-xs">
-          <td class="py-2.5 px-3 text-center font-medium">${item.no}</td>
-          <td class="py-2.5 px-3 text-center">${item.paid_date}</td>
-          <td class="py-2.5 px-3">
-            <span class="${item.metode === 'POTONG GAJI' ? 'text-blue-700 bg-blue-50 border border-blue-200' : 'text-emerald-700 bg-emerald-50 border border-emerald-200'} px-2 py-0.5 rounded font-semibold text-[11px]">
-              ${item.metode}
-            </span>
-            <div class="text-[11px] text-gray-500 mt-1">${item.keterangan}</div>
-          </td>
-          <td class="py-2.5 px-3 text-right font-bold text-gray-800">${item.nilai_formatted}</td>
-        </tr>
-      `).join('')
-    }
-
-    const modalHtml = `
-      <div class="text-left text-sm space-y-3">
-        <div class="bg-gray-50 p-3.5 rounded-lg border text-xs grid grid-cols-2 gap-2.5">
-          <div><span class="text-gray-500">Nomor Piutang:</span> <b class="text-gray-800">${potongan.nomor || '-'}</b></div>
-          <div><span class="text-gray-500">Karyawan:</span> <b class="text-gray-800">${namaKaryawan}</b></div>
-          <div><span class="text-gray-500">Total Pinjaman:</span> <b class="text-gray-800">${potongan.nilai_formatted}</b></div>
-          <div><span class="text-gray-500">Total Terbayar:</span> <b class="text-emerald-600">${potongan.total_bayar_formatted}</b></div>
-          <div><span class="text-gray-500">Sisa Angsuran:</span> <b class="${potongan.is_lunas ? 'text-gray-500' : 'text-red-600 font-bold'}">${potongan.sisa_formatted}</b></div>
-          <div><span class="text-gray-500">Status Pelunasan:</span> <span class="font-bold ${potongan.is_lunas ? 'text-emerald-600' : 'text-orange-600'}">${potongan.status_bayar}</span></div>
-        </div>
-
-        <div class="border rounded-lg overflow-hidden max-h-64 overflow-y-auto">
-          <table class="w-full text-left border-collapse">
-            <thead class="bg-gray-100 text-gray-700 text-xs font-semibold uppercase sticky top-0">
-              <tr>
-                <th class="py-2.5 px-3 text-center w-12">No</th>
-                <th class="py-2.5 px-3 text-center w-28">Tgl Bayar</th>
-                <th class="py-2.5 px-3">Metode / Keterangan</th>
-                <th class="py-2.5 px-3 text-right w-36">Nominal</th>
-              </tr>
-            </thead>
-            <tbody>
-              ${rowsHtml}
-            </tbody>
-          </table>
-        </div>
-      </div>
-    `
-
-    swal.fire({
-      title: 'Riwayat Pembayaran & Pelunasan',
-      html: modalHtml,
-      width: '620px',
-      showCloseButton: true,
-      confirmButtonText: 'Tutup',
-      confirmButtonColor: '#3B82F6'
-    })
-  } catch (err) {
-    swal.fire({
-      icon: 'error',
-      title: 'Gagal Memuat Riwayat',
-      text: typeof err === 'string' ? err : (err.message || 'Terjadi kesalahan sistem')
-    })
-  } finally {
-    isRequesting.value = false
-  }
 }
 
 function onPelunasanManualForm() {
