@@ -112,7 +112,13 @@ function onReset() {
 }
 
 async function onSave() {
-  if (values.besaran === null || values.besaran === undefined || values.besaran === '' || Number(values.besaran) <= 0) {
+  let cleanBesaran = values.besaran
+  if (typeof cleanBesaran === 'string') {
+    cleanBesaran = cleanBesaran.replace(/\./g, '').replace(/,/g, '.')
+  }
+  const besaranNum = Number(cleanBesaran)
+
+  if (cleanBesaran === null || cleanBesaran === undefined || cleanBesaran === '' || isNaN(besaranNum) || besaranNum <= 0) {
     formErrors.value = { besaran: ['Tarif / Jam (Besaran) wajib diisi dengan nominal lebih dari 0'] }
     swal.fire({
       icon: 'error',
@@ -120,47 +126,71 @@ async function onSave() {
     })
     return
   }
-  //values.tags = JSON.stringify(values.tags)
-      try {
-        const isCreating = ['Create','Copy','Tambah'].includes(actionText.value)
-        const payload = {
-          ...values,
-          is_active: Boolean(values.is_active)
-        }
-        if (isCreating) {
-          delete payload.id
-          if (actionText.value === 'Copy' || route.query.action === 'Copy') {
-            payload.kode = null
-          }
-        }
-        const dataURL = `${store.server.url_backend}/operation${endpointApi}${isCreating ? '' : ('/' + route.params.id)}`
-        isRequesting.value = true
-        const res = await fetch(dataURL, {
-          method: isCreating ? 'POST' : 'PUT',
-          headers: {
-            'Content-Type': 'Application/json',
-            Authorization: `${store.user.token_type} ${store.user.token}`
-          },
-          body: JSON.stringify(payload)
-        })
-        if (!res.ok) {
-          if ([400, 422].includes(res.status)) {
-            const responseJson = await res.json()
-            formErrors.value = responseJson.errors || {}
-            throw (responseJson.errors.length ? responseJson.errors[0] : responseJson.message || "Failed when trying to post data")
-          } else {
-            throw ("Failed when trying to post data")
-          }
-        }
-        router.replace('/' + modulPath + '?reload='+(Date.parse(new Date())))
-      } catch (err) {
-        isBadForm.value = true
-        swal.fire({
-          icon: 'error',
-          text: err
-        })
+
+  try {
+    const isCreating = ['Create', 'Copy', 'Tambah'].includes(actionText.value)
+    const payload = {
+      m_dir_id: values.m_dir_id || null,
+      kode: values.kode || null,
+      m_divisi_id: values.m_divisi_id || null,
+      m_dept_id: values.m_dept_id || null,
+      grading_id: values.grading_id || null,
+      grading: values.grading || null,
+      besaran: besaranNum,
+      desc: values.desc || null,
+      is_active: (values.is_active === true || values.is_active === 1 || values.is_active === '1' || values.is_active === 'true' || values.is_active === 't') ? 1 : 0
+    }
+
+    if (isCreating) {
+      delete payload.id
+      if (actionText.value === 'Copy' || route.query.action === 'Copy') {
+        payload.kode = null
       }
-      isRequesting.value = false
+    } else {
+      payload.id = Number(route.params.id)
+    }
+
+    const dataURL = `${store.server.url_backend}/operation${endpointApi}${isCreating ? '' : ('/' + route.params.id)}`
+    isRequesting.value = true
+    const res = await fetch(dataURL, {
+      method: isCreating ? 'POST' : 'PUT',
+      headers: {
+        'Content-Type': 'Application/json',
+        Authorization: `${store.user.token_type} ${store.user.token}`
+      },
+      body: JSON.stringify(payload)
+    })
+
+    if (!res.ok) {
+      const responseJson = await res.json().catch(() => ({}))
+      formErrors.value = responseJson.errors || {}
+      let errMsg = responseJson.error || responseJson.message || 'Failed when trying to post data'
+      if (Array.isArray(responseJson.errors) && responseJson.errors.length) {
+        errMsg = responseJson.errors.join('\n')
+      } else if (typeof responseJson.errors === 'object' && responseJson.errors !== null && !Array.isArray(responseJson.errors)) {
+        const firstErrKey = Object.keys(responseJson.errors)[0]
+        if (firstErrKey && responseJson.errors[firstErrKey]) {
+          errMsg = Array.isArray(responseJson.errors[firstErrKey]) ? responseJson.errors[firstErrKey][0] : responseJson.errors[firstErrKey]
+        }
+      }
+      throw new Error(errMsg)
+    }
+
+    swal.fire({
+      icon: 'success',
+      text: 'Data tarif lembur berhasil disimpan!'
+    }).then(() => {
+      router.replace('/' + modulPath + '?reload=' + (Date.parse(new Date())))
+    })
+  } catch (err) {
+    isBadForm.value = true
+    swal.fire({
+      icon: 'error',
+      text: err.message || err || 'Terjadi kesalahan saat menyimpan data'
+    })
+  } finally {
+    isRequesting.value = false
+  }
 }
 
 // Filter Action Button
@@ -258,9 +288,6 @@ const landing = reactive({
       authorization: `${store.user.token_type} ${store.user.token}`
     },
     params: {
-      simplest: true,
-      join: true,
-      searchfield: 'this.kode, m_dir.nama, m_divisi.nama, m_dept.nama, this.grading, this.besaran, this.is_active',
     },
     onsuccess(response) {
       response.page = response.current_page
@@ -295,7 +322,8 @@ const landing = reactive({
     flex:1,
     filter: 'ColFilter',
     resizable: true,
-    cellClass: [ 'border-r', '!border-gray-200', 'justify-left']
+    cellClass: [ 'border-r', '!border-gray-200', 'justify-left'],
+    valueGetter: (params) => params.data?.['m_dir.nama'] || params.data?.m_dir?.nama || params.data?.direktorat || params.data?.company || store.user?.data?.direktorat || store.user?.data?.company || '-'
   },
   {
     field: 'm_divisi.nama',

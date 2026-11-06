@@ -102,8 +102,7 @@
                 params: {
                   simplest:true,
                   single:true,
-                  scopes: 'filterDivisi',
-                  divisi_id: values.m_divisi_id ?? null,
+                  where: values.m_divisi_id ? `m_divisi_id=${values.m_divisi_id} and this.is_active='true'` : `this.is_active='true'`,
                   transform:false,
                 }
             }"
@@ -119,6 +118,9 @@
             @input="(v)=>{
               values.grading_id=v
             }"
+            @update:valueFull="(item)=>{
+              values.grading = item?.value || null
+            }"
             :errorText="formErrors.grading_id?'failed':''"
             :hints="formErrors.grading_id"
             displayField="value"
@@ -131,7 +133,7 @@
                 params: {
                   simplest:true,
                   single:true,
-                  where:`this.is_active='true' and this.group='grading'`,
+                  where: `this.group = 'GRADING'`,
                   transform:false,
                 }
             }"
