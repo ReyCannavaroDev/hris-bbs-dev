@@ -168,7 +168,7 @@
           <label class="font-semibold">Alasan<span class="text-red-500 space-x-0 pl-0">*</span></label>
           <FieldSelect :bind="{ disabled: !actionText, clearable:false }" class="col-span-12 !mt-0 w-full"
             :value="values.alasan_id" @input="v=>values.alasan_id=v"
-            @update:valueFull="(e)=>{ values.alasan_string = e?.value || '' }"
+            @update:valueFull="(e)=>{ values.alasan_string = e?.value || ''; if (e?.value_2) { values.max_hari_berturut = parseInt(e.value_2, 10); } }"
             :errorText="formErrors.alasan_id?'failed':''"
             :hints="formErrors.alasan_id" label="" placeholder="Alasan" valueField="id" displayField="value" :api="{
               url: `${store.server.url_backend}/operation/m_general`,
@@ -181,7 +181,7 @@
               transform: false,
               join: true,
               where:`this.group='ALASAN CUTI' AND this.is_active='true'`,
-              selectfield: 'this.id, this.code, this.value, this.is_active'
+              selectfield: 'this.id, this.code, this.value, this.is_active, this.value_2'
               }
               }" :check="false" />
         </div>
@@ -192,10 +192,13 @@
             :value="values.tipe_cuti_id" @input="v=>values.tipe_cuti_id=v"
             :errorText="formErrors.tipe_cuti_id?'failed':''" :hints="formErrors.tipe_cuti_id" label=""
             @update:valueFull="(e)=>{
-              if(e.value?.toLowerCase() !== 'p24'){
+              if(e?.value?.toLowerCase() !== 'p24'){
                 values.date_to = null
               }
-              values.tipe_string = e.value
+              values.tipe_string = e?.value || ''
+              if (e?.value_2 && !values.max_hari_berturut) {
+                values.max_hari_berturut = parseInt(e.value_2, 10);
+              }
             }"
             placeholder="Tipe Cuti" valueField="id" displayField="value" :api="{
               url: `${store.server.url_backend}/operation/m_general`,
@@ -208,7 +211,7 @@
               transform: false,
               join: true,
               where:`this.group='TIPE CUTI' AND this.is_active='true'`,
-              selectfield: 'this.id, this.code, this.value, this.is_active'
+              selectfield: 'this.id, this.code, this.value, this.is_active, this.value_2'
               }
               }" :check="false" />
         </div>

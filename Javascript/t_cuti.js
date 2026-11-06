@@ -200,6 +200,7 @@ const values = reactive({
   alasan_string: '',
   tipe_string: '',
   attachment: null,
+  max_hari_berturut: null,
 })
 const totalDays = ref();
 
@@ -365,6 +366,9 @@ onBeforeMount(async () => {
   if (!values.tipe_string && initialValues['tipe_cuti.value']) {
     values.tipe_string = initialValues['tipe_cuti.value']
   }
+  if (!values.max_hari_berturut && (initialValues['alasan.value_2'] || initialValues['tipe_cuti.value_2'] || initialValues['m_general.value_2'])) {
+    values.max_hari_berturut = parseInt(initialValues['alasan.value_2'] || initialValues['tipe_cuti.value_2'] || initialValues['m_general.value_2'], 10);
+  }
   const nomorTrx = values.nomor || initialValues.nomor || values.trx?.nomor || ''
   const intvTrx = values.interval ?? initialValues.interval
   if (values.date_from) values.date_from = normalizeCutiDate(values.date_from, values.date_to, intvTrx, nomorTrx)
@@ -514,36 +518,32 @@ function onSave() {
       const diffTime = dTo.getTime() - dFrom.getTime();
       const diffDays = Math.round(diffTime / (1000 * 3600 * 24)) + 1;
 
-      if (isMelahirkan) {
-        // HANYA cuti melahirkan yang tidak dibatasi 3 hari (diperbolehkan hingga maksimal 3 bulan)
-        const maxDate = new Date(dFrom);
-        maxDate.setMonth(maxDate.getMonth() + 3);
-        if (dTo > maxDate) {
-          isBadForm.value = true;
-          swal.fire({
-            icon: 'error',
-            text: 'Pengajuan cuti melahirkan maksimal 3 bulan.',
-          });
-          return;
+      // Batas maksimal hari berturut-turut dinamis dari m_general value_2 (atau fallback cerdas)
+      let maxLimit = 3;
+      if (values.max_hari_berturut && parseInt(values.max_hari_berturut) > 0) {
+        maxLimit = parseInt(values.max_hari_berturut);
+      } else if (isMelahirkan) {
+        maxLimit = 90;
+      } else if (strCheck.includes('agama') || strCheck.includes('ibadah') || strCheck.includes('haji') || strCheck.includes('umroh')) {
+        maxLimit = 40;
+      }
+
+      if (diffDays > maxLimit) {
+        isBadForm.value = true;
+        let namaJenis = values.alasan_string || values.tipe_string || 'cuti';
+        let errMsg = `Pengajuan ${namaJenis} maksimal ${maxLimit} hari berturut-turut per pengajuan.`;
+        if (isSakit && maxLimit === 3) {
+          errMsg = 'Pengajuan izin sakit dengan Surat Keterangan Dokter (SKD) maksimal 3 hari kerja per pengajuan.';
+        } else if (isMenikah && maxLimit === 3) {
+          errMsg = 'Pengajuan cuti menikah maksimal 3 hari kerja.';
+        } else if (isMeninggal && maxLimit === 3) {
+          errMsg = 'Pengajuan cuti duka cita / keluarga meninggal maksimal 3 hari kerja.';
         }
-      } else {
-        // Sisanya (termasuk cuti sakit, menikah, duka cita, reguler, dll): paling maksimal 3 hari berurutan
-        if (diffDays > 3) {
-          isBadForm.value = true;
-          let errMsg = 'Pengambilan cuti maksimal 3 hari berturut-turut per pengajuan.';
-          if (isSakit) {
-            errMsg = 'Pengajuan izin sakit dengan Surat Keterangan Dokter (SKD) maksimal 3 hari kerja per pengajuan.';
-          } else if (isMenikah) {
-            errMsg = 'Pengajuan cuti menikah maksimal 3 hari kerja.';
-          } else if (isMeninggal) {
-            errMsg = 'Pengajuan cuti duka cita / keluarga meninggal maksimal 3 hari kerja.';
-          }
-          swal.fire({
-            icon: 'error',
-            text: errMsg,
-          });
-          return;
-        }
+        swal.fire({
+          icon: 'error',
+          text: errMsg,
+        });
+        return;
       }
     }
 

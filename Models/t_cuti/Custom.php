@@ -129,11 +129,24 @@ class t_cuti extends \App\Models\BasicModels\t_cuti
         if (!$dateFrom || !$dateTo) return 1;
 
         $period = CarbonPeriod::create($dateFrom, $dateTo);
-        $tanggalMerah = \DB::table('m_libur_nasional')->pluck('tanggal')->toArray();
+        // Libur nasional murni (is_cuti_bersama = 0 atau false/null) TIDAK memotong cuti tahunan (di-skip)
+        // Sedangkan Cuti Bersama (is_cuti_bersama = 1) MEMOTONG cuti tahunan (tetap dihitung sebagai hari cuti)
+        $liburNasionalMurni = \DB::table('m_libur_nasional')
+            ->where('is_active', true)
+            ->where(function($q) {
+                $q->whereNull('is_cuti_bersama')
+                  ->orWhere('is_cuti_bersama', false)
+                  ->orWhere('is_cuti_bersama', 0);
+            })
+            ->pluck('tanggal')
+            ->map(function($t) { return date('Y-m-d', strtotime($t)); })
+            ->toArray();
+
         $businessDays = 0;
 
         foreach ($period as $date) {
-            if ($date->dayOfWeek != Carbon::SUNDAY && !in_array($date->format('Y-m-d'), $tanggalMerah)) {
+            $tglStr = $date->format('Y-m-d');
+            if ($date->dayOfWeek != Carbon::SUNDAY && !in_array($tglStr, $liburNasionalMurni)) {
                 $businessDays++;
             }
         }
@@ -147,19 +160,30 @@ class t_cuti extends \App\Models\BasicModels\t_cuti
             $dateFrom = Carbon::parse($from);
             $dateTo = Carbon::parse($to);
         }else{
-             $dateFrom = Carbon::createFromFormat('d/m/Y', $from);
+            $dateFrom = Carbon::createFromFormat('d/m/Y', $from);
             $dateTo = Carbon::createFromFormat('d/m/Y', $to);
         }
 
         // Membuat rentang tanggal antara date_from dan date_to
         $period = CarbonPeriod::create($dateFrom, $dateTo);
 
-        // Menghitung jumlah hari kerja
-        $tanggalMerah = \DB::table('m_libur_nasional')->pluck('tanggal')->toArray();
+        // Menghitung jumlah hari kerja: Hari Minggu & Libur Nasional murni di-skip, Cuti Bersama tetap dihitung
+        $liburNasionalMurni = \DB::table('m_libur_nasional')
+            ->where('is_active', true)
+            ->where(function($q) {
+                $q->whereNull('is_cuti_bersama')
+                  ->orWhere('is_cuti_bersama', false)
+                  ->orWhere('is_cuti_bersama', 0);
+            })
+            ->pluck('tanggal')
+            ->map(function($t) { return date('Y-m-d', strtotime($t)); })
+            ->toArray();
+
         $businessDays = 0;
 
         foreach ($period as $date) {
-            if ($date->dayOfWeek != Carbon::SUNDAY && !in_array($date->format('Y-m-d'), $tanggalMerah)) {
+            $tglStr = $date->format('Y-m-d');
+            if ($date->dayOfWeek != Carbon::SUNDAY && !in_array($tglStr, $liburNasionalMurni)) {
                 $businessDays++;
             }
         }
@@ -201,92 +225,62 @@ class t_cuti extends \App\Models\BasicModels\t_cuti
         $isSakit = str_contains($checkStr, 'sakit');
         $isMenikah = str_contains($checkStr, 'nikah') || str_contains($checkStr, 'menikah');
         $isMeninggal = str_contains($checkStr, 'meninggal') || str_contains($checkStr, 'kematian') || str_contains($checkStr, 'duka');
-        // HANYA yang alasan cutinya melahirkan yang tidak mempunyai validasi 3 hari
         $isMelahirkan = str_contains($alasanStr, 'lahir') || str_contains($alasanStr, 'melahirkan') || str_contains($alasanStr, 'bersalin') || str_contains($checkStr, 'melahirkan');
+        $isKeagamaan = str_contains($checkStr, 'agama') || str_contains($checkStr, 'keagamaan') || str_contains($checkStr, 'ibadah') || str_contains($checkStr, 'haji') || str_contains($checkStr, 'umroh');
 
         if ($isP24) {
-            // Izin parsial jam-jaman (P24) tidak dibatasi 3 hari harian
+            // Izin parsial jam-jaman (P24) tidak dibatasi hari
             return null;
         }
 
         $durasiHari = (int) ($interval ?? 1);
 
-        // 1. Izin Khusus: Melahirkan - maksimal 3 bulan & tidak memotong kuota cuti tahunan
-        if ($isMelahirkan) {
-            $dateFrom = $this->parseCarbonDate($arrayData['date_from'] ?? null);
-            $dateTo   = $this->parseCarbonDate($arrayData['date_to'] ?? null);
-            if ($dateFrom && $dateTo) {
-                $maxDate = (clone $dateFrom)->addMonths(3);
-                if ($dateTo->gt($maxDate)) {
-                    return response([
-                        "status"  => "error",
-                        "message" => "Pengajuan cuti melahirkan maksimal 3 bulan.",
-                        "errors"  => ["date_to" => ["Pengajuan cuti melahirkan maksimal 3 bulan."]]
-                    ], 422);
-                }
-            } elseif ($durasiHari > 95) {
-                return response([
-                    "status"  => "error",
-                    "message" => "Pengajuan cuti melahirkan maksimal 3 bulan.",
-                    "errors"  => ["interval" => ["Pengajuan cuti melahirkan maksimal 3 bulan."]]
-                ], 422);
-            }
-            return null; // Cuti melahirkan tidak memotong kuota cuti tahunan
+        // Ambil batas maksimal hari berturut-turut secara dinamis dari m_general kolom value_2
+        $maxHariBerturut = null;
+        if (!empty($alasanObj->value_2) && is_numeric(trim($alasanObj->value_2))) {
+            $maxHariBerturut = (int) trim($alasanObj->value_2);
+        } elseif (!empty($tipeObj->value_2) && is_numeric(trim($tipeObj->value_2))) {
+            $maxHariBerturut = (int) trim($tipeObj->value_2);
         }
 
-        // 2. Izin Khusus: Sakit (SKD) - maksimal 3 hari kerja & wajib upload surat dokter
-        if ($isSakit) {
-            if ($durasiHari > 3) {
-                return response([
-                    "status"  => "error",
-                    "message" => "Pengajuan izin sakit dengan Surat Keterangan Dokter (SKD) maksimal 3 hari kerja per pengajuan.",
-                    "errors"  => ["interval" => ["Pengajuan izin sakit dengan Surat Keterangan Dokter (SKD) maksimal 3 hari kerja per pengajuan."]]
-                ], 422);
+        // Fallback default cerdas jika value_2 belum diatur di database m_general
+        if (!$maxHariBerturut || $maxHariBerturut <= 0) {
+            if ($isMelahirkan) {
+                $maxHariBerturut = 90; // Default 3 bulan (90 hari) untuk cuti melahirkan
+            } elseif ($isKeagamaan) {
+                $maxHariBerturut = 40; // Default 40 hari untuk ibadah haji/keagamaan
+            } else {
+                $maxHariBerturut = 3;  // Default 3 hari berturut-turut untuk cuti reguler/izin lainnya
             }
-            if (empty($arrayData['attachment'])) {
-                return response([
-                    "status"  => "error",
-                    "message" => "Pengajuan izin sakit wajib melampirkan Surat Keterangan Dokter (SKD).",
-                    "errors"  => ["attachment" => ["Pengajuan izin sakit wajib melampirkan Surat Keterangan Dokter (SKD)."]]
-                ], 422);
-            }
-            return null; // Izin khusus sakit tidak memotong kuota cuti reguler
         }
 
-        // 2. Izin Khusus: Menikah - maksimal 3 hari kerja
-        if ($isMenikah) {
-            if ($durasiHari > 3) {
-                return response([
-                    "status"  => "error",
-                    "message" => "Pengajuan cuti menikah maksimal 3 hari kerja.",
-                    "errors"  => ["interval" => ["Pengajuan cuti menikah maksimal 3 hari kerja."]]
-                ], 422);
-            }
-            return null; // Izin khusus menikah tidak memotong kuota cuti reguler
-        }
+        $namaCuti = $alasanObj->value ?? ($tipeObj->value ?? 'cuti');
 
-        // 3. Izin Khusus: Keluarga Meninggal - maksimal 3 hari kerja
-        if ($isMeninggal) {
-            if ($durasiHari > 3) {
-                return response([
-                    "status"  => "error",
-                    "message" => "Pengajuan cuti duka cita / keluarga meninggal maksimal 3 hari kerja.",
-                    "errors"  => ["interval" => ["Pengajuan cuti duka cita / keluarga meninggal maksimal 3 hari kerja."]]
-                ], 422);
-            }
-            return null; // Izin khusus duka cita tidak memotong kuota cuti reguler
-        }
-
-        // 4. Cuti Reguler / Tahunan (MoM Poin 5: Maksimal 3 hari berturut-turut & potong kuota 12 hari)
-        if ($durasiHari > 3) {
+        // Validasi batas maksimal hari berturut-turut dinamis
+        if ($durasiHari > $maxHariBerturut) {
             return response([
                 "status"  => "error",
-                "message" => "Pengambilan cuti selain melahirkan maksimal 3 hari berturut-turut per pengajuan.",
-                "errors"  => ["interval" => ["Pengambilan cuti selain melahirkan maksimal 3 hari berturut-turut per pengajuan."]]
+                "message" => "Pengajuan {$namaCuti} maksimal {$maxHariBerturut} hari berturut-turut per pengajuan.",
+                "errors"  => ["interval" => ["Pengajuan {$namaCuti} maksimal {$maxHariBerturut} hari berturut-turut per pengajuan."]]
             ], 422);
         }
 
-        // Cek sisa kuota cuti tahunan karyawan
+        // Cek syarat khusus dokumen lampiran surat dokter untuk izin sakit
+        if ($isSakit && empty($arrayData['attachment'])) {
+            return response([
+                "status"  => "error",
+                "message" => "Pengajuan izin sakit wajib melampirkan Surat Keterangan Dokter (SKD).",
+                "errors"  => ["attachment" => ["Pengajuan izin sakit wajib melampirkan Surat Keterangan Dokter (SKD)."]]
+            ], 422);
+        }
+
+        // Izin Khusus (Melahirkan, Keagamaan, Sakit SKD, Menikah, Duka Cita, P24): TIDAK memotong kuota 12 hari cuti reguler tahunan
+        $isKhusus = $isMelahirkan || $isKeagamaan || $isSakit || $isMenikah || $isMeninggal || $isP24;
+        if ($isKhusus) {
+            return null;
+        }
+
+        // Cuti Reguler / Tahunan: Memotong kuota 12 hari cuti reguler tahunan karyawan
         $kary = \DB::table('m_kary')->where('id', $karyId)->first();
         if ($kary) {
             $sisaCuti = (int) ($kary->cuti_sisa_reguler ?? 12);
@@ -581,6 +575,11 @@ class t_cuti extends \App\Models\BasicModels\t_cuti
                                     str_contains($checkStr, 'melahirkan') ||
                                     str_contains($checkStr, 'bersalin') ||
                                     str_contains($checkStr, 'persalinan') ||
+                                    str_contains($checkStr, 'agama') ||
+                                    str_contains($checkStr, 'keagamaan') ||
+                                    str_contains($checkStr, 'ibadah') ||
+                                    str_contains($checkStr, 'haji') ||
+                                    str_contains($checkStr, 'umroh') ||
                                     str_contains($checkStr, 'p24') ||
                                     (!empty($data->time_from) && !empty($data->time_to));
 
