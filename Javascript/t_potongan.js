@@ -197,15 +197,27 @@ async function onSave() {
 
 
 function pelunasanManual(row) {
-  const sisa = row.sisa_angsuran !== undefined ? row.sisa_angsuran : (row.nilai || 0)
-  const namaKaryawan = row.is_all_kary ? 'Semua Karyawan' : (row['m_kary.nama_lengkap'] || row['m_kary.nama_depan'] || row.karyawan || 'Karyawan')
-  const nominalStr = 'Rp ' + Number(sisa).toLocaleString('id-ID')
+  const target = (Array.isArray(row) ? row[0] : (row?.data || row)) || (values?.id ? values : null)
+
+  if (!target || !target.id) {
+    swal.fire({
+      icon: 'warning',
+      title: 'Peringatan',
+      text: 'Pilih data transaksi terlebih dahulu untuk melakukan pelunasan manual.'
+    })
+    return
+  }
+
+  const rawSisa = target.sisa_angsuran !== undefined ? target.sisa_angsuran : (target.nilai || 0)
+  const numSisa = Number(String(rawSisa).replace(/[^0-9.-]/g, '')) || 0
+  const nominalStr = 'Rp ' + numSisa.toLocaleString('id-ID')
+  const namaKaryawan = target.is_all_kary ? 'Semua Karyawan' : (target['m_kary.nama_lengkap'] || target['m_kary.nama_depan'] || target.karyawan || target.m_kary_nama || 'Karyawan')
   const todayStr = new Date().toISOString().split('T')[0]
 
   swal.fire({
     title: 'Pelunasan Manual Piutang',
     html: `<div class="text-left text-sm">
-             <p class="mb-3">Apakah Anda yakin ingin melakukan <b>Pelunasan Manual di Luar Sistem</b> untuk piutang nomor <b>${row.nomor || '-'}</b>?</p>
+             <p class="mb-3">Apakah Anda yakin ingin melakukan <b>Pelunasan Manual di Luar Sistem</b> untuk piutang nomor <b>${target.nomor || '-'}</b>?</p>
              <div class="bg-gray-100 p-3 rounded border space-y-1 mb-3">
                <div><b>Karyawan:</b> ${namaKaryawan}</div>
                <div><b>Sisa Angsuran:</b> <span class="text-red-600 font-bold">${nominalStr}</span></div>
@@ -229,7 +241,9 @@ function pelunasanManual(row) {
       const paidAtInput = document.getElementById('swal_paid_at')
       const paidAt = paidAtInput ? paidAtInput.value : ''
       if (!paidAt) {
-        swal.showValidationMessage('Tanggal pelunasan wajib diisi')
+        if (typeof swal.showValidationMessage === 'function') {
+          swal.showValidationMessage('Tanggal pelunasan wajib diisi')
+        }
         return false
       }
       return { paid_at: paidAt }
@@ -238,6 +252,7 @@ function pelunasanManual(row) {
     if (result.isConfirmed) {
       try {
         isRequesting.value = true
+        const paidAtVal = result.value?.paid_at || document.getElementById('swal_paid_at')?.value || todayStr
         const dataURL = `${store.server.url_backend}/operation${endpointApi}/pelunasanManual`
         const res = await fetch(dataURL, {
           method: 'POST',
@@ -246,18 +261,18 @@ function pelunasanManual(row) {
             Authorization: `${store.user.token_type} ${store.user.token}`
           },
           body: JSON.stringify({ 
-            id: row.id,
-            paid_at: result.value?.paid_at
+            id: target.id,
+            paid_at: paidAtVal
           })
         })
-        const resJson = await res.json()
+        const resJson = await res.json().catch(() => null)
         if (!res.ok) {
-          throw (resJson.error || resJson.message || 'Gagal melakukan pelunasan manual')
+          throw (resJson?.error || resJson?.message || 'Gagal melakukan pelunasan manual')
         }
         swal.fire({
           icon: 'success',
           title: 'Berhasil',
-          text: resJson.message || 'Piutang berhasil dilunasi secara manual'
+          text: resJson?.message || 'Piutang berhasil dilunasi secara manual'
         })
         if (apiTable.value) {
           apiTable.value.reload()
@@ -271,7 +286,7 @@ function pelunasanManual(row) {
         swal.fire({
           icon: 'error',
           title: 'Gagal',
-          text: typeof err === 'string' ? err : (err.message || 'Terjadi kesalahan sistem')
+          text: typeof err === 'string' ? err : (err?.message || 'Terjadi kesalahan sistem')
         })
       } finally {
         isRequesting.value = false
@@ -485,7 +500,10 @@ const landing = reactive({
       icon: 'check-circle',
       title: "Pelunasan Manual",
       class: 'bg-emerald-600 rounded-lg text-white',
-      show: (row) => row.status?.toUpperCase() === 'POSTED' && !row.is_lunas,
+      show: (row) => {
+        const r = Array.isArray(row) ? row[0] : row
+        return r?.status?.toUpperCase() === 'POSTED' && !r?.is_lunas
+      },
       click(row) {
         pelunasanManual(row)
       }
@@ -494,7 +512,10 @@ const landing = reactive({
       icon: 'history',
       title: "Riwayat Pembayaran",
       class: 'bg-blue-600 rounded-lg text-white',
-      show: (row) => row.status?.toUpperCase() === 'POSTED',
+      show: (row) => {
+        const r = Array.isArray(row) ? row[0] : row
+        return r?.status?.toUpperCase() === 'POSTED'
+      },
       click(row) {
         showHistoryBayar(row)
       }
