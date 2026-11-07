@@ -259,7 +259,9 @@
               cellClass: ['!border-gray-200']
             }
           ]"
-        />
+        >
+          <template #header></template>
+        </TableStatic>
       </div>
 
       <!-- ACTION BUTTONS -->

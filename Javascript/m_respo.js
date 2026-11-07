@@ -17,21 +17,12 @@ const currentMenu = store.currentMenu
 const apiTable = ref(null)
 const formErrors = ref({})
 const tsId = `ts=`+(Date.parse(new Date()))
-const activeBtn = ref(1)
-
 // ------------------------------ PERSIAPAN
 const endpointApi = '/m_respo'
 
 onBeforeMount(()=>{
   document.title = 'Master Responsibility'
 })
-
-const filterShowData = (val, id) => {
-  activeBtn.value = id
-  if (apiTable.value) {
-    apiTable.value.filter('is_active', val)
-  }
-}
 
 //  @if( $id )------------------- VALUES FORM ! PENTING JANGAN DIHAPUS
 let initialValues = {}
@@ -190,6 +181,22 @@ async function onSave() {
 }
 
 //  @else----------------------- LANDING
+const activeBtn = ref(null)
+
+function filterShowData(params, noBtn) {
+  if (activeBtn.value === noBtn) {
+    activeBtn.value = null
+    landing.api.params.where = null
+  } else {
+    activeBtn.value = noBtn
+    landing.api.params.where = `this.is_active=${params ? 'true' : 'false'}`
+  }
+
+  if (apiTable.value) {
+    apiTable.value.reload()
+  }
+}
+
 const landing = reactive({
   actions: [
     {
@@ -311,4 +318,16 @@ const landing = reactive({
     }
   ]
 })
+
+onActivated(() => {
+  // reload table api landing
+  if (apiTable.value) {
+    if (route.query.reload) {
+      apiTable.value.reload()
+    }
+  }
+})
+
+//  @endif -------------------------------------------------END
+watchEffect(() => store.commit('set', ['isRequesting', isRequesting.value]))
 
