@@ -17,3 +17,4 @@ workspace ini bukan aplikasi laravel lengkap dan tidak ditujukan untuk dijalanka
 5. sebelum mengubah query atau join, periksa tipe kolom dan relasi pada migration, alter, basic, serta custom.
 6. jangan menaruh credential, token, `.env`, data pribadi karyawan, atau akses database ke workspace.
 7. setiap perbaikan harus mencantumkan file yang diubah, penyebab, perubahan kode, dampak, dan langkah pengujian.
+8. dilarang menjalankan perintah git add, git commit, dan git push. seluruh pengelolaan git dilakukan secara manual oleh user.
