@@ -315,7 +315,7 @@
             <template v-if="detailArrOpen.items && detailArrOpen.items.length">
               <tr v-for="(spk, idx) in detailArrOpen.items" :key="idx" class="border hover:bg-gray-50">
                 <td class="text-center border p-2">{{ idx + 1 }}</td>
-                <td class="text-center border p-2">{{ spk.tanggal }}</td>
+                <td class="text-center border p-2">{{ formatDateDisplay(spk.tanggal) }}</td>
                 <td class="text-left border p-2 font-mono text-xs">{{ spk.nomor }}</td>
                 <td class="text-left border p-2">{{ spk.tipe_lembur }}</td>
                 <td class="text-center border p-2">{{ spk.jam_mulai }} - {{ spk.jam_selesai }}</td>

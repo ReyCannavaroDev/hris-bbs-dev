@@ -39,6 +39,11 @@ function openDetailFromLanding(row) {
   if (typeof dataFormat === 'string') {
     try { dataFormat = JSON.parse(dataFormat) } catch (e) { dataFormat = [] }
   }
+  if (Array.isArray(dataFormat)) {
+    dataFormat.forEach(item => {
+      if (item.tanggal) item.tanggal = formatDateDisplay(item.tanggal)
+    })
+  }
   detailArrOpen.items = Array.isArray(dataFormat) ? dataFormat : []
   modalOpen.value = true
 }
@@ -49,6 +54,11 @@ function openDetail(i) {
   let dataFormat = item?.detail_lembur ?? []
   if (typeof dataFormat === 'string') {
     try { dataFormat = JSON.parse(dataFormat) } catch (e) { dataFormat = [] }
+  }
+  if (Array.isArray(dataFormat)) {
+    dataFormat.forEach(item => {
+      if (item.tanggal) item.tanggal = formatDateDisplay(item.tanggal)
+    })
   }
   detailArrOpen.items = Array.isArray(dataFormat) ? dataFormat : []
   modalOpen.value = true

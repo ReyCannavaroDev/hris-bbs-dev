@@ -286,10 +286,22 @@ onBeforeMount(async () => {
       const image_checkin = initialValues.checkin_foto?.replace(regex, '$1')
       const image_checkout = initialValues.checkout_foto?.replace(regex, '$1')
       initialValues.checkin_foto = image_checkin
-      const segments = new URL(initialValues.checkout_foto).pathname.split('/').filter(Boolean)
-      if(segments.length === 0){
-        isCheckout.value=true
-      }else{
+
+      let segments = []
+      if (initialValues.checkout_foto) {
+        try {
+          const urlObj = String(initialValues.checkout_foto).startsWith('http')
+            ? new URL(initialValues.checkout_foto)
+            : new URL(initialValues.checkout_foto, store.server.url_backend || window.location.origin)
+          segments = urlObj.pathname.split('/').filter(Boolean)
+        } catch (e) {
+          segments = []
+        }
+      }
+      if (segments.length === 0) {
+        isCheckout.value = true
+        initialValues.checkout_foto = null
+      } else {
         initialValues.checkout_foto = image_checkout
       }
       if(initialValues.checkin_lat && initialValues.checkin_long){
@@ -380,24 +392,88 @@ function onSave() {
   }).then(async (res) => {
     if (res.isConfirmed) {
       try {
-        values.checkin_on_scope = values.checkin_on_scope ? 1 : 0
-        values.checkout_on_scope = values.checkout_on_scope ? 1 : 0
-        // values.status='ATTEND'
-        if(values.checkin_time && values.checkout_time){
-          values.status='ATTEND'
-        }else if(values.checkin_time && !values.checkout_time){
-          values.status='WORKING'
-        }
-        if (values.tanggal) {
-          const parts = String(values.tanggal).split(/[-/]/)
-          if (parts.length === 3 && parts[2].length === 4) {
-            values.tanggal = `${parts[2]}-${parts[1].padStart(2, '0')}-${parts[0].padStart(2, '0')}`
+        const allowedKeys = [
+          'm_comp_id',
+          'default_user_id',
+          'tanggal',
+          'status',
+          'checkin_time',
+          'checkin_foto',
+          'checkin_lat',
+          'checkin_long',
+          'checkin_address',
+          'checkin_region',
+          'checkin_on_scope',
+          'checkout_time',
+          'checkout_foto',
+          'checkout_lat',
+          'checkout_long',
+          'checkout_address',
+          'checkout_region',
+          'checkout_on_scope',
+          'catatan_in',
+          'catatan_out'
+        ]
+
+        let payload = {}
+        for (const k of allowedKeys) {
+          if (values[k] !== undefined) {
+            payload[k] = values[k]
           }
         }
+
+        payload.checkin_on_scope = (values.checkin_on_scope === true || values.checkin_on_scope === 1 || values.checkin_on_scope === '1' || values.checkin_on_scope === 'true')
+
+        if (!values.checkout_time || String(values.checkout_time).trim() === '') {
+          payload.checkout_time = null
+          payload.checkout_on_scope = null
+        } else {
+          payload.checkout_on_scope = (values.checkout_on_scope === true || values.checkout_on_scope === 1 || values.checkout_on_scope === '1' || values.checkout_on_scope === 'true')
+        }
+
+        const nullableKeys = ['checkout_lat', 'checkout_long', 'checkout_address', 'checkout_region', 'checkout_foto', 'catatan_out', 'catatan_in']
+        for (const nk of nullableKeys) {
+          if (payload[nk] !== undefined && (payload[nk] === null || String(payload[nk]).trim() === '' || payload[nk] === 'null')) {
+            payload[nk] = null
+          }
+        }
+
+        if (payload.checkin_time && /^\d{2}:\d{2}$/.test(String(payload.checkin_time).trim())) {
+          payload.checkin_time = String(payload.checkin_time).trim() + ':00'
+        }
+        if (payload.checkout_time && /^\d{2}:\d{2}$/.test(String(payload.checkout_time).trim())) {
+          payload.checkout_time = String(payload.checkout_time).trim() + ':00'
+        }
+
+        if (values.checkin_time && payload.checkout_time) {
+          payload.status = 'ATTEND'
+        } else if (values.checkin_time && !payload.checkout_time) {
+          payload.status = 'WORKING'
+        } else if (values.status) {
+          payload.status = values.status
+        }
+
+        if (payload.tanggal) {
+          const parts = String(payload.tanggal).split(/[-/]/)
+          if (parts.length === 3 && parts[2].length === 4) {
+            payload.tanggal = `${parts[2]}-${parts[1].padStart(2, '0')}-${parts[0].padStart(2, '0')}`
+          }
+        }
+
+        const cleanFoto = (foto) => {
+          if (!foto) return null
+          let s = String(foto).trim()
+          if (store.server?.url_backend && s.startsWith(store.server.url_backend)) {
+            s = s.substring(store.server.url_backend.length).replace(/^\/+/, '')
+          }
+          return s ? s : null
+        }
+        if (payload.checkin_foto !== undefined) payload.checkin_foto = cleanFoto(payload.checkin_foto)
+        if (payload.checkout_foto !== undefined) payload.checkout_foto = cleanFoto(payload.checkout_foto)
+
         const isCreating = ['Create','Copy','Tambah'].includes(actionText.value)
         const dataURL = `${store.server.url_backend}/operation${endpointApi}${isCreating ? '' : ('/' + route.params.id)}`
         isRequesting.value = true
-        // values.status = 'WORKING' 
 
         const res = await fetch(dataURL, {
           method: isCreating ? 'POST' : 'PUT',
@@ -405,7 +481,7 @@ function onSave() {
             'Content-Type': 'Application/json',
             Authorization: `${store.user.token_type} ${store.user.token}`
           },
-          body: JSON.stringify(values)
+          body: JSON.stringify(payload)
         })
         if (!res.ok) {
           if ([400, 422].includes(res.status)) {

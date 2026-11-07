@@ -241,7 +241,7 @@
             
             <div class="flex flex-col flex-1 ">
               <FieldPopup
-              class="w-full py-2 mt-5"
+              class="w-full py-2 mt-5 [&_input]:!text-right"
                 :bind="{ readonly: !actionText }"
                 :value="values.tunjangan_kemahalan_id" @input="(v)=>values.tunjangan_kemahalan_id=v"
                 :errorText="formErrors.tunjangan_kemahalan_id?'failed':''" 
@@ -253,8 +253,6 @@
                       Authorization: `${store.user.token_type} ${store.user.token}`
                     },
                     params: {
-                      simplest:true,
-                      single:true,
                       where:`this.is_active='true'`,
                       transform:true,
                       searchfield: 'this.kode,this.besaran,this.desc'

@@ -436,6 +436,21 @@ class t_lembur extends \App\Models\BasicModels\t_lembur
 
     public function updateAfterTransaction( $newdata, $olddata, $data, $meta )
     {
+        if (!empty($newdata['id']) && !empty($newdata['tanggal'])) {
+            \DB::table('generate_approval')
+                ->where('trx_table', 't_lembur')
+                ->where('trx_id', $newdata['id'])
+                ->update([
+                    'trx_date' => date('Y-m-d', strtotime($newdata['tanggal']))
+                ]);
+            \DB::table('generate_approval_log')
+                ->where('trx_table', 't_lembur')
+                ->where('trx_id', $newdata['id'])
+                ->update([
+                    'trx_date' => date('Y-m-d', strtotime($newdata['tanggal']))
+                ]);
+        }
+
         if (app()->request->header("Source") == "mobile") {
             $app = $this->createAppTicket($newdata['id']);  
         }
@@ -484,6 +499,7 @@ class t_lembur extends \App\Models\BasicModels\t_lembur
         if(@$trx->pic_id != auth()->user()->id){
             $app_name = "APPROVAL LEMBUR UNTUK BAWAHAN";
         }
+        $trxDate = !empty($trx->tanggal) ? date('Y-m-d', strtotime($trx->tanggal)) : Date("Y-m-d");
         $conf = [
             "app_name" => @$app_name ?? "APPROVAL LEMBUR", 
             "trx_id" => $trx->id,
@@ -491,7 +507,7 @@ class t_lembur extends \App\Models\BasicModels\t_lembur
             "trx_name" => "Pengajuan Lembur",
             "form_name" => "t_lembur",
             "trx_nomor" => $trx->nomor,
-            "trx_date" => Date("Y-m-d"),
+            "trx_date" => $trxDate,
             "trx_creator_id" => $trx->creator_id,
             "m_kary_id" => $trx->m_kary_id,
         ];

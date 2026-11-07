@@ -13,18 +13,30 @@ class presensi_absensi extends \App\Models\BasicModels\presensi_absensi
     {
         parent::__construct();
         $this->helper = getCore('Helper');
-
+        $this->casts['checkin_on_scope'] = 'boolean';
+        $this->casts['checkout_on_scope'] = 'boolean';
     }
 
     public $fileColumns = [];
+    public $company_name;
 
     public $createAdditionalData = ["creator_id" => "auth:id"];
     public $updateAdditionalData = ["last_editor_id" => "auth:id"];
 
     public function onRetrieved($model)
     {
-        $model->checkout_foto = url('').'/'.$model->checkout_foto;
-        $model->checkin_foto = url('').'/'.$model->checkin_foto;
+        if (!empty($model->checkout_foto) && substr($model->checkout_foto, 0, 4) !== 'http') {
+            $model->checkout_foto = url('').'/'.ltrim($model->checkout_foto, '/');
+        } elseif (empty($model->checkout_foto) || $model->checkout_foto === url('').'/') {
+            $model->checkout_foto = null;
+        }
+
+        if (!empty($model->checkin_foto) && substr($model->checkin_foto, 0, 4) !== 'http') {
+            $model->checkin_foto = url('').'/'.ltrim($model->checkin_foto, '/');
+        } elseif (empty($model->checkin_foto) || $model->checkin_foto === url('').'/') {
+            $model->checkin_foto = null;
+        }
+
         $user = \DB::table('default_users')
             ->leftJoin('m_dir', 'm_dir.id', '=', 'default_users.m_dir_id')
             ->leftJoin('m_kary', 'm_kary.id', '=', 'default_users.m_kary_id')
@@ -33,6 +45,173 @@ class presensi_absensi extends \App\Models\BasicModels\presensi_absensi
             ->select('m_dir.nama as dir_nama', 'kary_dir.nama as kary_dir_nama')
             ->first();
         $model->company_name = $user ? ($user->dir_nama ?? $user->kary_dir_nama ?? '-') : '-';
+
+        if (method_exists($model, 'syncOriginal')) {
+            $model->syncOriginal();
+        }
+    }
+
+    public function createBefore($model, $arrayData, $metaData, $id = null)
+    {
+        $allowedColumns = $this->createable ?: $this->columns;
+        $cleanData = [];
+        foreach ($arrayData as $key => $val) {
+            if (in_array($key, $allowedColumns)) {
+                $cleanData[$key] = $val;
+            }
+        }
+
+        unset($cleanData['id'], $cleanData['created_at'], $cleanData['updated_at']);
+
+        foreach (['checkin_foto', 'checkout_foto'] as $fotoCol) {
+            if (isset($cleanData[$fotoCol])) {
+                $foto = trim((string)$cleanData[$fotoCol]);
+                $baseUrl = rtrim(url(''), '/');
+                if (substr($foto, 0, strlen($baseUrl)) === $baseUrl) {
+                    $foto = ltrim(substr($foto, strlen($baseUrl)), '/');
+                }
+                $cleanData[$fotoCol] = !empty($foto) ? $foto : null;
+            }
+        }
+
+        $nullableCols = [
+            'checkout_time',
+            'checkout_foto',
+            'checkout_lat',
+            'checkout_long',
+            'checkout_address',
+            'checkout_region',
+            'catatan_out',
+            'catatan_in',
+            'checkin_foto'
+        ];
+        foreach ($nullableCols as $col) {
+            if (array_key_exists($col, $cleanData) && (trim((string)$cleanData[$col]) === '' || $cleanData[$col] === 'null')) {
+                $cleanData[$col] = null;
+            }
+        }
+
+        if (isset($cleanData['checkin_on_scope'])) {
+            $cleanData['checkin_on_scope'] = filter_var($cleanData['checkin_on_scope'], FILTER_VALIDATE_BOOLEAN);
+        }
+
+        if (array_key_exists('checkout_on_scope', $cleanData)) {
+            if (empty($cleanData['checkout_time'])) {
+                $cleanData['checkout_on_scope'] = null;
+            } else {
+                $cleanData['checkout_on_scope'] = filter_var($cleanData['checkout_on_scope'], FILTER_VALIDATE_BOOLEAN);
+            }
+        }
+
+        if (!empty($cleanData['checkout_time']) && preg_match('/^\d{2}:\d{2}$/', trim($cleanData['checkout_time']))) {
+            $cleanData['checkout_time'] = trim($cleanData['checkout_time']) . ':00';
+        }
+        if (!empty($cleanData['checkin_time']) && preg_match('/^\d{2}:\d{2}$/', trim($cleanData['checkin_time']))) {
+            $cleanData['checkin_time'] = trim($cleanData['checkin_time']) . ':00';
+        }
+
+        if (!empty($cleanData['checkin_time']) && !empty($cleanData['checkout_time'])) {
+            $cleanData['status'] = 'ATTEND';
+        } elseif (!empty($cleanData['checkin_time']) && empty($cleanData['checkout_time'])) {
+            $cleanData['status'] = 'WORKING';
+        }
+
+        if (!empty($cleanData['tanggal'])) {
+            $cleanData['tanggal'] = date('Y-m-d', strtotime(str_replace('/', '-', $cleanData['tanggal'])));
+        }
+
+        if (empty($cleanData['m_comp_id'])) {
+            $cleanData['m_comp_id'] = auth()->user()->m_comp_id ?? 1;
+        }
+
+        return [
+            "model" => $model,
+            "data"  => $cleanData
+        ];
+    }
+
+    public function updateBefore($model, $arrayData, $metaData, $id = null)
+    {
+        $allowedColumns = $this->updateable ?: $this->columns;
+        $cleanData = [];
+        foreach ($arrayData as $key => $val) {
+            if (in_array($key, $allowedColumns)) {
+                $cleanData[$key] = $val;
+            }
+        }
+
+        unset($cleanData['id'], $cleanData['created_at'], $cleanData['updated_at'], $cleanData['creator_id'], $cleanData['company_name']);
+
+        if (is_object($model)) {
+            if (isset($model->company_name)) {
+                unset($model->company_name);
+            }
+            if (isset($model->attributes['company_name'])) {
+                unset($model->attributes['company_name']);
+            }
+        }
+
+        foreach (['checkin_foto', 'checkout_foto'] as $fotoCol) {
+            if (isset($cleanData[$fotoCol])) {
+                $foto = trim((string)$cleanData[$fotoCol]);
+                $baseUrl = rtrim(url(''), '/');
+                if (substr($foto, 0, strlen($baseUrl)) === $baseUrl) {
+                    $foto = ltrim(substr($foto, strlen($baseUrl)), '/');
+                }
+                $cleanData[$fotoCol] = !empty($foto) ? $foto : null;
+            }
+        }
+
+        $nullableCols = [
+            'checkout_time',
+            'checkout_foto',
+            'checkout_lat',
+            'checkout_long',
+            'checkout_address',
+            'checkout_region',
+            'catatan_out',
+            'catatan_in',
+            'checkin_foto'
+        ];
+        foreach ($nullableCols as $col) {
+            if (array_key_exists($col, $cleanData) && (trim((string)$cleanData[$col]) === '' || $cleanData[$col] === 'null')) {
+                $cleanData[$col] = null;
+            }
+        }
+
+        if (isset($cleanData['checkin_on_scope'])) {
+            $cleanData['checkin_on_scope'] = filter_var($cleanData['checkin_on_scope'], FILTER_VALIDATE_BOOLEAN);
+        }
+
+        if (array_key_exists('checkout_on_scope', $cleanData)) {
+            if (empty($cleanData['checkout_time'])) {
+                $cleanData['checkout_on_scope'] = null;
+            } else {
+                $cleanData['checkout_on_scope'] = filter_var($cleanData['checkout_on_scope'], FILTER_VALIDATE_BOOLEAN);
+            }
+        }
+
+        if (!empty($cleanData['checkout_time']) && preg_match('/^\d{2}:\d{2}$/', trim($cleanData['checkout_time']))) {
+            $cleanData['checkout_time'] = trim($cleanData['checkout_time']) . ':00';
+        }
+        if (!empty($cleanData['checkin_time']) && preg_match('/^\d{2}:\d{2}$/', trim($cleanData['checkin_time']))) {
+            $cleanData['checkin_time'] = trim($cleanData['checkin_time']) . ':00';
+        }
+
+        if (!empty($cleanData['checkin_time']) && !empty($cleanData['checkout_time'])) {
+            $cleanData['status'] = 'ATTEND';
+        } elseif (!empty($cleanData['checkin_time']) && empty($cleanData['checkout_time'])) {
+            $cleanData['status'] = 'WORKING';
+        }
+
+        if (!empty($cleanData['tanggal'])) {
+            $cleanData['tanggal'] = date('Y-m-d', strtotime(str_replace('/', '-', $cleanData['tanggal'])));
+        }
+
+        return [
+            "model" => $model,
+            "data"  => $cleanData
+        ];
     }
 
     public function setTanggalAttribute($value)

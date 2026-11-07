@@ -50,7 +50,10 @@ function updateTunjanganKemahalan() {
 
 async function fetchTunjanganKemahalan(gradingId, zonaId) {
   try {
-    const response = await fetch(`${store.server.url_backend}/operation/m_tunj_kemahalan?`+ new URLSearchParams({where: `this.is_active='true' AND this.m_zona_id=${zonaId} AND this.grading_id=${gradingId}`}), {
+    const response = await fetch(`${store.server.url_backend}/operation/m_tunj_kemahalan?`+ new URLSearchParams({
+      where: `this.is_active='true' AND this.m_zona_id=${zonaId} AND this.grading_id=${gradingId}`,
+      transform: true
+    }), {
       method: 'GET',
       headers: {
         'Content-Type': 'Application/json',

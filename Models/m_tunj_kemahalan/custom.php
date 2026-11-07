@@ -27,11 +27,34 @@ class m_tunj_kemahalan extends \App\Models\BasicModels\m_tunj_kemahalan
         ];
     }
 
+    public function getBesaranAttribute($value)
+    {
+        if ($value !== null && $value !== '') {
+            $val = is_numeric($value) ? (float)$value : (float)str_replace(['.', ','], '', (string)$value);
+            return number_format($val, 0, ',', '.');
+        }
+        return $value;
+    }
+
+    public function setBesaranAttribute($value)
+    {
+        if ($value !== null && $value !== '') {
+            if (is_numeric($value)) {
+                $this->attributes['besaran'] = (float)$value;
+            } else {
+                $this->attributes['besaran'] = (float)str_replace(['.', ','], '', (string)$value);
+            }
+        } else {
+            $this->attributes['besaran'] = $value;
+        }
+    }
+
     public function transformRowData( array $row )
     {
-        if (isset($row['besaran'])) {
+        if (isset($row['besaran']) && $row['besaran'] !== null && $row['besaran'] !== '') {
             $row['besaran_raw'] = $row['besaran'];
-            $row['besaran'] = number_format((float)$row['besaran'], 0, ',', '.');
+            $val = is_numeric($row['besaran']) ? (float)$row['besaran'] : (float)str_replace(['.', ','], '', (string)$row['besaran']);
+            $row['besaran'] = number_format($val, 0, ',', '.');
         }
         return $row;
     }

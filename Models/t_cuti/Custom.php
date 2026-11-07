@@ -499,6 +499,7 @@ class t_cuti extends \App\Models\BasicModels\t_cuti
     {
         $trx = $this->find($id);
 
+        $trxDate = !empty($trx->date_from) ? date('Y-m-d', strtotime($trx->date_from)) : Date("Y-m-d");
         $conf = [
             "app_name" => "APPROVAL CUTI",
             "trx_id" => $trx->id,
@@ -506,7 +507,7 @@ class t_cuti extends \App\Models\BasicModels\t_cuti
             "trx_name" => "Pengajuan Cuti",
             "form_name" => "t_cuti",
             "trx_nomor" => $trx->nomor,
-            "trx_date" => Date("Y-m-d"),
+            "trx_date" => $trxDate,
             "trx_creator_id" => $trx->creator_id,
         ];
 

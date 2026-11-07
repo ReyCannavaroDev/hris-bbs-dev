@@ -614,8 +614,54 @@ class Helper
         $isSuperadmin = (bool) ($userAuth->is_superadmin ?? false);
         $model = new generate_approval;
 
-        $query = generate_approval::selectRaw("generate_approval.*,(select u.name from default_users u where u.id = generate_approval.creator_id) creator")
-            ->leftJoin('default_users', 'default_users.id', 'generate_approval.creator_id');
+        $query = generate_approval::selectRaw("
+            generate_approval.id, generate_approval.m_comp_id, generate_approval.m_dir_id, generate_approval.nomor, generate_approval.m_approval_id, generate_approval.trx_id, generate_approval.trx_name, generate_approval.form_name, generate_approval.trx_table, generate_approval.trx_nomor,
+            (case 
+                when generate_approval.trx_table = 't_lembur' then coalesce((select tl.tanggal from t_lembur tl where tl.id = generate_approval.trx_id), generate_approval.trx_date)
+                when generate_approval.trx_table = 't_cuti' then coalesce((select tc.date_from from t_cuti tc where tc.id = generate_approval.trx_id), generate_approval.trx_date)
+                when generate_approval.trx_table = 't_spd' then coalesce((select ts.tanggal from t_spd ts where ts.id = generate_approval.trx_id), generate_approval.trx_date)
+                when generate_approval.trx_table = 't_rpd' then coalesce((select ts.tanggal from t_rpd tr join t_spd ts on ts.id = tr.t_spd_id where tr.id = generate_approval.trx_id), generate_approval.trx_date)
+                else generate_approval.trx_date 
+            end) as trx_date,
+            generate_approval.trx_object, generate_approval.trx_creator_id, generate_approval.status, generate_approval.creator_id, generate_approval.last_editor_id, generate_approval.created_at, generate_approval.updated_at, generate_approval.last_approve_id, generate_approval.last_approve_det_id,
+            (select u.name from default_users u where u.id = generate_approval.creator_id) creator")
+            ->leftJoin('default_users', 'default_users.id', 'generate_approval.creator_id')
+            ->whereRaw("
+                coalesce((select app.is_active from m_approval app where app.id = generate_approval.m_approval_id), true) = true
+                and coalesce((select m.is_active from m_approval app join m_menu m on m.id = app.m_menu_id where app.id = generate_approval.m_approval_id), true) = true
+                and not exists (
+                    select 1 from m_menu m_chk
+                    where (
+                        replace(coalesce(m_chk.path, ''), '/', '') in (generate_approval.form_name, generate_approval.trx_table)
+                        or replace(coalesce(m_chk.endpoint, ''), '/', '') in (generate_approval.form_name, generate_approval.trx_table)
+                        or m_chk.path in (generate_approval.form_name, concat('/', generate_approval.form_name), generate_approval.trx_table, concat('/', generate_approval.trx_table))
+                        or m_chk.endpoint in (generate_approval.form_name, concat('/', generate_approval.form_name), generate_approval.trx_table, concat('/', generate_approval.trx_table))
+                    )
+                    and coalesce(m_chk.is_active, true) = false
+                )
+                and (
+                    (
+                        generate_approval.m_approval_id is not null
+                        and exists (
+                            select 1 from m_approval app 
+                            join m_menu m on m.id = app.m_menu_id 
+                            where app.id = generate_approval.m_approval_id 
+                              and coalesce(app.is_active, true) = true 
+                              and coalesce(m.is_active, true) = true
+                        )
+                    )
+                    or exists (
+                        select 1 from m_menu m_act
+                        where (
+                            replace(coalesce(m_act.path, ''), '/', '') in (generate_approval.form_name, generate_approval.trx_table)
+                            or replace(coalesce(m_act.endpoint, ''), '/', '') in (generate_approval.form_name, generate_approval.trx_table)
+                            or m_act.path in (generate_approval.form_name, concat('/', generate_approval.form_name), generate_approval.trx_table, concat('/', generate_approval.trx_table))
+                            or m_act.endpoint in (generate_approval.form_name, concat('/', generate_approval.form_name), generate_approval.trx_table, concat('/', generate_approval.trx_table))
+                        )
+                        and coalesce(m_act.is_active, true) = true
+                    )
+                )
+            ");
 
         if ($isSuperadmin) {
             $data = $query->where('generate_approval.status', 'PROGRESS')
