@@ -38,6 +38,7 @@
             :value="values.kode" :errorText="formErrors.kode?'failed':''"
             @input="v=>values.kode=v" :hints="formErrors.kode" 
             :check="false" placeholder="Auto Generate"
+            label=""
           />
         </div>
 
@@ -47,6 +48,7 @@
             :value="values.nama" :errorText="formErrors.nama?'failed':''"
             @input="v=>values.nama=v" :hints="formErrors.nama" 
             :check="false" placeholder="Contoh: HRD - PT BBS"
+            label=""
           />
         </div>
 
@@ -59,6 +61,7 @@
             @input="v=>values.m_dir_id=v"
             :errorText="formErrors.m_dir_id?'failed':''"
             :hints="formErrors.m_dir_id"
+            label=""
             placeholder="Pilih Company / Direktorat"
             displayField="nama"
             valueField="id"
@@ -87,6 +90,7 @@
             @input="v=>values.m_divisi_id=v"
             :errorText="formErrors.m_divisi_id?'failed':''"
             :hints="formErrors.m_divisi_id"
+            label=""
             placeholder="Pilih Divisi (Opsional)"
             displayField="nama"
             valueField="id"
@@ -115,6 +119,7 @@
             @input="v=>values.m_dept_id=v"
             :errorText="formErrors.m_dept_id?'failed':''"
             :hints="formErrors.m_dept_id"
+            label=""
             placeholder="Pilih Departemen (Opsional)"
             displayField="nama"
             valueField="id"
@@ -154,6 +159,7 @@
             :value="values.desc" :errorText="formErrors.desc?'failed':''"
             @input="v=>values.desc=v" :hints="formErrors.desc" 
             :check="false" placeholder="Catatan atau ruang lingkup responsibility"
+            label=""
           />
         </div>
       </div>
