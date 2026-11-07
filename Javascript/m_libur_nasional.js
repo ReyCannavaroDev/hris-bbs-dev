@@ -1,7 +1,7 @@
 //   javascript
 
 import { useRouter, useRoute, RouterLink } from 'vue-router'
-import { ref, readonly, reactive, inject, onMounted, onBeforeMount, watchEffect, onActivated } from 'vue'
+import { ref, readonly, reactive, inject, onMounted, onBeforeMount, watch, watchEffect, onActivated } from 'vue'
 
 const router = useRouter()
 const route = useRoute()
@@ -29,6 +29,9 @@ let initialValues = {}
 const changedValues = []
 
 const values = reactive({
+   kode: null,
+   tanggal: null,
+   desc: null,
    is_active: true,
    is_cuti_bersama: false,
    is_potong_cuti: false
@@ -82,6 +85,15 @@ onBeforeMount(async () => {
   if (values.tanggal && typeof values.tanggal === 'string' && values.tanggal.includes('T')) {
     values.tanggal = values.tanggal.split('T')[0]
   }
+  if (typeof values.is_active !== 'undefined') {
+    values.is_active = values.is_active === true || values.is_active === 1 || values.is_active === '1' || values.is_active === 'true' || values.is_active === 't'
+  }
+  if (typeof values.is_cuti_bersama !== 'undefined') {
+    values.is_cuti_bersama = values.is_cuti_bersama === true || values.is_cuti_bersama === 1 || values.is_cuti_bersama === '1' || values.is_cuti_bersama === 'true' || values.is_cuti_bersama === 't'
+  }
+  if (typeof values.is_potong_cuti !== 'undefined') {
+    values.is_potong_cuti = values.is_potong_cuti === true || values.is_potong_cuti === 1 || values.is_potong_cuti === '1' || values.is_potong_cuti === 'true' || values.is_potong_cuti === 't'
+  }
 })
 
 
@@ -128,41 +140,47 @@ function onReset() {
 }
 
 async function onSave() {
-  //values.tags = JSON.stringify(values.tags)
-      try {
-        const isCreating = ['Create','Copy','Tambah'].includes(actionText.value)
-        const dataURL = `${store.server.url_backend}/operation${endpointApi}${isCreating ? '' : ('/' + route.params.id)}`
-        isRequesting.value = true
-        values.is_active = values.is_active ? 1 : 0
-        values.is_cuti_bersama = values.is_cuti_bersama ? 1 : 0
-        values.is_potong_cuti = values.is_potong_cuti ? 1 : 0
+  try {
+    const isCreating = ['Create','Copy','Tambah'].includes(actionText.value)
+    const dataURL = `${store.server.url_backend}/operation${endpointApi}${isCreating ? '' : ('/' + route.params.id)}`
+    isRequesting.value = true
 
-        const res = await fetch(dataURL, {
-          method: isCreating ? 'POST' : 'PUT',
-          headers: {
-            'Content-Type': 'Application/json',
-            Authorization: `${store.user.token_type} ${store.user.token}`
-          },
-          body: JSON.stringify(values)
-        })
-        if (!res.ok) {
-          if ([400, 422].includes(res.status)) {
-            const responseJson = await res.json()
-            formErrors.value = responseJson.errors || {}
-            throw (responseJson.errors.length ? responseJson.errors[0] : responseJson.message || "Failed when trying to post data")
-          } else {
-            throw ("Failed when trying to post data")
-          }
-        }
-        router.replace('/' + modulPath + '?reload='+(Date.parse(new Date())))
-      } catch (err) {
-        isBadForm.value = true
-        swal.fire({
-          icon: 'error',
-          text: err
-        })
+    const payload = { ...values }
+    payload.is_active = values.is_active ? 1 : 0
+    payload.is_cuti_bersama = values.is_cuti_bersama ? 1 : 0
+    payload.is_potong_cuti = values.is_potong_cuti ? 1 : 0
+
+    const res = await fetch(dataURL, {
+      method: isCreating ? 'POST' : 'PUT',
+      headers: {
+        'Content-Type': 'Application/json',
+        Authorization: `${store.user.token_type} ${store.user.token}`
+      },
+      body: JSON.stringify(payload)
+    })
+    if (!res.ok) {
+      if ([400, 422].includes(res.status)) {
+        const responseJson = await res.json()
+        formErrors.value = responseJson.errors || {}
+        const errorMsg = Array.isArray(responseJson.errors)
+          ? responseJson.errors[0]
+          : (typeof responseJson.errors === 'object' && responseJson.errors !== null
+              ? Object.values(responseJson.errors).flat()[0]
+              : responseJson.message || "Failed when trying to post data")
+        throw errorMsg
+      } else {
+        throw ("Failed when trying to post data")
       }
-      isRequesting.value = false
+    }
+    router.replace('/' + modulPath + '?reload='+(Date.parse(new Date())))
+  } catch (err) {
+    isBadForm.value = true
+    swal.fire({
+      icon: 'error',
+      text: err
+    })
+  }
+  isRequesting.value = false
 }
 
 //  @else----------------------- LANDING

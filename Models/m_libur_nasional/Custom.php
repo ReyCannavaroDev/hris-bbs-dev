@@ -9,6 +9,7 @@ class m_libur_nasional extends \App\Models\BasicModels\m_libur_nasional
     {
         parent::__construct();
         $this->helper = getCore('Helper');
+        $this->required = array_values(array_diff($this->required, ['is_active']));
     }
     
     public $fileColumns    = [ /*file_column*/ ];
