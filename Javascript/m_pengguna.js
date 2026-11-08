@@ -195,6 +195,16 @@ function toggleStatus(selectedItem) {
   selectedItem.is_active = !selectedItem.is_active
 }
 
+function onToggleChange(item) {
+  if (item.is_primary && !item.is_active) {
+    item.is_active = true
+    swal.fire({
+      icon: 'warning',
+      text: 'Responsibility utama (Primary) harus selalu aktif.'
+    })
+  }
+}
+
 function handlePrimaryChange(selectedItem) {
   togglePrimary(selectedItem)
 }
