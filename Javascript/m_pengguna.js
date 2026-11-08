@@ -89,7 +89,10 @@ onBeforeMount(async () => {
       }
 
       // Pastikan jika ada responsibility, minimal 1 berstatus Primary dan Active
-      if (trx_respo.value.length > 0 && !trx_respo.value.some(r => r.is_primary)) {
+      if (trx_respo.value.length === 1) {
+        trx_respo.value[0].is_primary = true
+        trx_respo.value[0].is_active = true
+      } else if (trx_respo.value.length > 1 && !trx_respo.value.some(r => r.is_primary)) {
         trx_respo.value[0].is_primary = true
         trx_respo.value[0].is_active = true
       }
@@ -188,6 +191,11 @@ function onRespoAdd(rows) {
 
 function togglePrimary(selectedItem) {
   if (!actionText.value) return
+  if (trx_respo.value.length === 1) {
+    selectedItem.is_primary = true
+    selectedItem.is_active = true
+    return
+  }
   trx_respo.value.forEach(item => {
     item.is_primary = (item === selectedItem)
   })
@@ -224,7 +232,10 @@ function handlePrimaryChange(selectedItem) {
 function onRemoveRespo(index) {
   const removed = trx_respo.value[index]
   trx_respo.value.splice(index, 1)
-  if (removed?.is_primary && trx_respo.value.length > 0) {
+  if (trx_respo.value.length === 1) {
+    trx_respo.value[0].is_primary = true
+    trx_respo.value[0].is_active = true
+  } else if (removed?.is_primary && trx_respo.value.length > 0) {
     trx_respo.value[0].is_primary = true
     trx_respo.value[0].is_active = true
   }

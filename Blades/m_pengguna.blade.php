@@ -301,19 +301,16 @@
                 <td class="p-3 border-r border-gray-200 font-semibold text-primary">{{ item.respo_nama || '-' }}</td>
                 <td class="p-3 text-center border-r border-gray-200">
                   <div class="flex justify-center">
-                    <label 
-                      class="cursor-pointer inline-flex items-center p-1"
-                      :title="actionText ? 'Jadikan responsibility utama' : ''"
+                    <input 
+                      type="checkbox"
+                      class="w-5 h-5 text-blue-600 bg-white border-2 border-gray-400 rounded focus:ring-blue-500 transition-all"
+                      :class="(trx_respo.length === 1 || !actionText) ? 'cursor-not-allowed opacity-80' : 'cursor-pointer'"
+                      :checked="Boolean(item.is_primary)"
+                      :disabled="!actionText || (trx_respo.length === 1 && item.is_primary)"
+                      :title="trx_respo.length === 1 ? 'Pengguna dengan 1 responsibility wajib berstatus Primary' : (item.is_primary ? 'Responsibility utama yang aktif' : 'Jadikan responsibility utama')"
                       @click="togglePrimary(item)"
-                    >
-                      <input 
-                        type="checkbox"
-                        class="w-5 h-5 text-blue-600 bg-white border-2 border-gray-400 rounded focus:ring-blue-500 cursor-pointer transition-all"
-                        :checked="Boolean(item.is_primary)"
-                        :disabled="!actionText"
-                        @change="togglePrimary(item)"
-                      />
-                    </label>
+                      @change="togglePrimary(item)"
+                    />
                   </div>
                 </td>
                 <td class="p-3 text-center border-r border-gray-200">
