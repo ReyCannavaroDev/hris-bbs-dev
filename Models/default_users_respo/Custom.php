@@ -169,5 +169,47 @@ class default_users_respo extends \App\Models\BasicModels\default_users_respo
             return response()->json(['error' => 'Gagal berpindah responsibility: ' . $e->getMessage()], 500);
         }
     }
+
+    /**
+     * Endpoint API: Mendapatkan daftar responsibility milik user tertentu (untuk form m_pengguna)
+     * GET /operation/default_users_respo/getUserRespo?user_id=123
+     */
+    public function custom_getUserRespo($request)
+    {
+        $req = $request instanceof \Illuminate\Http\Request ? $request : app()->request;
+        $userId = $req->user_id ?? $req->default_users_id ?? request('user_id');
+        if (!$userId) {
+            return response()->json(['data' => []]);
+        }
+
+        $list = \DB::table('default_users_respo as dur')
+            ->join('m_respo as r', 'r.id', '=', 'dur.m_respo_id')
+            ->leftJoin('m_dir as d', 'd.id', '=', 'r.m_dir_id')
+            ->leftJoin('m_divisi as div', 'div.id', '=', 'r.m_divisi_id')
+            ->leftJoin('m_dept as dept', 'dept.id', '=', 'r.m_dept_id')
+            ->where('dur.default_users_id', $userId)
+            ->select([
+                'dur.id',
+                'dur.default_users_id',
+                'dur.m_respo_id',
+                'dur.is_primary',
+                'dur.is_active',
+                'dur.seq',
+                'r.nama as respo_nama',
+                'r.kode as respo_kode',
+                'r.m_comp_id',
+                'r.m_dir_id',
+                'd.nama as company_nama',
+                'r.m_divisi_id',
+                'div.nama as divisi_nama',
+                'r.m_dept_id',
+                'dept.nama as dept_nama',
+            ])
+            ->orderBy('dur.seq', 'asc')
+            ->orderBy('dur.id', 'asc')
+            ->get();
+
+        return response()->json(['data' => $list]);
+    }
 }
 

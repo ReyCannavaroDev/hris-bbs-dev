@@ -28,6 +28,7 @@ onBeforeMount(()=>{
 let initialValues = {}
 let initialValues2 = {}
 const changedValues = []
+const trx_respo = ref([])
 
 const values = reactive({
   is_active: true
@@ -56,6 +57,36 @@ onBeforeMount(async () => {
       initialValues.username = initialValues.username
       initialValues.email = initialValues.email
       nikChange(initialValues.m_kary_id)
+
+      // Load responsibilities
+      if (initialValues.default_users_respo && Array.isArray(initialValues.default_users_respo) && initialValues.default_users_respo.length > 0) {
+        trx_respo.value = initialValues.default_users_respo.map(d => ({
+          ...d,
+          is_primary: d.is_primary === true || d.is_primary === 1 || d.is_primary === '1',
+          is_active: d.is_active === true || d.is_active === 1 || d.is_active === '1'
+        }))
+      } else {
+        try {
+          const respoRes = await fetch(`${store.server.url_backend}/operation/default_users_respo/getUserRespo?user_id=${editedId}`, {
+            headers: {
+              'Content-Type': 'Application/json',
+              Authorization: `${store.user.token_type} ${store.user.token}`
+            }
+          })
+          if (respoRes.ok) {
+            const respoJson = await respoRes.json()
+            if (respoJson.data && Array.isArray(respoJson.data)) {
+              trx_respo.value = respoJson.data.map(d => ({
+                ...d,
+                is_primary: d.is_primary === true || d.is_primary === 1 || d.is_primary === '1',
+                is_active: d.is_active === true || d.is_active === 1 || d.is_active === '1'
+              }))
+            }
+          }
+        } catch (e) {
+          console.warn('Gagal memuat list respo user:', e)
+        }
+      }
     } catch (err) {
       isBadForm.value = true
       swal.fire({
@@ -112,6 +143,53 @@ async function nikChange(id) {
     values.password = null
     values.password_confirm = null
     values.default_password = null
+  }
+}
+
+function onRespoAdd(rows) {
+  let dataArr = [...trx_respo.value]
+  rows.forEach(row => {
+    const respoId = row.id
+    if (dataArr.some(existing => Number(existing.m_respo_id) === Number(respoId))) {
+      return
+    }
+    const isFirst = dataArr.length === 0
+    dataArr.push({
+      m_respo_id: respoId,
+      respo_nama: row.nama,
+      company_nama: row['m_dir.nama'] || row.dir_nama || '-',
+      divisi_nama: row['m_divisi.nama'] || row.divisi_nama || '-',
+      dept_nama: row['m_dept.nama'] || row.dept_nama || '-',
+      is_primary: isFirst,
+      is_active: true,
+      seq: dataArr.length + 1
+    })
+  })
+  trx_respo.value = dataArr
+}
+
+function handlePrimaryChange(selectedItem) {
+  if (selectedItem.is_primary) {
+    trx_respo.value.forEach(item => {
+      if (item !== selectedItem) {
+        item.is_primary = false
+      }
+    })
+    selectedItem.is_active = true
+  } else {
+    const hasAnyPrimary = trx_respo.value.some(item => item.is_primary)
+    if (!hasAnyPrimary && trx_respo.value.length > 0) {
+      selectedItem.is_primary = true
+    }
+  }
+}
+
+function onRemoveRespo(index) {
+  const removed = trx_respo.value[index]
+  trx_respo.value.splice(index, 1)
+  if (removed?.is_primary && trx_respo.value.length > 0) {
+    trx_respo.value[0].is_primary = true
+    trx_respo.value[0].is_active = true
   }
 }
 
@@ -195,8 +273,22 @@ async function onSave() {
     isRequesting.value = true
     delete values.atasan
 
+    // Pastikan jika ada respo yang diinput, ada yang dijadikan primary
+    if (trx_respo.value.length > 0) {
+      if (!trx_respo.value.some(r => r.is_primary)) {
+        trx_respo.value[0].is_primary = true
+        trx_respo.value[0].is_active = true
+      }
+    }
+
     const payload = Object.assign({}, values, {
-      is_active: values.is_active ? 1 : 0
+      is_active: values.is_active ? 1 : 0,
+      default_users_respo: trx_respo.value.map((r, idx) => ({
+        m_respo_id: r.m_respo_id,
+        is_primary: (r.is_primary === true || r.is_primary === 1 || r.is_primary === '1') ? 1 : 0,
+        is_active: (r.is_active === true || r.is_active === 1 || r.is_active === '1') ? 1 : 0,
+        seq: idx + 1
+      }))
     })
 
     const res = await fetch(dataURL, {

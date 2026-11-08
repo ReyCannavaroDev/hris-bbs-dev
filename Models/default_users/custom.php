@@ -91,6 +91,35 @@ class default_users extends \App\Models\BasicModels\default_users
             
         }
         $object['profil_image'] = url('').'/'.$row['profil_image'];
+
+        if (!empty($row['id'])) {
+            $object['default_users_respo'] = \DB::table('default_users_respo as dur')
+                ->join('m_respo as r', 'r.id', '=', 'dur.m_respo_id')
+                ->leftJoin('m_dir as d', 'd.id', '=', 'r.m_dir_id')
+                ->leftJoin('m_divisi as div', 'div.id', '=', 'r.m_divisi_id')
+                ->leftJoin('m_dept as dept', 'dept.id', '=', 'r.m_dept_id')
+                ->where('dur.default_users_id', $row['id'])
+                ->select([
+                    'dur.id',
+                    'dur.default_users_id',
+                    'dur.m_respo_id',
+                    'dur.is_primary',
+                    'dur.is_active',
+                    'dur.seq',
+                    'r.nama as respo_nama',
+                    'r.kode as respo_kode',
+                    'r.m_comp_id',
+                    'r.m_dir_id',
+                    'd.nama as company_nama',
+                    'r.m_divisi_id',
+                    'div.nama as divisi_nama',
+                    'r.m_dept_id',
+                    'dept.nama as dept_nama',
+                ])
+                ->orderBy('dur.seq', 'asc')
+                ->orderBy('dur.id', 'asc')
+                ->get();
+        }
         
         return array_merge( $row, $object );
     }
@@ -215,6 +244,12 @@ class default_users extends \App\Models\BasicModels\default_users
         ];
     }
 
+    public function createAfter($model, $arrayData, $metaData, $id = null)
+    {
+        $userId = $model->id ?? $id;
+        $this->syncUserRespo($userId, $arrayData);
+    }
+
 
     
 
@@ -291,14 +326,25 @@ class default_users extends \App\Models\BasicModels\default_users
     public function updateBefore( $model, $arrayData, $metaData, $id=null )
     {
         $hasher = app()->make("hash");
+        if (req("password")) {
+            $arrayData['password'] = $hasher->make(req("password"));
+        }
         return [
             "model" => $model,
-            "data" => array_merge($arrayData, [
-                "password" => $hasher->make(req("password")),
+            "data"  => $arrayData,
+        ];
+    }
+
+    public function updateAfter($model, $arrayData, $metaData, $id = null)
+    {
+        $userId = $model->id ?? $id;
+        $this->syncUserRespo($userId, $arrayData);
+        return [
+            "model" => $model,
+            "data"  => array_merge($arrayData, [
+                "is_sync" => false,
             ]),
         ];
-        $newArrayData  = array_merge( $arrayData,[] );
-       
     }
     
 
@@ -347,9 +393,97 @@ class default_users extends \App\Models\BasicModels\default_users
             ]);
         }
 
+        // Sinkronkan daftar responsibility milik user
+        $this->syncUserRespo($userId, $req);
+
         return response([
             'message' => 'Update pengguna berhasil'
         ]);
+    }
+
+    /**
+     * Sinkronkan daftar responsibility ke tabel default_users_respo
+     */
+    private function syncUserRespo($userId, $req)
+    {
+        if (!$userId) return;
+
+        $respoList = null;
+        if (is_object($req) && method_exists($req, 'input')) {
+            $respoList = $req->input('default_users_respo') ?? $req->default_users_respo;
+        } elseif (is_object($req)) {
+            $respoList = $req->default_users_respo ?? null;
+        } elseif (is_array($req)) {
+            $respoList = $req['default_users_respo'] ?? null;
+        }
+        if ($respoList === null && app()->request) {
+            $respoList = app()->request->input('default_users_respo') ?? app()->request->default_users_respo;
+        }
+
+        if (!is_array($respoList)) {
+            return;
+        }
+
+        \DB::table('default_users_respo')->where('default_users_id', $userId)->delete();
+
+        $now = \Carbon\Carbon::now();
+        $authId = auth()->user()->id ?? $userId;
+        $primaryRespoId = null;
+
+        $seq = 1;
+        foreach ($respoList as $item) {
+            $row = is_array($item) ? $item : (array)$item;
+            $mRespoId = !empty($row['m_respo_id']) ? (int)$row['m_respo_id'] : null;
+            if (!$mRespoId) continue;
+
+            $isPrimary = !empty($row['is_primary']) && ($row['is_primary'] === true || $row['is_primary'] === 1 || $row['is_primary'] === '1' || $row['is_primary'] === 'true');
+            $isActive = isset($row['is_active']) ? ($row['is_active'] === true || $row['is_active'] === 1 || $row['is_active'] === '1' || $row['is_active'] === 'true') : true;
+
+            if ($isPrimary) {
+                $primaryRespoId = $mRespoId;
+            }
+
+            \DB::table('default_users_respo')->insert([
+                'default_users_id' => $userId,
+                'm_respo_id'       => $mRespoId,
+                'seq'              => $row['seq'] ?? $seq++,
+                'is_primary'       => $isPrimary ? 1 : 0,
+                'is_active'        => $isActive ? 1 : 0,
+                'creator_id'       => $authId,
+                'last_editor_id'   => $authId,
+                'created_at'       => $now,
+                'updated_at'       => $now,
+            ]);
+        }
+
+        // Jika belum ada yang primary tapi list ada isinya, jadikan item pertama sebagai primary
+        if (!$primaryRespoId && count($respoList) > 0) {
+            $first = is_array($respoList[0]) ? $respoList[0] : (array)$respoList[0];
+            $primaryRespoId = !empty($first['m_respo_id']) ? (int)$first['m_respo_id'] : null;
+            if ($primaryRespoId) {
+                \DB::table('default_users_respo')
+                    ->where('default_users_id', $userId)
+                    ->where('m_respo_id', $primaryRespoId)
+                    ->update(['is_primary' => 1]);
+            }
+        }
+
+        // Sinkronkan m_dir_id dan m_comp_id pada default_users sesuai primary respo
+        if ($primaryRespoId) {
+            $respoData = \DB::table('m_respo')->where('id', $primaryRespoId)->first();
+            if ($respoData) {
+                $updateUser = [];
+                if (!empty($respoData->m_dir_id)) {
+                    $updateUser['m_dir_id'] = $respoData->m_dir_id;
+                }
+                if (!empty($respoData->m_comp_id)) {
+                    $updateUser['m_comp_id'] = $respoData->m_comp_id;
+                }
+                if (!empty($updateUser)) {
+                    \DB::table('default_users')->where('id', $userId)->update($updateUser);
+                }
+            }
+        }
     }
 
 

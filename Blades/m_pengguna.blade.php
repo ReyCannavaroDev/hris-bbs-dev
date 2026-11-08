@@ -214,15 +214,156 @@
           </div>
         </div>
         <!-- END COLUMN -->
-        <!-- ACTION BUTTON START -->
-        <div class="flex flex-row justify-end space-x-[20px] mt-[5em]">
-          <button @click="onBack" class="bg-[#EF4444] hover:bg-[#ed3232] text-white px-[36.5px] py-[12px] rounded-[6px] ">
-            Kembali
-          </button>
-          <button v-show="actionText" @click="onSave" class="bg-[#10B981] hover:bg-[#0ea774] text-white px-[36.5px] py-[12px] rounded-[6px] ">
-            Simpan
-          </button>
+      </div>
+
+      <!-- DAFTAR RESPONSIBILITY SECTION -->
+      <div class="mt-8 border-t pt-6">
+        <div class="flex justify-between items-center mb-4">
+          <div>
+            <h2 class="text-[18px] font-bold text-gray-800">Daftar Responsibility</h2>
+            <p class="text-xs text-gray-500 mt-0.5">Tentukan responsibility dan ruang lingkup hak akses untuk pengguna ini.</p>
+          </div>
+          <div v-if="actionText">
+            <ButtonMultiSelect title="Tambah Responsibility" @add="onRespoAdd" :api="{
+                url: `${store.server.url_backend}/operation/m_respo`,
+                headers: {'Content-Type': 'Application/json', authorization: `${store.user.token_type} ${store.user.token}`},
+                params: { 
+                  simplest: true,
+                  join: true,
+                  where: 'this.is_active = true'  
+                },
+                onsuccess:(response)=>{
+                  response.page = 1
+                  response.hasNext = false
+                  return response
+                }
+              }" :columns="[
+                {
+                  headerName: 'No',
+                  valueGetter:(params)=>params.node.rowIndex + 1,
+                  width: 60,
+                  sortable: false, resizable: false, filter: false,
+                  cellClass: ['justify-center', 'bg-gray-50']
+                },
+                {
+                  field: 'nama',
+                  headerName: 'Nama Responsibility',
+                  flex: 1
+                },
+                {
+                  field: 'm_dir.nama',
+                  headerName: 'Company',
+                  flex: 1
+                },
+                {
+                  field: 'm_divisi.nama',
+                  headerName: 'Divisi',
+                  flex: 1
+                },
+                {
+                  field: 'm_dept.nama',
+                  headerName: 'Departemen',
+                  flex: 1
+                },
+                {
+                  headerName: 'Pilih',
+                  checkboxSelection: true,
+                  headerCheckboxSelection: true,
+                  width: 80,
+                  sortable: false, resizable: false, filter: false,
+                  cellClass: ['justify-center', 'bg-gray-50']
+                }
+              ]">
+              <div class="flex justify-center items-center px-4 py-2 text-xs font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700 transition-all duration-200 cursor-pointer shadow-sm">
+                <icon fa="plus" size="sm mr-1.5" /> Tambah Responsibility
+              </div>
+            </ButtonMultiSelect>
+          </div>
         </div>
+
+        <!-- TABLE RESPONSIBILITY -->
+        <div class="overflow-x-auto border border-gray-200 rounded-lg shadow-sm">
+          <table class="w-full text-sm text-left border-collapse">
+            <thead class="bg-gray-100 text-gray-700 uppercase text-xs font-semibold">
+              <tr>
+                <th class="p-3 text-center border-b border-r border-gray-200 w-12">No.</th>
+                <th class="p-3 border-b border-r border-gray-200">Company</th>
+                <th class="p-3 border-b border-r border-gray-200">Divisi</th>
+                <th class="p-3 border-b border-r border-gray-200">Departemen</th>
+                <th class="p-3 border-b border-r border-gray-200">Responsibility</th>
+                <th class="p-3 text-center border-b border-r border-gray-200 w-28">Is Primary</th>
+                <th class="p-3 text-center border-b border-r border-gray-200 w-36">Status</th>
+                <th class="p-3 text-center border-b border-gray-200 w-16" v-if="actionText">Action</th>
+              </tr>
+            </thead>
+            <tbody class="divide-y divide-gray-200 bg-white">
+              <tr v-for="(item, i) in trx_respo" :key="item.m_respo_id || i" class="hover:bg-gray-50 transition-colors">
+                <td class="p-3 text-center border-r border-gray-200 font-medium text-gray-600">{{ i + 1 }}.</td>
+                <td class="p-3 border-r border-gray-200 font-medium text-gray-800">{{ item.company_nama || '-' }}</td>
+                <td class="p-3 border-r border-gray-200 text-gray-600">{{ item.divisi_nama || '-' }}</td>
+                <td class="p-3 border-r border-gray-200 text-gray-600">{{ item.dept_nama || '-' }}</td>
+                <td class="p-3 border-r border-gray-200 font-semibold text-primary">{{ item.respo_nama || '-' }}</td>
+                <td class="p-3 text-center border-r border-gray-200">
+                  <div class="flex justify-center">
+                    <label class="relative inline-flex items-center cursor-pointer">
+                      <input 
+                        type="checkbox" 
+                        class="peer hidden" 
+                        v-model="item.is_primary" 
+                        :disabled="!actionText"
+                        @change="handlePrimaryChange(item)" 
+                      />
+                      <span class="h-5 w-5 flex items-center justify-center border-2 border-gray-300 rounded bg-white peer-checked:bg-primary peer-checked:border-primary peer-disabled:opacity-50 transition-colors">
+                        <svg v-show="item.is_primary" xmlns="http://www.w3.org/2000/svg" class="h-3.5 w-3.5 text-white" viewBox="0 0 20 20" fill="currentColor">
+                          <path fill-rule="evenodd" d="M16.707 5.293a1 1 0 00-1.414 0L8 12.586l-3.293-3.293a1 1 0 00-1.414 1.414l4 4a1 1 0 001.414 0l8-8a1 1 0 000-1.414z" clip-rule="evenodd" />
+                        </svg>
+                      </span>
+                    </label>
+                  </div>
+                </td>
+                <td class="p-3 text-center border-r border-gray-200">
+                  <div class="flex items-center justify-center space-x-1">
+                    <span :class="!item.is_active ? 'text-red-500 font-medium text-xs' : 'text-gray-400 text-xs'">InActive</span>
+                    <input
+                      class="mx-1 h-3.5 w-8 appearance-none rounded-[0.4375rem] bg-neutral-300 before:pointer-events-none before:absolute before:h-3.5 before:w-3.5 before:rounded-full before:bg-transparent before:content-[''] after:absolute after:z-[2] after:-mt-[0.1875rem] after:h-5 after:w-5 after:rounded-full after:border-none after:bg-blue-500 after:shadow-[0_0px_3px_0_rgb(0_0_0_/_7%),_0_2px_2px_0_rgb(0_0_0_/_4%)] after:transition-[background-color_0.2s,transform_0.2s] after:content-[''] checked:bg-primary checked:after:absolute checked:after:z-[2] checked:after:-mt-[3px] checked:after:ml-[1.0625rem] checked:after:h-5 checked:after:w-5 checked:after:rounded-full checked:after:border-none checked:after:bg-primary checked:after:shadow-[0_3px_1px_-2px_rgba(0,0,0,0.2),_0_2px_2px_0_rgba(0,0,0,0.14),_0_1px_5px_0_rgba(0,0,0,0.12)] checked:after:transition-[background-color_0.2s,transform_0.2s] checked:after:content-[''] hover:cursor-pointer focus:outline-none focus:ring-0 focus:before:scale-100 focus:before:opacity-[0.12] focus:before:shadow-[3px_-1px_0px_13px_rgba(0,0,0,0.6)] focus:before:transition-[box-shadow_0.2s,transform_0.2s] focus:after:absolute focus:after:z-[1] focus:after:block focus:after:h-5 focus:after:w-5 focus:after:rounded-full focus:after:content-[''] checked:focus:border-primary checked:focus:bg-primary checked:focus:before:ml-[1.0625rem] checked:focus:before:scale-100 checked:focus:before:shadow-[3px_-1px_0px_13px_#3b71ca] checked:focus:before:transition-[box-shadow_0.2s,transform_0.2s] dark:bg-neutral-600 dark:after:bg-neutral-400 dark:checked:bg-primary dark:checked:after:bg-primary dark:focus:before:shadow-[3px_-1px_0px_13px_rgba(255,255,255,0.4)] dark:checked:focus:before:shadow-[3px_-1px_0px_13px_#3b71ca]"
+                      type="checkbox"
+                      role="switch"
+                      :id="'respo_active_' + i"
+                      :disabled="!actionText || item.is_primary"
+                      v-model="item.is_active" />
+                    <span :class="item.is_active ? 'text-green-600 font-medium text-xs' : 'text-gray-400 text-xs'">Active</span>
+                  </div>
+                </td>
+                <td class="p-3 text-center" v-if="actionText">
+                  <button 
+                    type="button" 
+                    @click="onRemoveRespo(i)" 
+                    class="text-red-500 hover:text-red-700 transition-colors p-1"
+                    title="Hapus Responsibility"
+                  >
+                    <icon fa="trash" size="sm" />
+                  </button>
+                </td>
+              </tr>
+              <tr v-if="trx_respo.length === 0">
+                <td :colspan="actionText ? 8 : 7" class="text-center py-8 text-gray-400 italic bg-gray-50">
+                  Belum ada responsibility yang ditambahkan untuk pengguna ini.
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- ACTION BUTTON START -->
+      <div class="flex flex-row justify-end space-x-[20px] mt-[3em]">
+        <button @click="onBack" class="bg-[#EF4444] hover:bg-[#ed3232] text-white px-[36.5px] py-[12px] rounded-[6px] transition-colors">
+          Kembali
+        </button>
+        <button v-show="actionText" @click="onSave" class="bg-[#10B981] hover:bg-[#0ea774] text-white px-[36.5px] py-[12px] rounded-[6px] transition-colors">
+          Simpan
+        </button>
+      </div>
       </div>
     </div>
   </div>
