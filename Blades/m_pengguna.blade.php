@@ -232,11 +232,7 @@
                   join: true,
                   where: 'this.is_active = true'  
                 },
-                onsuccess:(response)=>{
-                  response.page = 1
-                  response.hasNext = false
-                  return response
-                }
+                onsuccess: (response) => filterAvailableRespo(response)
               }" :columns="[
                 {
                   headerName: 'No',

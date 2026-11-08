@@ -152,6 +152,18 @@ async function nikChange(id) {
   }
 }
 
+function filterAvailableRespo(response) {
+  if (response && response.data && Array.isArray(response.data)) {
+    const selectedIds = trx_respo.value.map(r => Number(r.m_respo_id || r.id)).filter(Boolean)
+    response.data = response.data.filter(dt => !selectedIds.includes(Number(dt.id)))
+  }
+  if (response) {
+    response.page = 1
+    response.hasNext = false
+  }
+  return response
+}
+
 function onRespoAdd(rows) {
   let dataArr = [...trx_respo.value]
   rows.forEach(row => {
