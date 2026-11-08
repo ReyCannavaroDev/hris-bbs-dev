@@ -87,6 +87,12 @@ onBeforeMount(async () => {
           console.warn('Gagal memuat list respo user:', e)
         }
       }
+
+      // Pastikan jika ada responsibility, minimal 1 berstatus Primary dan Active
+      if (trx_respo.value.length > 0 && !trx_respo.value.some(r => r.is_primary)) {
+        trx_respo.value[0].is_primary = true
+        trx_respo.value[0].is_active = true
+      }
     } catch (err) {
       isBadForm.value = true
       swal.fire({
@@ -153,14 +159,14 @@ function onRespoAdd(rows) {
     if (dataArr.some(existing => Number(existing.m_respo_id) === Number(respoId))) {
       return
     }
-    const isFirst = dataArr.length === 0
+    const hasPrimary = dataArr.some(item => item.is_primary)
     dataArr.push({
       m_respo_id: respoId,
       respo_nama: row.nama,
       company_nama: row['m_dir.nama'] || row.dir_nama || '-',
       divisi_nama: row['m_divisi.nama'] || row.divisi_nama || '-',
       dept_nama: row['m_dept.nama'] || row.dept_nama || '-',
-      is_primary: isFirst,
+      is_primary: !hasPrimary,
       is_active: true,
       seq: dataArr.length + 1
     })
@@ -168,20 +174,29 @@ function onRespoAdd(rows) {
   trx_respo.value = dataArr
 }
 
-function handlePrimaryChange(selectedItem) {
+function togglePrimary(selectedItem) {
+  if (!actionText.value) return
+  trx_respo.value.forEach(item => {
+    item.is_primary = (item === selectedItem)
+  })
+  selectedItem.is_active = true
+}
+
+function toggleStatus(selectedItem) {
+  if (!actionText.value) return
   if (selectedItem.is_primary) {
-    trx_respo.value.forEach(item => {
-      if (item !== selectedItem) {
-        item.is_primary = false
-      }
+    swal.fire({
+      icon: 'warning',
+      text: 'Responsibility utama (Primary) harus selalu aktif.'
     })
     selectedItem.is_active = true
-  } else {
-    const hasAnyPrimary = trx_respo.value.some(item => item.is_primary)
-    if (!hasAnyPrimary && trx_respo.value.length > 0) {
-      selectedItem.is_primary = true
-    }
+    return
   }
+  selectedItem.is_active = !selectedItem.is_active
+}
+
+function handlePrimaryChange(selectedItem) {
+  togglePrimary(selectedItem)
 }
 
 function onRemoveRespo(index) {

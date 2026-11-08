@@ -305,33 +305,43 @@
                 <td class="p-3 border-r border-gray-200 font-semibold text-primary">{{ item.respo_nama || '-' }}</td>
                 <td class="p-3 text-center border-r border-gray-200">
                   <div class="flex justify-center">
-                    <label class="relative inline-flex items-center cursor-pointer">
+                    <label 
+                      class="cursor-pointer inline-flex items-center p-1"
+                      :title="actionText ? 'Jadikan responsibility utama' : ''"
+                      @click="togglePrimary(item)"
+                    >
                       <input 
-                        type="checkbox" 
-                        class="peer hidden" 
-                        v-model="item.is_primary" 
+                        type="checkbox"
+                        class="w-5 h-5 text-blue-600 bg-white border-2 border-gray-400 rounded focus:ring-blue-500 cursor-pointer transition-all"
+                        :checked="Boolean(item.is_primary)"
                         :disabled="!actionText"
-                        @change="handlePrimaryChange(item)" 
+                        @change="togglePrimary(item)"
                       />
-                      <span class="h-5 w-5 flex items-center justify-center border-2 border-gray-300 rounded bg-white peer-checked:bg-primary peer-checked:border-primary peer-disabled:opacity-50 transition-colors">
-                        <svg v-show="item.is_primary" xmlns="http://www.w3.org/2000/svg" class="h-3.5 w-3.5 text-white" viewBox="0 0 20 20" fill="currentColor">
-                          <path fill-rule="evenodd" d="M16.707 5.293a1 1 0 00-1.414 0L8 12.586l-3.293-3.293a1 1 0 00-1.414 1.414l4 4a1 1 0 001.414 0l8-8a1 1 0 000-1.414z" clip-rule="evenodd" />
-                        </svg>
-                      </span>
                     </label>
                   </div>
                 </td>
                 <td class="p-3 text-center border-r border-gray-200">
-                  <div class="flex items-center justify-center space-x-1">
-                    <span :class="!item.is_active ? 'text-red-500 font-medium text-xs' : 'text-gray-400 text-xs'">InActive</span>
-                    <input
-                      class="mx-1 h-3.5 w-8 appearance-none rounded-[0.4375rem] bg-neutral-300 before:pointer-events-none before:absolute before:h-3.5 before:w-3.5 before:rounded-full before:bg-transparent before:content-[''] after:absolute after:z-[2] after:-mt-[0.1875rem] after:h-5 after:w-5 after:rounded-full after:border-none after:bg-blue-500 after:shadow-[0_0px_3px_0_rgb(0_0_0_/_7%),_0_2px_2px_0_rgb(0_0_0_/_4%)] after:transition-[background-color_0.2s,transform_0.2s] after:content-[''] checked:bg-primary checked:after:absolute checked:after:z-[2] checked:after:-mt-[3px] checked:after:ml-[1.0625rem] checked:after:h-5 checked:after:w-5 checked:after:rounded-full checked:after:border-none checked:after:bg-primary checked:after:shadow-[0_3px_1px_-2px_rgba(0,0,0,0.2),_0_2px_2px_0_rgba(0,0,0,0.14),_0_1px_5px_0_rgba(0,0,0,0.12)] checked:after:transition-[background-color_0.2s,transform_0.2s] checked:after:content-[''] hover:cursor-pointer focus:outline-none focus:ring-0 focus:before:scale-100 focus:before:opacity-[0.12] focus:before:shadow-[3px_-1px_0px_13px_rgba(0,0,0,0.6)] focus:before:transition-[box-shadow_0.2s,transform_0.2s] focus:after:absolute focus:after:z-[1] focus:after:block focus:after:h-5 focus:after:w-5 focus:after:rounded-full focus:after:content-[''] checked:focus:border-primary checked:focus:bg-primary checked:focus:before:ml-[1.0625rem] checked:focus:before:scale-100 checked:focus:before:shadow-[3px_-1px_0px_13px_#3b71ca] checked:focus:before:transition-[box-shadow_0.2s,transform_0.2s] dark:bg-neutral-600 dark:after:bg-neutral-400 dark:checked:bg-primary dark:checked:after:bg-primary dark:focus:before:shadow-[3px_-1px_0px_13px_rgba(255,255,255,0.4)] dark:checked:focus:before:shadow-[3px_-1px_0px_13px_#3b71ca]"
-                      type="checkbox"
-                      role="switch"
-                      :id="'respo_active_' + i"
-                      :disabled="!actionText || item.is_primary"
-                      v-model="item.is_active" />
-                    <span :class="item.is_active ? 'text-green-600 font-medium text-xs' : 'text-gray-400 text-xs'">Active</span>
+                  <div class="flex items-center justify-center">
+                    <div 
+                      class="inline-flex items-center space-x-2 select-none"
+                      :class="actionText && !item.is_primary ? 'cursor-pointer' : (actionText && item.is_primary ? 'cursor-default' : 'cursor-not-allowed opacity-80')"
+                      @click="toggleStatus(item)"
+                      :title="item.is_primary ? 'Responsibility utama harus selalu aktif' : (actionText ? 'Klik untuk ubah status' : '')"
+                    >
+                      <span :class="!item.is_active ? 'text-red-500 font-semibold text-xs' : 'text-gray-400 text-xs'">InActive</span>
+                      <div class="relative inline-flex items-center">
+                        <div 
+                          class="w-8 h-4 rounded-full transition-colors duration-200 ease-in-out cursor-pointer"
+                          :class="item.is_active ? 'bg-primary' : 'bg-neutral-300'"
+                        >
+                          <div 
+                            class="w-4 h-4 bg-white rounded-full shadow transform transition-transform duration-200 ease-in-out border border-gray-200"
+                            :class="item.is_active ? 'translate-x-4' : 'translate-x-0'"
+                          ></div>
+                        </div>
+                      </div>
+                      <span :class="item.is_active ? 'text-green-600 font-semibold text-xs' : 'text-gray-400 text-xs'">Active</span>
+                    </div>
                   </div>
                 </td>
                 <td class="p-3 text-center" v-if="actionText">
