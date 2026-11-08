@@ -89,6 +89,9 @@ onBeforeMount(async () => {
       for (const key in initialValues) {
         values[key] = initialValues[key]
       }
+      if (initialValues.is_active !== undefined) {
+        values.is_active = (initialValues.is_active === true || initialValues.is_active === 1 || initialValues.is_active === '1' || initialValues.is_active === 'true' || initialValues.is_active === 't')
+      }
 
       // Ambil detail roles m_respo_d
       const resDet = await fetch(`${store.server.url_backend}/operation/m_respo_d?join=true&where=this.m_respo_id=${editedId}&paginate=500`, {
@@ -133,7 +136,7 @@ async function onSave() {
     return
   }
   if (!values.m_dir_id) {
-    swal.fire({ icon: 'warning', text: 'Company / Direktorat wajib dipilih.' })
+    swal.fire({ icon: 'warning', text: 'Company wajib dipilih.' })
     return
   }
 
@@ -291,7 +294,7 @@ const landing = reactive({
     },
     {
       field: 'm_dir.nama',
-      headerName: 'Company / Direktorat',
+      headerName: 'Company',
       flex: 1.2,
       cellClass: ['border-r', '!border-gray-200']
     },
