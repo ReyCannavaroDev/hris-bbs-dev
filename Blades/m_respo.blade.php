@@ -139,8 +139,12 @@
             fa-icon="search" :check="false" />
         </div>
 
-        <div class="flex flex-col justify-center">
-          <label class="font-semibold mb-2">Status Active :</label>
+        <div class="flex flex-col gap-2">
+          <label
+            class="inline-block pl-[0.15rem] hover:cursor-pointer font-semibold"
+            for="is_active_for_click"
+            >Status :</label
+          >
           <div class="flex w-40">
             <div class="flex-auto">
               <i class="text-red-500">InActive</i>
