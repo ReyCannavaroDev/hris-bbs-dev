@@ -8,6 +8,7 @@ class m_respo extends \App\Models\BasicModels\m_respo
     {
         parent::__construct();
         $this->required = ["nama"];
+        $this->details  = ["m_respo_d"];
     }
     
     public $fileColumns = [];

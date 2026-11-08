@@ -7,6 +7,7 @@ class m_respo_d extends \App\Models\BasicModels\m_respo_d
     public function __construct()
     {
         parent::__construct();
+        $this->required = ["m_role_id"];
     }
     
     public $fileColumns = [];

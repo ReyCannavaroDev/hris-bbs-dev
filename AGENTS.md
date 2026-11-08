@@ -18,3 +18,4 @@ workspace ini bukan aplikasi laravel lengkap dan tidak ditujukan untuk dijalanka
 6. jangan menaruh credential, token, `.env`, data pribadi karyawan, atau akses database ke workspace.
 7. setiap perbaikan harus mencantumkan file yang diubah, penyebab, perubahan kode, dampak, dan langkah pengujian.
 8. dilarang menjalankan perintah git add, git commit, dan git push. seluruh pengelolaan git dilakukan secara manual oleh user.
+9. dilarang mengedit file Migration.php dan Basic.php (file hasil generate). penambahan kolom database dilakukan di Alter.php, sedangkan penyesuaian rules, relasi, properti, dan fungsi dilakukan di Custom.php.
