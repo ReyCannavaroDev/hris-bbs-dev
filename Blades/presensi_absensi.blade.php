@@ -320,7 +320,7 @@
         <div>
           <label class="font-semibold">Tanggal</label>
           <FieldX :bind="{ readonly: true, disabled: true }" label="" class="w-full py-2 !mt-0" :value="formatDmy(values.tanggal)"
-            :errorText="formErrors.tanggal ? 'failed' : ''" @input="v=>values.tanggal=v"
+            :errorText="formErrors.tanggal ? 'failed' : ''"
             :hints="formErrors.tanggal" :check="false" label="" placeholder="Tanggal" />
         </div>
         <div>
@@ -373,7 +373,8 @@
             <label class="font-semibold">Pin Titik Lokasi Check In</span></label>
             <FieldGeo class="w-full py-2 !mt-0" :bind="{ readonly: !actionText }" @input="(v)=>{
             values.geo_checkin=v
-            values.test = values.geo_checkin?.match(/\(([^)]+)\)/)[1].split(' ')
+            const matchIn = values.geo_checkin?.match(/\(([^)]+)\)/)
+            values.test = matchIn ? matchIn[1].split(' ') : null
             if(values.test){
               values.checkin_long = values.test[0]
               values.checkin_lat = values.test[1]
@@ -474,7 +475,8 @@
             <label class="font-semibold">Pin Titik Lokasi Check Out</span></label>
             <FieldGeo class="w-full py-2 !mt-0" :bind="{ readonly: !actionText }" @input="(v)=>{
             values.geo_checkout=v
-            values.test_out = values.geo_checkout?.match(/\(([^)]+)\)/)[1].split(' ')
+            const matchOut = values.geo_checkout?.match(/\(([^)]+)\)/)
+            values.test_out = matchOut ? matchOut[1].split(' ') : null
             if(values.test_out){
               values.checkout_long = values.test_out[0]
               values.checkout_lat = values.test_out[1]

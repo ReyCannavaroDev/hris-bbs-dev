@@ -12,9 +12,15 @@ class presensiabsensi extends Migration
         Schema::table($this->tableName, function (Blueprint $table) {
             //$table->string('_existColumnName_')->change();
             //$table->string('_columnName_');
-            $table->dropColumn(['catatan']);
-            // $table->string('checkin_foto')->nullable()->change();
-            // $table->string('checkout_foto')->nullable()->change();
+            if (Schema::hasColumn($this->tableName, 'catatan')) {
+                $table->dropColumn(['catatan']);
+            }
+            if (Schema::hasColumn($this->tableName, 'checkin_foto')) {
+                $table->string('checkin_foto')->nullable()->change();
+            }
+            if (Schema::hasColumn($this->tableName, 'checkout_foto')) {
+                $table->string('checkout_foto')->nullable()->change();
+            }
             // $table->text('catatan')->nullable();
             // $table->text('catatan_out')->nullable();
         });

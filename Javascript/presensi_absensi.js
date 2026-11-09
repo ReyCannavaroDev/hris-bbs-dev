@@ -211,10 +211,11 @@ const loadData = async () => {
     }
     clearInterval(interval);
   } catch (err) {
+    loaderData.value = false
     isRequesting.value = false
     swal.fire({
       icon: 'Perhatian',
-      text: err,
+      text: err?.message || String(err),
       allowOutsideClick: false,
     })
     clearInterval(interval);
@@ -282,9 +283,11 @@ onBeforeMount(async () => {
       const resultJson = await res.json()
       initialValues = resultJson.data
       initialValues.company_name = resultJson.data.company_name || resultJson.data['default_user.m_dir.nama'] || '-'
-      const regex = new RegExp(`(${store.server.url_backend})(\/?)(${store.server.url_backend})`, 'g')
-      const image_checkin = initialValues.checkin_foto?.replace(regex, '$1')
-      const image_checkout = initialValues.checkout_foto?.replace(regex, '$1')
+      const backendUrl = String(store.server?.url_backend || '')
+      const escapedBackendUrl = backendUrl.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+      const regex = escapedBackendUrl ? new RegExp(`(${escapedBackendUrl})(\\/?)(${escapedBackendUrl})`, 'g') : null
+      const image_checkin = regex && initialValues.checkin_foto ? initialValues.checkin_foto.replace(regex, '$1') : initialValues.checkin_foto
+      const image_checkout = regex && initialValues.checkout_foto ? initialValues.checkout_foto.replace(regex, '$1') : initialValues.checkout_foto
       initialValues.checkin_foto = image_checkin
 
       let segments = []
@@ -314,7 +317,7 @@ onBeforeMount(async () => {
       isBadForm.value = true
       swal.fire({
         icon: 'error',
-        text: err,
+        text: err?.message || String(err),
         allowOutsideClick: false,
         confirmButtonText: 'Kembali',
       }).then(() => {
@@ -346,7 +349,7 @@ onBeforeMount(async () => {
       isBadForm.value = true
       swal.fire({
         icon: 'error',
-        text: err,
+        text: err?.message || String(err),
         allowOutsideClick: false,
         confirmButtonText: 'Kembali',
       }).then(() => {
@@ -365,7 +368,12 @@ onBeforeMount(async () => {
 })
 
 function onBack() {
-    router.replace('/' + modulPath+'?ts='+route.query.ts)
+  const ts = route.query.ts || (values.tanggal ? String(values.tanggal) : '')
+  if (ts && ts !== 'undefined') {
+    router.replace('/' + modulPath + '?ts=' + encodeURIComponent(ts))
+  } else {
+    router.replace('/' + modulPath)
+  }
 }
 
 
@@ -391,6 +399,7 @@ function onSave() {
     showDenyButton: true
   }).then(async (res) => {
     if (res.isConfirmed) {
+      formErrors.value = {}
       try {
         const allowedKeys = [
           'm_comp_id',
@@ -471,36 +480,60 @@ function onSave() {
         if (payload.checkin_foto !== undefined) payload.checkin_foto = cleanFoto(payload.checkin_foto)
         if (payload.checkout_foto !== undefined) payload.checkout_foto = cleanFoto(payload.checkout_foto)
 
-        const isCreating = ['Create','Copy','Tambah'].includes(actionText.value)
-        const dataURL = `${store.server.url_backend}/operation${endpointApi}${isCreating ? '' : ('/' + route.params.id)}`
+        const isCreating = ['Create', 'Copy', 'Tambah'].includes(actionText.value)
+        if (!isCreating && route.params.id) {
+          payload.id = Number(route.params.id)
+        }
+
+        const dataURL = `${store.server.url_backend}/operation${endpointApi}/save_web`
         isRequesting.value = true
 
-        const res = await fetch(dataURL, {
-          method: isCreating ? 'POST' : 'PUT',
+        const fetchRes = await fetch(dataURL, {
+          method: 'POST',
           headers: {
             'Content-Type': 'Application/json',
             Authorization: `${store.user.token_type} ${store.user.token}`
           },
           body: JSON.stringify(payload)
         })
-        if (!res.ok) {
-          if ([400, 422].includes(res.status)) {
-            const responseJson = await res.json()
-            formErrors.value = responseJson.errors || {}
-            throw new Error(responseJson.message || "Failed when trying to post data")
-          } else {
-            throw new Error("Failed when trying to post data")
-          }
+        if (!fetchRes.ok) {
+          let errMsg = `Gagal menyimpan data (HTTP ${fetchRes.status})`
+          try {
+            const contentType = fetchRes.headers.get('content-type') || ''
+            if (contentType.includes('application/json')) {
+              const responseJson = await fetchRes.json()
+              formErrors.value = responseJson.errors || {}
+              if (Array.isArray(responseJson.errors) && responseJson.errors.length) {
+                errMsg = responseJson.errors[0]
+              } else if (typeof responseJson.errors === 'string' && responseJson.errors) {
+                errMsg = responseJson.errors
+              } else if (responseJson.errors && typeof responseJson.errors === 'object' && Object.keys(responseJson.errors).length) {
+                const firstKey = Object.keys(responseJson.errors)[0]
+                const firstVal = responseJson.errors[firstKey]
+                const firstDetail = Array.isArray(firstVal) ? firstVal[0] : firstVal
+                errMsg = responseJson.message ? `${responseJson.message}: ${firstDetail}` : String(firstDetail)
+              } else if (responseJson.message) {
+                errMsg = responseJson.message
+              }
+            } else {
+              const textBody = await fetchRes.text()
+              if (textBody) {
+                errMsg = `${errMsg} - ${textBody.slice(0, 200)}`
+              }
+            }
+          } catch (_) {}
+          throw new Error(errMsg)
         }
         onBack()
       } catch (err) {
         isBadForm.value = true
         swal.fire({
           icon: 'error',
-          text: err
+          text: err?.message || String(err || 'Terjadi kesalahan saat menyimpan data')
         })
+      } finally {
+        isRequesting.value = false
       }
-      isRequesting.value = false
     }
   })
 }

@@ -9,31 +9,163 @@ use Illuminate\Support\Facades\Http;
 class presensi_absensi extends \App\Models\BasicModels\presensi_absensi
 {
     private $helper;
+    private $nullableColumnCache = [];
+
     public function __construct()
     {
         parent::__construct();
         $this->helper = getCore('Helper');
         $this->casts['checkin_on_scope'] = 'boolean';
         $this->casts['checkout_on_scope'] = 'boolean';
+        // Hindari join ke last_editor_id agar baris baru dengan last_editor_id NULL tidak gugur oleh INNER JOIN otomatis generator
+        $this->joins = [
+            "m_comp.id=presensi_absensi.m_comp_id",
+            "default_users.id=presensi_absensi.default_user_id",
+            "default_users.id=presensi_absensi.creator_id"
+        ];
     }
 
     public $fileColumns = [];
-    public $company_name;
 
     public $createAdditionalData = ["creator_id" => "auth:id"];
     public $updateAdditionalData = ["last_editor_id" => "auth:id"];
 
+    private function isColumnNullable($column)
+    {
+        if (array_key_exists($column, $this->nullableColumnCache)) {
+            return $this->nullableColumnCache[$column];
+        }
+
+        $nullable = false;
+        try {
+            $colInfo = \DB::selectOne(
+                "SELECT is_nullable FROM information_schema.columns WHERE table_schema = current_schema() AND table_name = ? AND column_name = ? LIMIT 1",
+                [$this->table, $column]
+            );
+            if ($colInfo && strtoupper((string)($colInfo->is_nullable ?? '')) === 'YES') {
+                $nullable = true;
+            }
+        } catch (\Throwable $e) {
+            $nullable = false;
+        }
+
+        $this->nullableColumnCache[$column] = $nullable;
+        return $nullable;
+    }
+
+    private function normalizeFotoValue($val)
+    {
+        if ($val === null) {
+            return null;
+        }
+        $foto = trim((string)$val);
+        if ($foto === '' || strtolower($foto) === 'null' || $foto === '/') {
+            return null;
+        }
+
+        $baseUrl = rtrim(url(''), '/');
+        if ($baseUrl !== '' && stripos($foto, $baseUrl) === 0) {
+            $foto = ltrim(substr($foto, strlen($baseUrl)), '/');
+        }
+
+        if (app()->bound('request') && app()->request) {
+            $reqHost = rtrim((string)app()->request->getSchemeAndHttpHost(), '/');
+            if ($reqHost !== '' && stripos($foto, $reqHost) === 0) {
+                $foto = ltrim(substr($foto, strlen($reqHost)), '/');
+            }
+        }
+
+        if (preg_match('#^https?://[^/]+/(uploads/.+)$#i', $foto, $m)) {
+            $foto = $m[1];
+        }
+
+        $foto = trim($foto);
+        return ($foto === '' || $foto === '/') ? null : $foto;
+    }
+
+    private function normalizeDateValue($val)
+    {
+        if ($val === null) {
+            return null;
+        }
+        $str = trim((string)$val);
+        if ($str === '' || $str === '-' || strtolower($str) === 'null') {
+            return null;
+        }
+
+        if (preg_match('/^(\d{4})[-\/](\d{1,2})[-\/](\d{1,2})$/', $str, $m)) {
+            $y = (int)$m[1];
+            $mo = (int)$m[2];
+            $d = (int)$m[3];
+            return checkdate($mo, $d, $y) ? sprintf('%04d-%02d-%02d', $y, $mo, $d) : null;
+        }
+
+        if (preg_match('/^(\d{1,2})[-\/](\d{1,2})[-\/](\d{4})$/', $str, $m)) {
+            $d = (int)$m[1];
+            $mo = (int)$m[2];
+            $y = (int)$m[3];
+            return checkdate($mo, $d, $y) ? sprintf('%04d-%02d-%02d', $y, $mo, $d) : null;
+        }
+
+        try {
+            return Carbon::parse($str)->format('Y-m-d');
+        } catch (\Throwable $e) {
+            return null;
+        }
+    }
+
+    private function normalizeTimeValue($val)
+    {
+        if ($val === null) {
+            return null;
+        }
+        $str = trim((string)$val);
+        if ($str === '' || strtolower($str) === 'null') {
+            return null;
+        }
+
+        if (preg_match('/^(\d{1,2}):(\d{2})(?::(\d{2}))?/', $str, $m)) {
+            $h = (int)$m[1];
+            $i = (int)$m[2];
+            $s = isset($m[3]) ? (int)$m[3] : 0;
+            if ($h >= 0 && $h <= 23 && $i >= 0 && $i <= 59 && $s >= 0 && $s <= 59) {
+                return sprintf('%02d:%02d:%02d', $h, $i, $s);
+            }
+        }
+
+        return null;
+    }
+
+    private function toBooleanValue($val, $default = false)
+    {
+        if ($val === null || $val === '') {
+            return $default;
+        }
+        $parsed = filter_var($val, FILTER_VALIDATE_BOOLEAN, FILTER_NULL_ON_FAILURE);
+        return $parsed === null ? $default : $parsed;
+    }
+
     public function onRetrieved($model)
     {
+        if (!$model || !is_object($model)) {
+            return;
+        }
+
+        // Transformasi hanya untuk GET agar PUT/POST/DELETE tidak tercemar atribut virtual company_name atau URL foto
+        if (app()->bound('request') && app()->request && !app()->request->isMethod('GET')) {
+            return;
+        }
+
+        $baseUrl = rtrim(url(''), '/');
         if (!empty($model->checkout_foto) && substr($model->checkout_foto, 0, 4) !== 'http') {
-            $model->checkout_foto = url('').'/'.ltrim($model->checkout_foto, '/');
-        } elseif (empty($model->checkout_foto) || $model->checkout_foto === url('').'/') {
+            $model->checkout_foto = $baseUrl.'/'.ltrim($model->checkout_foto, '/');
+        } elseif (empty($model->checkout_foto) || $model->checkout_foto === $baseUrl.'/' || $model->checkout_foto === '/') {
             $model->checkout_foto = null;
         }
 
         if (!empty($model->checkin_foto) && substr($model->checkin_foto, 0, 4) !== 'http') {
-            $model->checkin_foto = url('').'/'.ltrim($model->checkin_foto, '/');
-        } elseif (empty($model->checkin_foto) || $model->checkin_foto === url('').'/') {
+            $model->checkin_foto = $baseUrl.'/'.ltrim($model->checkin_foto, '/');
+        } elseif (empty($model->checkin_foto) || $model->checkin_foto === $baseUrl.'/' || $model->checkin_foto === '/') {
             $model->checkin_foto = null;
         }
 
@@ -61,29 +193,25 @@ class presensi_absensi extends \App\Models\BasicModels\presensi_absensi
             }
         }
 
-        unset($cleanData['id'], $cleanData['created_at'], $cleanData['updated_at']);
+        unset($cleanData['id'], $cleanData['created_at'], $cleanData['updated_at'], $cleanData['company_name']);
 
         foreach (['checkin_foto', 'checkout_foto'] as $fotoCol) {
-            if (isset($cleanData[$fotoCol])) {
-                $foto = trim((string)$cleanData[$fotoCol]);
-                $baseUrl = rtrim(url(''), '/');
-                if (substr($foto, 0, strlen($baseUrl)) === $baseUrl) {
-                    $foto = ltrim(substr($foto, strlen($baseUrl)), '/');
-                }
-                $cleanData[$fotoCol] = !empty($foto) ? $foto : null;
+            $fotoVal = array_key_exists($fotoCol, $cleanData) ? $this->normalizeFotoValue($cleanData[$fotoCol]) : null;
+            if ($fotoVal === null) {
+                $cleanData[$fotoCol] = $this->isColumnNullable($fotoCol) ? null : '';
+            } else {
+                $cleanData[$fotoCol] = $fotoVal;
             }
         }
 
         $nullableCols = [
             'checkout_time',
-            'checkout_foto',
             'checkout_lat',
             'checkout_long',
             'checkout_address',
             'checkout_region',
             'catatan_out',
-            'catatan_in',
-            'checkin_foto'
+            'catatan_in'
         ];
         foreach ($nullableCols as $col) {
             if (array_key_exists($col, $cleanData) && (trim((string)$cleanData[$col]) === '' || $cleanData[$col] === 'null')) {
@@ -91,23 +219,18 @@ class presensi_absensi extends \App\Models\BasicModels\presensi_absensi
             }
         }
 
-        if (isset($cleanData['checkin_on_scope'])) {
-            $cleanData['checkin_on_scope'] = filter_var($cleanData['checkin_on_scope'], FILTER_VALIDATE_BOOLEAN);
+        $cleanData['checkin_on_scope'] = $this->toBooleanValue($cleanData['checkin_on_scope'] ?? false, false);
+
+        if (empty($cleanData['checkout_time'])) {
+            $cleanData['checkout_time'] = null;
+            $cleanData['checkout_on_scope'] = null;
+        } else {
+            $cleanData['checkout_time'] = $this->normalizeTimeValue($cleanData['checkout_time']);
+            $cleanData['checkout_on_scope'] = $this->toBooleanValue($cleanData['checkout_on_scope'] ?? false, false);
         }
 
-        if (array_key_exists('checkout_on_scope', $cleanData)) {
-            if (empty($cleanData['checkout_time'])) {
-                $cleanData['checkout_on_scope'] = null;
-            } else {
-                $cleanData['checkout_on_scope'] = filter_var($cleanData['checkout_on_scope'], FILTER_VALIDATE_BOOLEAN);
-            }
-        }
-
-        if (!empty($cleanData['checkout_time']) && preg_match('/^\d{2}:\d{2}$/', trim($cleanData['checkout_time']))) {
-            $cleanData['checkout_time'] = trim($cleanData['checkout_time']) . ':00';
-        }
-        if (!empty($cleanData['checkin_time']) && preg_match('/^\d{2}:\d{2}$/', trim($cleanData['checkin_time']))) {
-            $cleanData['checkin_time'] = trim($cleanData['checkin_time']) . ':00';
+        if (!empty($cleanData['checkin_time'])) {
+            $cleanData['checkin_time'] = $this->normalizeTimeValue($cleanData['checkin_time']) ?? $cleanData['checkin_time'];
         }
 
         if (!empty($cleanData['checkin_time']) && !empty($cleanData['checkout_time'])) {
@@ -117,11 +240,20 @@ class presensi_absensi extends \App\Models\BasicModels\presensi_absensi
         }
 
         if (!empty($cleanData['tanggal'])) {
-            $cleanData['tanggal'] = date('Y-m-d', strtotime(str_replace('/', '-', $cleanData['tanggal'])));
+            $parsedTanggal = $this->normalizeDateValue($cleanData['tanggal']);
+            if ($parsedTanggal !== null) {
+                $cleanData['tanggal'] = $parsedTanggal;
+            }
+        }
+
+        if (isset($cleanData['default_user_id']) && $cleanData['default_user_id'] !== '') {
+            $cleanData['default_user_id'] = (int)$cleanData['default_user_id'];
         }
 
         if (empty($cleanData['m_comp_id'])) {
             $cleanData['m_comp_id'] = auth()->user()->m_comp_id ?? 1;
+        } else {
+            $cleanData['m_comp_id'] = (int)$cleanData['m_comp_id'];
         }
 
         return [
@@ -143,35 +275,32 @@ class presensi_absensi extends \App\Models\BasicModels\presensi_absensi
         unset($cleanData['id'], $cleanData['created_at'], $cleanData['updated_at'], $cleanData['creator_id'], $cleanData['company_name']);
 
         if (is_object($model)) {
-            if (isset($model->company_name)) {
+            if (method_exists($model, 'offsetUnset')) {
+                $model->offsetUnset('company_name');
+            } elseif (isset($model->company_name)) {
                 unset($model->company_name);
-            }
-            if (isset($model->attributes['company_name'])) {
-                unset($model->attributes['company_name']);
             }
         }
 
         foreach (['checkin_foto', 'checkout_foto'] as $fotoCol) {
-            if (isset($cleanData[$fotoCol])) {
-                $foto = trim((string)$cleanData[$fotoCol]);
-                $baseUrl = rtrim(url(''), '/');
-                if (substr($foto, 0, strlen($baseUrl)) === $baseUrl) {
-                    $foto = ltrim(substr($foto, strlen($baseUrl)), '/');
+            if (array_key_exists($fotoCol, $cleanData)) {
+                $fotoVal = $this->normalizeFotoValue($cleanData[$fotoCol]);
+                if ($fotoVal === null) {
+                    $cleanData[$fotoCol] = $this->isColumnNullable($fotoCol) ? null : '';
+                } else {
+                    $cleanData[$fotoCol] = $fotoVal;
                 }
-                $cleanData[$fotoCol] = !empty($foto) ? $foto : null;
             }
         }
 
         $nullableCols = [
             'checkout_time',
-            'checkout_foto',
             'checkout_lat',
             'checkout_long',
             'checkout_address',
             'checkout_region',
             'catatan_out',
-            'catatan_in',
-            'checkin_foto'
+            'catatan_in'
         ];
         foreach ($nullableCols as $col) {
             if (array_key_exists($col, $cleanData) && (trim((string)$cleanData[$col]) === '' || $cleanData[$col] === 'null')) {
@@ -179,23 +308,22 @@ class presensi_absensi extends \App\Models\BasicModels\presensi_absensi
             }
         }
 
-        if (isset($cleanData['checkin_on_scope'])) {
-            $cleanData['checkin_on_scope'] = filter_var($cleanData['checkin_on_scope'], FILTER_VALIDATE_BOOLEAN);
+        if (array_key_exists('checkin_on_scope', $cleanData)) {
+            $cleanData['checkin_on_scope'] = $this->toBooleanValue($cleanData['checkin_on_scope'], false);
         }
 
-        if (array_key_exists('checkout_on_scope', $cleanData)) {
+        if (array_key_exists('checkout_time', $cleanData) || array_key_exists('checkout_on_scope', $cleanData)) {
             if (empty($cleanData['checkout_time'])) {
+                $cleanData['checkout_time'] = null;
                 $cleanData['checkout_on_scope'] = null;
             } else {
-                $cleanData['checkout_on_scope'] = filter_var($cleanData['checkout_on_scope'], FILTER_VALIDATE_BOOLEAN);
+                $cleanData['checkout_time'] = $this->normalizeTimeValue($cleanData['checkout_time']) ?? $cleanData['checkout_time'];
+                $cleanData['checkout_on_scope'] = $this->toBooleanValue($cleanData['checkout_on_scope'] ?? false, false);
             }
         }
 
-        if (!empty($cleanData['checkout_time']) && preg_match('/^\d{2}:\d{2}$/', trim($cleanData['checkout_time']))) {
-            $cleanData['checkout_time'] = trim($cleanData['checkout_time']) . ':00';
-        }
-        if (!empty($cleanData['checkin_time']) && preg_match('/^\d{2}:\d{2}$/', trim($cleanData['checkin_time']))) {
-            $cleanData['checkin_time'] = trim($cleanData['checkin_time']) . ':00';
+        if (!empty($cleanData['checkin_time'])) {
+            $cleanData['checkin_time'] = $this->normalizeTimeValue($cleanData['checkin_time']) ?? $cleanData['checkin_time'];
         }
 
         if (!empty($cleanData['checkin_time']) && !empty($cleanData['checkout_time'])) {
@@ -205,13 +333,211 @@ class presensi_absensi extends \App\Models\BasicModels\presensi_absensi
         }
 
         if (!empty($cleanData['tanggal'])) {
-            $cleanData['tanggal'] = date('Y-m-d', strtotime(str_replace('/', '-', $cleanData['tanggal'])));
+            $parsedTanggal = $this->normalizeDateValue($cleanData['tanggal']);
+            if ($parsedTanggal !== null) {
+                $cleanData['tanggal'] = $parsedTanggal;
+            }
+        }
+
+        if (isset($cleanData['default_user_id']) && $cleanData['default_user_id'] !== '') {
+            $cleanData['default_user_id'] = (int)$cleanData['default_user_id'];
+        }
+
+        if (array_key_exists('m_comp_id', $cleanData) && empty($cleanData['m_comp_id'])) {
+            $cleanData['m_comp_id'] = auth()->user()->m_comp_id ?? 1;
         }
 
         return [
             "model" => $model,
             "data"  => $cleanData
         ];
+    }
+
+    public function custom_save_web($req)
+    {
+        $rawId = $req->input('id') ?? $req->query('id');
+        $isUpdate = !empty($rawId);
+        $recordId = $isUpdate ? (int)$rawId : null;
+
+        $existing = null;
+        if ($isUpdate) {
+            $existing = \DB::table('presensi_absensi')->where('id', $recordId)->first();
+            if (!$existing) {
+                return $this->helper->customResponse("Data absensi dengan ID #{$recordId} tidak ditemukan", 404);
+            }
+        }
+
+        $rawDefaultUserId = $req->input('default_user_id');
+        if (($rawDefaultUserId === null || $rawDefaultUserId === '') && $existing) {
+            $rawDefaultUserId = $existing->default_user_id;
+        }
+
+        $rawTanggal = $req->input('tanggal');
+        if (($rawTanggal === null || trim((string)$rawTanggal) === '') && $existing) {
+            $rawTanggal = $existing->tanggal;
+        }
+        $normalizedTanggal = $this->normalizeDateValue($rawTanggal);
+
+        $rawCheckinTime = $req->input('checkin_time');
+        $normalizedCheckinTime = $this->normalizeTimeValue($rawCheckinTime);
+
+        $rawCheckoutTime = $req->input('checkout_time');
+        $hasCheckoutTimeText = $rawCheckoutTime !== null && trim((string)$rawCheckoutTime) !== '' && strtolower(trim((string)$rawCheckoutTime)) !== 'null';
+        $normalizedCheckoutTime = $hasCheckoutTimeText ? $this->normalizeTimeValue($rawCheckoutTime) : null;
+
+        $toStrOrNull = function ($val) {
+            if ($val === null) {
+                return null;
+            }
+            $s = trim((string)$val);
+            return ($s === '' || strtolower($s) === 'null') ? null : $s;
+        };
+
+        $valInput = [
+            'default_user_id'   => is_numeric($rawDefaultUserId) ? (int)$rawDefaultUserId : $rawDefaultUserId,
+            'tanggal'           => $normalizedTanggal,
+            'checkin_time'      => $normalizedCheckinTime,
+            'checkin_lat'       => $toStrOrNull($req->input('checkin_lat')),
+            'checkin_long'      => $toStrOrNull($req->input('checkin_long')),
+            'checkin_address'   => $toStrOrNull($req->input('checkin_address')),
+            'checkin_region'    => $toStrOrNull($req->input('checkin_region')),
+            'checkout_lat'      => $toStrOrNull($req->input('checkout_lat')),
+            'checkout_long'     => $toStrOrNull($req->input('checkout_long')),
+            'checkout_address'  => $toStrOrNull($req->input('checkout_address')),
+            'checkout_region'   => $toStrOrNull($req->input('checkout_region')),
+        ];
+
+        $validator = Validator::make($valInput, [
+            'default_user_id'   => 'required|integer',
+            'tanggal'           => 'required|date_format:Y-m-d',
+            'checkin_time'      => 'required',
+            'checkin_lat'       => 'required|max:255',
+            'checkin_long'      => 'required|max:255',
+            'checkin_address'   => 'required|max:255',
+            'checkin_region'    => 'required|max:255',
+            'checkout_lat'      => 'nullable|max:255',
+            'checkout_long'     => 'nullable|max:255',
+            'checkout_address'  => 'nullable|max:255',
+            'checkout_region'   => 'nullable|max:255',
+        ], [
+            'default_user_id.required' => 'Karyawan wajib dipilih',
+            'default_user_id.integer'  => 'ID Karyawan tidak valid',
+            'tanggal.required'         => 'Tanggal absensi wajib diisi',
+            'tanggal.date_format'      => 'Format tanggal absensi tidak valid',
+            'checkin_time.required'    => 'Waktu Check In wajib diisi dengan format JJ:MM',
+            'checkin_lat.required'     => 'Latitude Check In wajib diisi (pilih Lokasi atau Pin Peta)',
+            'checkin_long.required'    => 'Longitude Check In wajib diisi (pilih Lokasi atau Pin Peta)',
+            'checkin_address.required' => 'Alamat Check In wajib diisi',
+            'checkin_address.max'      => 'Alamat Check In maksimal 255 karakter',
+            'checkin_region.required'  => 'Lokasi Check In wajib dipilih',
+            'checkin_region.max'       => 'Lokasi Check In maksimal 255 karakter',
+            'checkout_address.max'     => 'Alamat Check Out maksimal 255 karakter',
+            'checkout_region.max'      => 'Lokasi Check Out maksimal 255 karakter',
+        ]);
+
+        if ($validator->fails()) {
+            return $this->helper->responseValidate($validator);
+        }
+
+        if ($hasCheckoutTimeText && $normalizedCheckoutTime === null) {
+            return $this->helper->customResponse('Format Waktu Check Out tidak valid (gunakan JJ:MM atau JJ:MM:DD)', 422);
+        }
+
+        $targetUser = \DB::table('default_users')->where('id', $valInput['default_user_id'])->first();
+        if (!$targetUser) {
+            return $this->helper->customResponse("User karyawan dengan ID #{$valInput['default_user_id']} tidak ditemukan", 422);
+        }
+
+        if ($req->has('checkin_foto')) {
+            $checkinFoto = $this->normalizeFotoValue($req->input('checkin_foto'));
+        } elseif ($isUpdate) {
+            $checkinFoto = $this->normalizeFotoValue($existing->checkin_foto ?? null);
+        } else {
+            $checkinFoto = null;
+        }
+        if ($checkinFoto === null) {
+            $checkinFoto = $this->isColumnNullable('checkin_foto') ? null : '';
+        }
+
+        if ($req->has('checkout_foto')) {
+            $checkoutFoto = $this->normalizeFotoValue($req->input('checkout_foto'));
+        } elseif ($isUpdate) {
+            $checkoutFoto = $this->normalizeFotoValue($existing->checkout_foto ?? null);
+        } else {
+            $checkoutFoto = null;
+        }
+        if ($checkoutFoto === null && !$this->isColumnNullable('checkout_foto')) {
+            $checkoutFoto = '';
+        }
+
+        $mCompId = null;
+        if ($req->filled('m_comp_id') && is_numeric($req->input('m_comp_id'))) {
+            $mCompId = (int)$req->input('m_comp_id');
+        } elseif ($existing && !empty($existing->m_comp_id)) {
+            $mCompId = (int)$existing->m_comp_id;
+        } elseif (!empty($targetUser->m_comp_id)) {
+            $mCompId = (int)$targetUser->m_comp_id;
+        } elseif (auth()->check() && !empty(auth()->user()->m_comp_id)) {
+            $mCompId = (int)auth()->user()->m_comp_id;
+        } else {
+            $mCompId = 1;
+        }
+
+        $checkinOnScope = $this->toBooleanValue($req->input('checkin_on_scope'), false);
+        $checkoutOnScope = $normalizedCheckoutTime !== null
+            ? $this->toBooleanValue($req->input('checkout_on_scope'), false)
+            : null;
+        $status = ($normalizedCheckinTime && $normalizedCheckoutTime) ? 'ATTEND' : 'WORKING';
+
+        $authId = auth()->check() ? auth()->user()->id : null;
+        $now = Carbon::now();
+
+        $saveData = [
+            'm_comp_id'         => $mCompId,
+            'default_user_id'   => $valInput['default_user_id'],
+            'tanggal'           => $valInput['tanggal'],
+            'status'            => $status,
+            'checkin_time'      => $normalizedCheckinTime,
+            'checkin_foto'      => $checkinFoto,
+            'checkin_lat'       => $valInput['checkin_lat'],
+            'checkin_long'      => $valInput['checkin_long'],
+            'checkin_address'   => $valInput['checkin_address'],
+            'checkin_region'    => $valInput['checkin_region'],
+            'checkin_on_scope'  => $checkinOnScope,
+            'catatan_in'        => $toStrOrNull($req->input('catatan_in')),
+            'checkout_time'     => $normalizedCheckoutTime,
+            'checkout_foto'     => $checkoutFoto,
+            'checkout_lat'      => $valInput['checkout_lat'],
+            'checkout_long'     => $valInput['checkout_long'],
+            'checkout_address'  => $valInput['checkout_address'],
+            'checkout_region'   => $valInput['checkout_region'],
+            'checkout_on_scope' => $checkoutOnScope,
+            'catatan_out'       => $toStrOrNull($req->input('catatan_out')),
+            'updated_at'        => $now,
+        ];
+
+        DB::beginTransaction();
+        try {
+            if ($isUpdate) {
+                $saveData['last_editor_id'] = $authId;
+                \DB::table('presensi_absensi')->where('id', $recordId)->update($saveData);
+                $savedId = $recordId;
+            } else {
+                $saveData['creator_id'] = $authId;
+                $saveData['created_at'] = $now;
+                $savedId = \DB::table('presensi_absensi')->insertGetId($saveData);
+            }
+
+            DB::commit();
+            $savedRow = \DB::table('presensi_absensi')->where('id', $savedId)->first();
+            return $this->helper->customResponse('Data absensi berhasil disimpan', 200, $savedRow);
+        } catch (\Throwable $e) {
+            DB::rollback();
+            return $this->helper->customResponse(
+                'Gagal menyimpan data absensi: ' . $e->getMessage() . ' (Baris ' . $e->getLine() . ')',
+                422
+            );
+        }
     }
 
     public function setTanggalAttribute($value)
