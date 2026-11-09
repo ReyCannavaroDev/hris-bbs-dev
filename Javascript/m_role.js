@@ -21,10 +21,14 @@ const detail = ref(null)
 
 // ------------------------------ PERSIAPAN
 const endpointApi = '/m_role'
+const parseRoleBool = (val) => (val === true || val === 1 || val === '1' || val === 'true' || val === 't')
+
 onBeforeMount(()=>{
   document.title = 'Master Role'
   // tampilkan default direktorat dengan store user comp.nama
-  values.direktorat = store.user.data?.direktorat
+  if (typeof values !== 'undefined') {
+    values.direktorat = store.user.data?.direktorat
+  }
 })
 
 //  @if( $id )------------------- VALUES FORM ! PENTING JANGAN DIHAPUS
@@ -57,8 +61,6 @@ const onDetailAdd = (rows) => {
 function deleteAll() {
 detail.value.key++
 }
-
-const parseRoleBool = (val) => (val === true || val === 1 || val === '1' || val === 'true' || val === 't')
 
 const values = reactive({
   is_superadmin: false,

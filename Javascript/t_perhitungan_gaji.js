@@ -59,8 +59,10 @@ const clearRestrictedSalaryData = () => {
   modalOpen.value = false
 }
 
+const baseSearchField = 'this.id, this.nomor, m_kary.nik, m_kary.nama_lengkap, m_kary_dir.nama, m_kary_divisi.nama, m_kary_dept.nama, this.periode, periode.value'
+
 const syncSalaryLandingAccess = (allowed) => {
-  const baseSearchField = 'this.id, this.nomor, m_kary.nik, m_kary.nama_lengkap, m_kary_dir.nama, m_kary_divisi.nama, m_kary_dept.nama, this.periode, periode.value'
+  if (typeof landing === 'undefined' || typeof nettoColumn === 'undefined') return
   landing.api.params.searchfield = allowed ? `${baseSearchField}, this.netto` : baseSearchField
 
   const hasNettoCol = landing.columns.some(col => col.field === 'netto')
@@ -724,8 +726,6 @@ async function onSave() {
 }
 
 //  @else----------------------- LANDING
-const baseSearchField = 'this.id, this.nomor, m_kary.nik, m_kary.nama_lengkap, m_kary_dir.nama, m_kary_divisi.nama, m_kary_dept.nama, this.periode, periode.value'
-
 const nettoColumn = {
   field: 'netto',
   headerName: 'Gaji',
