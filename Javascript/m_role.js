@@ -612,8 +612,8 @@ const landing = reactive({
     cellClass: [ 'border-r', '!border-gray-200', 'justify-center'],
     cellRenderer: ({ value }) => {
       return value === 'Yes' || value === true
-        ? `<span class="bg-emerald-50 text-emerald-700 border border-emerald-200 rounded-md text-xs font-medium px-3 py-0.5 inline-block capitalize">Bisa Lihat</span>`
-        : `<span class="bg-gray-50 text-gray-500 border border-gray-200 rounded-md text-xs font-medium px-3 py-0.5 inline-block capitalize">Tidak</span>`
+        ? `<span class="text-green-500 rounded-md text-xs font-medium px-4 py-1 inline-block capitalize">Bisa Lihat</span>`
+        : `<span class="text-gray-500 rounded-md text-xs font-medium px-4 py-1 inline-block capitalize">Tidak</span>`
     }
   },
   {
