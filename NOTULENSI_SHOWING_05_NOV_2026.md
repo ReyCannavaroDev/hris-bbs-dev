@@ -1,6 +1,7 @@
 # 📝 NOTULENSI & REKAP HASIL SHOWING HRIS BBS (SESI 2)
 **Tanggal Pelaksanaan Showing:** Kamis, 5 November 2026  
 **Tanggal Penyusunan Notulensi:** Kamis, 5 November 2026  
+**Pembaruan Status Terakhir:** Senin, 9 November 2026  
 **Pencatat Lapangan & Dev Lead:** Rey Cannavaro  
 **Kolaborator Lapangan:** Mas Duta  
 **Pihak Pengguna / Klien:** Manajemen & Tim HR PT Berkah Bersaudara Sentosa (BBS)  
@@ -165,49 +166,59 @@ erDiagram
 
 | No | Modul / Fitur | Kategori | PIC | File / Komponen Terdampak | Prioritas | Status |
 |---|---|---|:---:|---|:---:|:---:|
-| 1 | **Skenario Lembur 2 Tahap (Rencana & Realisasi Checkout)** | Lembur | Tim Dev | `t_lembur`, `t_absensi`, `Blades/t_lembur.blade.php`, `Javascript/t_lembur.js` | Tinggi | 📝 Pending |
-| 2 | **Lembur Hari Minggu & Libur Nasional di Payroll** | Lembur | Tim Dev | `Cores/PerhitunganGaji.php`, `Models/t_perhitungan_lembur/Custom.php` | Tinggi | 📝 Pending |
-| 3 | **Pengajuan Lembur Susulan (Hari Sebelumnya / Backdated)** | Lembur | Tim Dev | `Models/t_lembur/Custom.php`, `Javascript/t_lembur.js` | Sedang | 📝 Pending |
-| 4 | **Separator Ribuan pada Nominal Upah Master Karyawan** | Master Karyawan | Tim Dev | `Blades/m_karyawan.blade.php`, `Javascript/m_karyawan.js`, `Models/m_kary/Custom.php` | Sedang | 📝 Pending |
-| 5 | **Restriksi Akses Data Gaji (Kepala HRD & Superadmin Saja)** | Keamanan Payroll | Tim Dev | `Models/m_kary/Custom.php`, `Models/t_perhitungan_gaji/Custom.php`, `Blades/m_karyawan.blade.php` | Tinggi | 📝 Pending |
-| 6 | **Pengecualian Batas 3 Hari (Cuti Melahirkan & Keagamaan)** | Cuti | Tim Dev | `Models/t_cuti/Custom.php`, `Javascript/t_cuti.js` | Tinggi | 📝 Pending |
-| 7 | **Batas Hari Maksimal Cuti Dinamis dari `m_general` (`value_2`)** | Cuti | Tim Dev | `Models/t_cuti/Custom.php`, `Javascript/t_cuti.js` | Tinggi | 📝 Pending |
-| 8 | **Verifikasi Libur Nasional Tidak Memotong Jatah Cuti Tahunan** | Libur & Cuti | Tim Dev | `Models/t_cuti/Custom.php`, `Models/m_libur_nasional/Custom.php` | Tinggi | 📝 Pending |
-| 9 | **Modal / Tampilan Riwayat (Log) Pelunasan Kasbon** | Piutang / Kasbon | Tim Dev | `Blades/t_potongan.blade.php`, `Javascript/t_potongan.js`, `Models/t_potongan/Custom.php` | Sedang | 📝 Pending |
-| 10 | **Field Tanggal Adjustable pada Pelunasan Manual Kasbon** | Piutang / Kasbon | Tim Dev | `Blades/t_potongan.blade.php`, `Javascript/t_potongan.js`, `Models/t_potongan/Custom.php` | Sedang | 📝 Pending |
-| 11 | **Perancangan Konsep & Skema Multi-Respo Multi-Company (`m_respo`)** | Arsitektur Akses | Tim Dev | `Models/m_respo/*`, Migrasi & Middleware Otorisasi | Tinggi | 📝 Pending |
+| 1 | **Skenario Lembur 2 Tahap (Rencana & Realisasi Checkout)** | Lembur | Tim Dev | `t_lembur`, `t_absensi`, `Blades/t_lembur.blade.php`, `Javascript/t_lembur.js` | Tinggi | ✅ Selesai |
+| 2 | **Lembur Hari Minggu & Libur Nasional di Payroll** | Lembur | Tim Dev | `Cores/PerhitunganGaji.php`, `Models/t_perhitungan_lembur/Custom.php`, `Javascript/t_final_gaji.js` | Tinggi | ✅ Selesai *(catatan)* |
+| 3 | **Pengajuan Lembur Susulan (Hari Sebelumnya / Backdated)** | Lembur | Tim Dev | `Models/t_lembur/Custom.php`, `Javascript/t_lembur.js` | Sedang | ✅ Selesai |
+| 4 | **Separator Ribuan pada Nominal Upah Master Karyawan** | Master Karyawan | Tim Dev | `Blades/m_karyawan.blade.php`, `Javascript/m_karyawan.js`, `Models/m_kary/Custom.php` | Sedang | ✅ Selesai |
+| 5 | **Restriksi Akses Data Gaji (Kepala HRD & Superadmin Saja)** | Keamanan Payroll | Tim Dev | `Models/m_kary/Custom.php`, `Models/t_perhitungan_gaji/Custom.php`, `Blades/m_karyawan.blade.php` | Tinggi | ⚠️ Sebagian |
+| 6 | **Pengecualian Batas 3 Hari (Cuti Melahirkan & Keagamaan)** | Cuti | Tim Dev | `Models/t_cuti/Custom.php`, `Javascript/t_cuti.js` | Tinggi | ✅ Selesai |
+| 7 | **Batas Hari Maksimal Cuti Dinamis dari `m_general` (`value_2`)** | Cuti | Tim Dev | `Models/t_cuti/Custom.php`, `Javascript/t_cuti.js` | Tinggi | ✅ Selesai |
+| 8 | **Verifikasi Libur Nasional Tidak Memotong Jatah Cuti Tahunan** | Libur & Cuti | Tim Dev | `Models/t_cuti/Custom.php`, `Models/m_libur_nasional/Custom.php` | Tinggi | ✅ Selesai |
+| 9 | **Modal / Tampilan Riwayat (Log) Pelunasan Kasbon** | Piutang / Kasbon | Tim Dev | `Blades/t_potongan.blade.php`, `Javascript/t_potongan.js`, `Models/t_potongan/Custom.php` | Sedang | ✅ Selesai |
+| 10 | **Field Tanggal Adjustable pada Pelunasan Manual Kasbon** | Piutang / Kasbon | Tim Dev | `Blades/t_potongan.blade.php`, `Javascript/t_potongan.js`, `Models/t_potongan/Custom.php` | Sedang | ⚠️ Sebagian |
+| 11 | **Perancangan Konsep & Skema Multi-Respo Multi-Company (`m_respo`)** | Arsitektur Akses | Tim Dev | `Models/m_respo/*`, `Models/default_users_respo/*`, `Cores/Respo.php`, `Cores/Frontend.php` | Tinggi | ⚠️ Sebagian *(On Progress)* |
 
 ---
 
 ## 🎯 Detail Action Items per Track Pengerjaan
 
 ### Track 1: Modul Lembur (`t_lembur` & `t_perhitungan_lembur`)
-- [ ] **Task 1.1:** Tambahkan kolom status/alur realisasi pada `t_lembur` (misal: field `jam_checkout_aktual`, `jam_realisasi_mulai`, `jam_realisasi_selesai`, serta status approval realisasi).
-- [ ] **Task 1.2:** Implementasikan integrasi penarikan jam *checkout* absensi dari `t_absensi` ke transaksi `t_lembur`.
-- [ ] **Task 1.3:** Sesuaikan antarmuka UI `Blades/t_lembur.blade.php` dan `Javascript/t_lembur.js` untuk mengakomodasi alur Approval Tahap 2 (Verifikasi Realisasi).
-- [ ] **Task 1.4:** Buka validasi tanggal pada pengajuan lembur agar dapat menerima pengajuan susulan hari sebelumnya (H-1 atau backdated).
-- [ ] **Task 1.5:** Pastikan kalkulasi lembur pada hari Minggu dan Hari Libur Nasional dihitung secara presisi pada `t_perhitungan_lembur` dan ditarik ke `t_perhitungan_gaji`.
+- [x] **Task 1.1:** Tambahkan kolom status/alur realisasi pada `t_lembur` (`jam_mulai_realisasi`, `jam_selesai_realisasi`, `realisasi_min`, `diakui_min`, `tarif_lembur`, `total_lembur`, serta alur status `HALF APPROVED` -> `APPROVED`). *(Commit `50191db`)*
+- [x] **Task 1.2:** Implementasikan integrasi penarikan jam *checkout* absensi dari `presensi_absensi` ke transaksi `t_lembur` melalui `sinkronkanRealisasiDariAbsen()` dan endpoint `sync_realisasi`. *(Commit `50191db`)*
+- [x] **Task 1.3:** Sesuaikan antarmuka UI `Blades/t_lembur.blade.php` dan `Javascript/t_lembur.js` untuk mengakomodasi alur Approval Tahap 2 (Verifikasi Realisasi) dan menyembunyikan data realisasi dari sisi karyawan pengaju. *(Commit `50191db`)*
+- [x] **Task 1.4:** Buka validasi tanggal pada pengajuan lembur agar dapat menerima pengajuan susulan hari sebelumnya (H-1 atau backdated); tanggal notifikasi approval juga disesuaikan ke `t_lembur.tanggal`. *(Commit `50191db`, `aa2af27`)*
+- [x] **Task 1.5:** Pastikan kalkulasi lembur pada hari Minggu dan Hari Libur Nasional dihitung pada `t_perhitungan_lembur` dan ditarik ke payroll (`t_final_gaji.js`). *(Catatan: sudah dihitung penuh di `t_lembur` -> `t_perhitungan_lembur` -> `t_final_gaji`, namun masih memakai tarif standar per jam di `m_lembur`—belum ada pengali/multiplier khusus hari libur jika diperlukan, serta penarikannya berada di `t_final_gaji` bukan `t_perhitungan_gaji`.)*
 
 ### Track 2: Master Karyawan & Kerahasiaan Payroll (`m_kary` & `t_perhitungan_gaji`)
-- [ ] **Task 2.1:** Pasang formatter angka ribuan (*thousand separator*) pada input gaji pokok personal dan gaji acuan di form `m_karyawan.blade.php` & `m_karyawan.js`.
-- [ ] **Task 2.2:** Buat middleware/kondisi pengecekan hak akses gaji pada `Models/m_kary/Custom.php`: sembunyikan nilai gaji jika user bukan Superadmin atau Kepala HRD.
-- [ ] **Task 2.3:** Kunci akses modal detail slip gaji di modul `t_perhitungan_gaji` agar hanya dapat dibuka oleh role yang berwenang.
+- [x] **Task 2.1:** Pasang formatter angka ribuan (*thousand separator*) pada input gaji pokok personal dan gaji acuan di form `Blades/m_karyawan.blade.php` & `Javascript/m_karyawan.js` beserta sanitasi numeric di `Models/m_kary/Custom.php`. *(Commit `2954c8f`, `3035634`)*
+- [ ] **Task 2.2:** *(Sebagian selesai)* Restriksi akses gaji pada `m_kary`:
+  - Sudah: Menyembunyikan field `gaji_pokok` & `gaji_acuan` di form `m_karyawan` dan memblokir update kolom tersebut di `Models/m_kary/Custom.php` (`createBefore`/`updateBefore`) khusus untuk role yang mengandung `Staff HRD` (`2954c8f`).
+  - Belum: Whitelist ketat agar **hanya** `Superadmin` & `Kepala HRD` yang boleh melihat (saat ini role non-HR lain belum diblokir), serta masking `gaji_pokok`/`gaji_acuan` di response GET `transformRowData()` pada `Models/m_kary/Custom.php`.
+- [ ] **Task 2.3:** Kunci akses modal detail slip gaji di modul `t_perhitungan_gaji` (`Blades/t_perhitungan_gaji.blade.php` & `Javascript/t_perhitungan_gaji.js`) agar hanya dapat dibuka oleh role yang berwenang (`Superadmin` & `Kepala HRD`). *(Belum ditemukan pembatasan role di modul ini.)*
 
 ### Track 3: Modul Cuti & Libur Nasional (`t_cuti` & `m_libur_nasional`)
-- [ ] **Task 3.1:** Ubah logika validasi di `Models/t_cuti/Custom.php` dan `Javascript/t_cuti.js` agar mengambil kuota maksimal durasi cuti dari `m_general.value_2`.
-- [ ] **Task 3.2:** Berikan pengecualian batas 3 hari berturut-turut untuk kategori cuti Melahirkan dan Cuti Keagamaan.
-- [ ] **Task 3.3:** Verifikasi engine perhitungan hari cuti: pastikan tanggal yang bertepatan dengan data aktif di `m_libur_nasional` tidak dihitung sebagai pengurang kuota cuti tahunan 12 hari.
+- [x] **Task 3.1:** Ubah logika validasi di `Models/t_cuti/Custom.php` dan `Javascript/t_cuti.js` agar mengambil kuota maksimal durasi cuti dari `m_general.value_2`. *(Commit `fc564c1`)*
+- [x] **Task 3.2:** Berikan pengecualian batas 3 hari berturut-turut untuk kategori cuti Melahirkan (fallback 90 hari) dan Cuti Keagamaan (fallback 40 hari). *(Commit `fc564c1`)*
+- [x] **Task 3.3:** Verifikasi engine perhitungan hari cuti: modul `m_libur_nasional` membedakan Libur Nasional murni vs Cuti Bersama (`is_cuti_bersama`), dan `Models/t_cuti/Custom.php` (`hitungHari` & `custom_hitungHari`) hanya memotong hari kerja efektif + cuti bersama sehingga libur nasional murni tidak mengurangi kuota 12 hari. *(Commit `fc564c1`, `e6b2e80`, `2103d4f`, `60c0ee9`)*
 
 ### Track 4: Modul Kasbon & Piutang Karyawan (`t_potongan`)
-- [ ] **Task 4.1:** Perbarui endpoint `custom_pelunasanManual` di `Models/t_potongan/Custom.php` untuk menerima parameter input `tanggal_bayar` (default hari ini, namun dapat diisi tanggal manual).
-- [ ] **Task 4.2:** Tambahkan form dialog pelunasan manual pada `Javascript/t_potongan.js` dan `Blades/t_potongan.blade.php` dengan input tanggal pelunasan dan catatan pelunasan.
-- [ ] **Task 4.3:** Buat modal riwayat pelunasan kasbon (*Payment History Log*) pada tabel landing `t_potongan`.
+- [x] **Task 4.1:** Perbarui endpoint `custom_pelunasanManual` di `Models/t_potongan/Custom.php` untuk menerima parameter tanggal pembayaran manual (`paid_at`, default hari ini). *(Commit `30e05c2`, `fd10a1f`)*
+- [ ] **Task 4.2:** *(Sebagian selesai)* Form dialog pelunasan manual pada `Javascript/t_potongan.js`:
+  - Sudah: Input tanggal pelunasan (`#swal_paid_at`, default hari ini, adjustable).
+  - Belum: Input **catatan pelunasan** di dialog serta penyimpanannya di `t_potongan_det_bayar`.
+- [x] **Task 4.3:** Buat modal riwayat pelunasan kasbon (*Payment History Log*) pada modul `t_potongan` (`custom_getHistoryBayar` di `Models/t_potongan/Custom.php` & `showHistoryBayar()` di `Javascript/t_potongan.js`). *(Commit `9ad9e78`, `2b46e13`)*
 
 ### Track 5: Arsitektur Multi-Responsibility & Multi-Company (`m_respo`)
-- [ ] **Task 5.1:** Susun skema migrasi tabel `m_respo` (`user_id`, `m_comp_id`, `m_dir_id`, `role_id`, `is_default`, `is_active`).
-- [ ] **Task 5.2:** Rancang mekanisme session context switcher untuk pergantian company/responsibility pada header aplikasi.
-- [ ] **Task 5.3:** Uji coba skenario 1 user mengelola multi-company dengan hak akses yang terisolasi per company.
+- [x] **Task 5.1:** Susun skema migrasi dan modul master `m_respo` (diimplementasikan lebih modular menjadi `m_respo`, detail role `m_respo_d`, dan pivot user `default_users_respo` + UI CRUD `/m_respo` dan assignment di `/m_pengguna`). *(Commit `02e5cb3`, `88ad41d`, `3654cba`, `d9f36a3`)*
+- [ ] **Task 5.2:** *(Sebagian selesai)* Mekanisme context switcher responsibility:
+  - Sudah: Halaman menu `/akses_respo` (`Blades/akses_respo.blade.php`, `Javascript/akses_respo.js`) serta endpoint `getMyRespo` & `switchRespo` di `Models/default_users_respo/Custom.php`.
+  - Belum: Tombol/dropdown switcher langsung di top header aplikasi, dan sinkronisasi `m_dir_id = null` pada `default_users` jika beralih ke respo Holding.
+- [ ] **Task 5.3:** Aktivasi & uji coba skenario multi-company terisolasi:
+  - Belum: Menghubungkan `/frontend-menu` di `Cores/Frontend.php` dan `Cores/Response.php` agar membaca dari `Cores/Respo.php` (bukan `m_role_access` lama), memperbaiki agregasi permission multi-role di `Respo::checkAccessForm()`, serta menerapkan filter scope company/divisi/dept aktif ke modul-modul transaksi.
+
+### 📌 Tambahan Pekerjaan di Luar Notulensi (Sudah Selesai)
+- [x] **Perbaikan Create & Edit Web `presensi_absensi`**: Menambahkan endpoint `custom_save_web`, normalisasi payload JS, adjustment nullable `checkin_foto`/`checkout_foto` (`Alter.php`), serta perbaikan join `last_editor_id` & hook `onRetrieved`. *(Commit `b4c687e`, 9 Nov 2026)*
 
 ---
-*Dokumen ini disusun sebagai notulensi resmi hasil showing 5 November 2026 dan menjadi panduan kerja pengembangan tim HRIS BBS Dev.*
+*Dokumen ini disusun sebagai notulensi resmi hasil showing 5 November 2026, diperbarui pada 9 November 2026 berdasarkan kondisi source code terkini di repository HRIS BBS Dev.*
 
