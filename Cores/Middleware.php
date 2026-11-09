@@ -106,6 +106,24 @@ class Middleware
             $_GET['where'] = $requestData['where'];
         }
 
+        // Normalisasi filter can_view_salary dan view_salary agar support 'Yes', 'No', 'true', 'false' via query where
+        if (!empty($requestData['where']) && $modelInstance && in_array('can_view_salary', $modelInstance->columns ?? [])) {
+            $requestData['where'] = preg_replace_callback(
+                '/(?:this\.)?(?:view_salary|can_view_salary)\s*(?:=|ilike|like)\s*[\'"]?%?(yes|no|true|false|1|0)%?[\'"]?/i',
+                function ($m) {
+                    $val = strtolower($m[1]);
+                    $bool = in_array($val, ['yes', 'true', '1'], true) ? 'true' : 'false';
+                    return "this.can_view_salary=$bool";
+                },
+                $requestData['where']
+            );
+            $request->merge(['where' => $requestData['where']]);
+            if ($request->query) {
+                $request->query->set('where', $requestData['where']);
+            }
+            $_GET['where'] = $requestData['where'];
+        }
+
         // Normalisasi filter is_active agar support 'Active' dan 'Inactive' via query where
         if (isset($requestData['filter_is_active'])) {
             $val = strtolower(trim((string)$requestData['filter_is_active']));
@@ -199,6 +217,42 @@ class Middleware
                 unset($_GET['filter_is_superadmin'], $_GET['filter_superadmin']);
                 unset($_REQUEST['filter_is_superadmin'], $_REQUEST['filter_superadmin']);
                 unset($requestData['filter_is_superadmin'], $requestData['filter_superadmin']);
+            }
+        }
+
+        // Normalisasi filter_can_view_salary dan filter_view_salary
+        if ((isset($requestData['filter_can_view_salary']) || isset($requestData['filter_view_salary'])) && $modelInstance && in_array('can_view_salary', $modelInstance->columns ?? [])) {
+            $rawVal = $requestData['filter_can_view_salary'] ?? $requestData['filter_view_salary'];
+            $val = strtolower(trim((string)$rawVal));
+            $boolVal = in_array($val, ['yes', 'true', '1'], true) ? 'true' : (in_array($val, ['no', 'false', '0'], true) ? 'false' : null);
+            if ($boolVal !== null) {
+                $condition = "this.can_view_salary=$boolVal";
+                if (!empty($requestData['where'])) {
+                    if (preg_match('/\bthis\.can_view_salary\s*=\s*(?:true|false|1|0)\b/i', $requestData['where'])) {
+                        $requestData['where'] = preg_replace('/\bthis\.can_view_salary\s*=\s*(?:true|false|1|0)\b/i', $condition, $requestData['where']);
+                    } else {
+                        $requestData['where'] .= " and $condition";
+                    }
+                } else {
+                    $requestData['where'] = $condition;
+                }
+                $request->merge(['where' => $requestData['where']]);
+                if ($request->query) {
+                    $request->query->set('where', $requestData['where']);
+                    $request->query->remove('filter_can_view_salary');
+                    $request->query->remove('filter_view_salary');
+                }
+                if ($request->request) {
+                    $request->request->remove('filter_can_view_salary');
+                    $request->request->remove('filter_view_salary');
+                }
+                $request->offsetUnset('filter_can_view_salary');
+                $request->offsetUnset('filter_view_salary');
+                $_GET['where'] = $requestData['where'];
+                $_REQUEST['where'] = $requestData['where'];
+                unset($_GET['filter_can_view_salary'], $_GET['filter_view_salary']);
+                unset($_REQUEST['filter_can_view_salary'], $_REQUEST['filter_view_salary']);
+                unset($requestData['filter_can_view_salary'], $requestData['filter_view_salary']);
             }
         }
 

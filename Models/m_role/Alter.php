@@ -15,6 +15,18 @@ class mrole extends Migration
             //$table->dropColumn([ ]);
             //$table->bigInteger('m_dir_id')->default(1)->comment('{"src":"m_dir.id"}')->change();
             $table->bigInteger('m_comp_id')->comment('{"src":"m_comp.id"}')->nullable()->change();
+            if (!Schema::hasColumn($this->tableName, 'can_view_salary')) {
+                $table->boolean('can_view_salary')->default(false);
+            }
+        });
+    }
+
+    public function down()
+    {
+        Schema::table($this->tableName, function (Blueprint $table) {
+            if (Schema::hasColumn($this->tableName, 'can_view_salary')) {
+                $table->dropColumn('can_view_salary');
+            }
         });
     }
 }

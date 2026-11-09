@@ -33,23 +33,40 @@ class default_users extends \App\Models\BasicModels\default_users
         $object = [];
         $req = app()->request;
         if($req->from == 'role_access'){
-            $roles = m_role_access::join('m_role as r','r.id','m_role_access.m_role_id')
-                ->where('m_role_access.user_id', $row['id'])
-                ->pluck('r.name')
-                ->toArray();
-            $object['role_names'] = !empty($roles) ? implode(', ', $roles) : '-';
-            $object['is_superadmin'] = 
-                m_role_access::join('m_role as r','r.id','m_role_access.m_role_id')
-                ->where('m_role_access.user_id', $row['id'])
-                ->pluck('is_superadmin')->first();
-            if($req->detail)
-                $object['detail'] =  m_role_access::join('m_role as r','r.id','m_role_access.m_role_id')
-                ->select("r.*")
-                ->where('m_role_access.user_id', $row['id'])
-                ->get();
+            $userId = (int) ($row['id'] ?? 0);
+            $respoCore = getCore('Respo');
+            $effectiveRoles = $userId ? $respoCore->getEffectiveRoles($userId) : [];
+            $roles = array_values(array_filter(array_map(function ($r) {
+                return $r->name ?? null;
+            }, $effectiveRoles)));
+            $hasRespo = $userId ? $respoCore->userHasAssignedRespo($userId) : false;
+            $activeRespo = $hasRespo ? $respoCore->checkRespoActive($userId) : null;
 
-            // Sediakan nama company secara konsisten (dari m_dir, m_comp, atau relasi m_kary)
-            $companyName = $row['m_dir.nama'] ?? ($row['m_comp.nama'] ?? null);
+            $object['role_names'] = !empty($roles) ? implode(', ', $roles) : '-';
+            $object['roles'] = $roles;
+            $object['effective_roles'] = $effectiveRoles;
+            $object['has_respo'] = $hasRespo;
+            $object['active_respo'] = $activeRespo;
+            $object['is_superadmin'] = $userId ? $respoCore->isUserSuperadmin($userId) : false;
+            $object['can_view_salary'] = $userId ? $respoCore->canViewSalary($userId) : false;
+            if($req->detail) {
+                // Pertahankan daftar m_role_access untuk kompatibilitas modul legacy m_role_access
+                $object['detail'] = m_role_access::join('m_role as r','r.id','m_role_access.m_role_id')
+                    ->select("r.*")
+                    ->where('m_role_access.user_id', $row['id'])
+                    ->get();
+            }
+
+            // Sediakan nama company secara konsisten (Holding active respo, m_dir, m_comp, atau relasi m_kary)
+            $companyName = null;
+            if ($activeRespo) {
+                $companyName = !empty($activeRespo->m_dir_id)
+                    ? ($activeRespo->dir_nama ?? null)
+                    : 'Holding (Semua Company)';
+            }
+            if (empty($companyName)) {
+                $companyName = $row['m_dir.nama'] ?? ($row['m_comp.nama'] ?? null);
+            }
             if (empty($companyName) && !empty($row['m_dir_id'])) {
                 $companyName = \DB::table('m_dir')->where('id', $row['m_dir_id'])->value('nama');
             }
@@ -468,22 +485,20 @@ class default_users extends \App\Models\BasicModels\default_users
             }
         }
 
-        // Sinkronkan m_dir_id dan m_comp_id pada default_users sesuai primary respo
+        // Sinkronkan m_dir_id (termasuk null untuk Holding) dan m_comp_id pada default_users sesuai primary respo
         if ($primaryRespoId) {
             $respoData = \DB::table('m_respo')->where('id', $primaryRespoId)->first();
             if ($respoData) {
-                $updateUser = [];
-                if (!empty($respoData->m_dir_id)) {
-                    $updateUser['m_dir_id'] = $respoData->m_dir_id;
-                }
+                $updateUser = [
+                    'm_dir_id' => $respoData->m_dir_id ?? null,
+                ];
                 if (!empty($respoData->m_comp_id)) {
                     $updateUser['m_comp_id'] = $respoData->m_comp_id;
                 }
-                if (!empty($updateUser)) {
-                    \DB::table('default_users')->where('id', $userId)->update($updateUser);
-                }
+                \DB::table('default_users')->where('id', $userId)->update($updateUser);
             }
         }
+        getCore('Respo')->resetCache($userId);
     }
 
 

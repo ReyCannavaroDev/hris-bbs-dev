@@ -81,12 +81,16 @@ class default_users_respo extends \App\Models\BasicModels\default_users_respo
             ->get();
 
         $activeRespo = $list->firstWhere('is_primary', true) ?: $list->first();
+        $respoCore = getCore('Respo');
 
         return response()->json([
-            'success'      => true,
-            'list'         => $list,
-            'active_respo' => $activeRespo,
-            'count'        => count($list)
+            'success'         => true,
+            'has_respo'       => $respoCore->userHasAssignedRespo((int) $userId),
+            'can_view_salary' => $respoCore->canViewSalary((int) $userId),
+            'is_superadmin'   => $respoCore->isUserSuperadmin((int) $userId),
+            'list'            => $list,
+            'active_respo'    => $activeRespo,
+            'count'           => count($list)
         ]);
     }
 
@@ -146,23 +150,33 @@ class default_users_respo extends \App\Models\BasicModels\default_users_respo
                 ->select(['r.*', 'd.nama as dir_nama'])
                 ->first();
 
-            // Opsional: sinkronkan m_dir_id pada tabel default_users agar konsisten dengan query lama
-            if (!empty($respo->m_dir_id)) {
-                \DB::table('default_users')
-                    ->where('id', $userId)
-                    ->update([
-                        'm_dir_id'   => $respo->m_dir_id,
-                        'm_comp_id'  => $respo->m_comp_id ?? 1,
-                        'updated_at' => \Carbon\Carbon::now()
-                    ]);
-            }
+            // Sinkronkan m_dir_id (termasuk null untuk Holding) & m_comp_id pada default_users agar konsisten
+            \DB::table('default_users')
+                ->where('id', $userId)
+                ->update([
+                    'm_dir_id'   => $respo->m_dir_id ?? null,
+                    'm_comp_id'  => $respo->m_comp_id ?? 1,
+                    'updated_at' => \Carbon\Carbon::now()
+                ]);
 
             \DB::commit();
 
+            $respoCore = getCore('Respo');
+            $respoCore->resetCache($userId);
+            $effectiveRoles = $respoCore->getEffectiveRoles((int) $userId);
+            $roleNames = array_values(array_map(function ($r) {
+                return $r->name;
+            }, $effectiveRoles));
+
             return response()->json([
-                'success'      => true,
-                'message'      => 'Berhasil berpindah ke responsibility: ' . ($respo->nama ?? '-'),
-                'active_respo' => $respo
+                'success'         => true,
+                'message'         => 'Berhasil berpindah ke responsibility: ' . ($respo->nama ?? '-'),
+                'active_respo'    => $respo,
+                'direktorat'      => $respo->dir_nama ?: 'Holding (Semua Company)',
+                'is_superadmin'   => $respoCore->isUserSuperadmin((int) $userId),
+                'can_view_salary' => $respoCore->canViewSalary((int) $userId),
+                'roles'           => $roleNames,
+                'role_names'      => implode(', ', $roleNames),
             ]);
         } catch (\Exception $e) {
             \DB::rollBack();

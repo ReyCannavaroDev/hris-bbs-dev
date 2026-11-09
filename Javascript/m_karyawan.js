@@ -24,154 +24,172 @@ const formErrorsBhs = ref({})
 const formErrorsPK = ref({})
 const activeTabIndex = ref(0)
 const tsId = `ts=` + (Date.parse(new Date()))
-const isStaffHrd = ref(false)
 
-const checkIsStaffHrd = async () => {
-  try {
-    const userData = store.user?.data || {}
-    const isSuper = (
-      userData.is_superadmin === true ||
-      userData.is_superadmin === 1 ||
-      userData.is_superadmin === '1' ||
-      userData.is_superadmin === 'true' ||
-      userData.username === 'developer'
-    )
-    if (isSuper) {
-      isStaffHrd.value = false
-      return
-    }
+const isTruthyFlag = (val) => val === true || val === 1 || val === '1' || String(val || '').toLowerCase() === 'true' || String(val || '').toLowerCase() === 't'
 
-    const matchesStaffHrd = (name) => /staff\s*hrd/i.test(String(name || '').trim())
-
-    // 1. Cek langsung dari store.user atau localStorage
-    let rolesList = []
-    if (Array.isArray(userData.roles)) {
-      userData.roles.forEach(r => rolesList.push(typeof r === 'string' ? r : (r.name || '')))
-    }
-    if (userData.role) rolesList.push(userData.role)
-    if (userData.role_name) rolesList.push(userData.role_name)
-    if (userData.role_names) rolesList.push(userData.role_names)
-
-    if (typeof window !== 'undefined' && window.localStorage?.user) {
-      try {
-        const localUser = JSON.parse(window.localStorage.user)
-        const localData = localUser?.data || {}
-        if (Array.isArray(localData.roles)) {
-          localData.roles.forEach(r => rolesList.push(typeof r === 'string' ? r : (r.name || '')))
-        }
-        if (localData.role) rolesList.push(localData.role)
-        if (localData.role_name) rolesList.push(localData.role_name)
-        if (localData.role_names) rolesList.push(localData.role_names)
-      } catch (e) {}
-    }
-
-    if (rolesList.some(matchesStaffHrd)) {
-      isStaffHrd.value = true
-      return
-    }
-
-    const userId = userData.id || (typeof window !== 'undefined' && window.localStorage?.user ? JSON.parse(window.localStorage.user)?.data?.id : null)
-    if (!userId) return
-
-    // 2. Fetch endpoint default_users/{userId}?from=role_access&detail=true
+const getUserSnapshot = () => {
+  const storeData = store.user?.data || {}
+  let localData = {}
+  if (typeof window !== 'undefined' && window.localStorage?.user) {
     try {
-      const resUser = await fetch(`${store.server.url_backend}/operation/default_users/${userId}?from=role_access&detail=true`, {
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `${store.user.token_type} ${store.user.token}`
-        }
+      localData = JSON.parse(window.localStorage.user)?.data || {}
+    } catch (e) {}
+  }
+  return { ...localData, ...storeData }
+}
+
+const detectSyncCanViewSalary = () => {
+  const userData = getUserSnapshot()
+  if (userData.username === 'developer') return true
+  if (isTruthyFlag(userData.is_superadmin)) return true
+  if (isTruthyFlag(userData.can_view_salary)) return true
+  return false
+}
+
+const canViewSalary = ref(detectSyncCanViewSalary())
+
+const clearRestrictedSalaryFields = () => {
+  if (!canViewSalary.value && typeof values !== 'undefined') {
+    values.gaji_pokok = null
+    values.gaji_acuan = null
+  }
+}
+
+const checkCanViewSalary = async () => {
+  try {
+    const userData = getUserSnapshot()
+    if (userData.username === 'developer') {
+      canViewSalary.value = true
+      return true
+    }
+
+    const userId = userData.id
+    if (!userId) {
+      canViewSalary.value = detectSyncCanViewSalary()
+      clearRestrictedSalaryFields()
+      return canViewSalary.value
+    }
+
+    const authHeader = {
+      'Content-Type': 'application/json',
+      Authorization: `${store.user.token_type} ${store.user.token}`
+    }
+
+    // 1. Cek Respo Mode: /operation/default_users_respo/getMyRespo -> m_respo_d (fail-closed)
+    let inRespoMode = isTruthyFlag(userData.has_respo)
+    let respoResolved = false
+    try {
+      const resMyRespo = await fetch(`${store.server.url_backend}/operation/default_users_respo/getMyRespo`, {
+        headers: authHeader
       })
-      if (resUser.ok) {
-        const jsonUser = await resUser.json()
-        const uData = jsonUser.data || {}
-        if (uData.role_names && matchesStaffHrd(uData.role_names)) {
-          isStaffHrd.value = true
-          return
-        }
-        if (Array.isArray(uData.detail)) {
-          const hasRole = uData.detail.some(r => matchesStaffHrd(r.name))
-          if (hasRole) {
-            isStaffHrd.value = true
-            return
+      if (resMyRespo.ok) {
+        const jsonMyRespo = await resMyRespo.json()
+        const respoList = Array.isArray(jsonMyRespo.list) ? jsonMyRespo.list : []
+        if (isTruthyFlag(jsonMyRespo.has_respo) || respoList.length > 0 || Number(jsonMyRespo.count || 0) > 0) {
+          inRespoMode = true
+          const activeRespo = jsonMyRespo.active_respo || respoList[0]
+          if (activeRespo?.m_respo_id) {
+            const resDetail = await fetch(`${store.server.url_backend}/operation/m_respo_d?join=true&where=this.m_respo_id=${activeRespo.m_respo_id}&paginate=200`, {
+              headers: authHeader
+            })
+            if (resDetail.ok) {
+              const jsonDetail = await resDetail.json()
+              const detailRows = jsonDetail.data || []
+              const allowed = detailRows.some(item => {
+                const activeRole = item['m_role.is_active'] ?? item.m_role?.is_active
+                if (activeRole !== undefined && !isTruthyFlag(activeRole)) return false
+                const isSuper = item['m_role.is_superadmin'] ?? item.m_role?.is_superadmin
+                const canSalary = item['m_role.can_view_salary'] ?? item.m_role?.can_view_salary
+                return isTruthyFlag(isSuper) || isTruthyFlag(canSalary)
+              })
+              canViewSalary.value = allowed
+              respoResolved = true
+            }
+          } else {
+            canViewSalary.value = false
+            respoResolved = true
           }
         }
       }
     } catch (e) {
-      console.warn('Check default_users role_access failed:', e)
+      console.warn('Check getMyRespo failed:', e)
     }
 
-    // 3. Fallback: Fetch endpoint m_role_access?join=true&where=this.user_id={userId}
+    if (inRespoMode) {
+      if (!respoResolved) {
+        canViewSalary.value = detectSyncCanViewSalary()
+      }
+      clearRestrictedSalaryFields()
+      return canViewSalary.value
+    }
+
+    // 2. Legacy Fallback Mode (hanya jika user tidak memiliki baris default_users_respo)
+    let legacyResolved = false
     try {
-      const resRole = await fetch(`${store.server.url_backend}/operation/m_role_access?join=true&where=this.user_id=${userId}`, {
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `${store.user.token_type} ${store.user.token}`
-        }
+      const resRole = await fetch(`${store.server.url_backend}/operation/m_role_access?join=true&where=this.user_id=${userId}&paginate=200`, {
+        headers: authHeader
       })
       if (resRole.ok) {
         const jsonRole = await resRole.json()
         const userRoles = jsonRole.data || []
-        const hasStaff = userRoles.some(item => {
-          const roleName = item['m_role.name'] || item.m_role?.name || item.name || ''
-          return matchesStaffHrd(roleName)
-        })
-        if (hasStaff) {
-          isStaffHrd.value = true
-          return
-        }
-      }
-    } catch (e) {
-      console.warn('Check m_role_access failed:', e)
-    }
-
-    // 4. Fallback 2: Fetch m_role_access tanpa join, lalu cek id di m_role
-    try {
-      const resRaw = await fetch(`${store.server.url_backend}/operation/m_role_access?where=this.user_id=${userId}`, {
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `${store.user.token_type} ${store.user.token}`
-        }
-      })
-      if (resRaw.ok) {
-        const jsonRaw = await resRaw.json()
-        const listAccess = jsonRaw.data || []
-        const roleIds = listAccess.map(a => a.m_role_id).filter(Boolean)
-        if (roleIds.length > 0) {
-          const resRoles = await fetch(`${store.server.url_backend}/operation/m_role?where=this.id in (${roleIds.join(',')})`, {
-            headers: {
-              'Content-Type': 'application/json',
-              Authorization: `${store.user.token_type} ${store.user.token}`
-            }
+        const hasJoinedRole = userRoles.some(item => (item['m_role.is_superadmin'] !== undefined || item['m_role.can_view_salary'] !== undefined || item.m_role))
+        if (userRoles.length === 0) {
+          canViewSalary.value = false
+          legacyResolved = true
+        } else if (hasJoinedRole) {
+          const allowed = userRoles.some(item => {
+            const activeRole = item['m_role.is_active'] ?? item.m_role?.is_active
+            if (activeRole !== undefined && !isTruthyFlag(activeRole)) return false
+            const isSuper = item['m_role.is_superadmin'] ?? item.m_role?.is_superadmin
+            const canSalary = item['m_role.can_view_salary'] ?? item.m_role?.can_view_salary
+            return isTruthyFlag(isSuper) || isTruthyFlag(canSalary)
           })
-          if (resRoles.ok) {
-            const jsonRoles = await resRoles.json()
-            const rolesData = jsonRoles.data || []
-            if (rolesData.some(r => matchesStaffHrd(r.name))) {
-              isStaffHrd.value = true
-              return
+          canViewSalary.value = allowed
+          legacyResolved = true
+        } else {
+          const roleIds = userRoles.map(a => a.m_role_id).filter(Boolean)
+          if (roleIds.length > 0) {
+            const resRoles = await fetch(`${store.server.url_backend}/operation/m_role?where=this.id in (${roleIds.join(',')})&paginate=200`, {
+              headers: authHeader
+            })
+            if (resRoles.ok) {
+              const jsonRoles = await resRoles.json()
+              const rolesData = jsonRoles.data || []
+              const allowed = rolesData.some(r => {
+                if (r.is_active !== undefined && !isTruthyFlag(r.is_active)) return false
+                return isTruthyFlag(r.is_superadmin) || isTruthyFlag(r.can_view_salary)
+              })
+              canViewSalary.value = allowed
+              legacyResolved = true
             }
           }
         }
       }
     } catch (e) {
-      console.warn('Check m_role fallback failed:', e)
+      console.warn('Check legacy m_role_access failed:', e)
     }
+
+    if (!legacyResolved) {
+      canViewSalary.value = detectSyncCanViewSalary()
+    }
+    clearRestrictedSalaryFields()
+    return canViewSalary.value
   } catch (err) {
-    console.error('Failed to check Staff HRD role:', err)
+    console.error('Failed to check salary permission:', err)
+    canViewSalary.value = false
+    clearRestrictedSalaryFields()
+    return false
   }
 }
 
-// Jalankan segera
-checkIsStaffHrd()
-
-// ------------------------------ PERSIAPAN
+// Cek izin gaji dilakukan saat lifecycle mount agar reactive state sudah terinisialisasi
 const endpointApi = '/m_kary'
 onBeforeMount(async () => {
   document.title = 'Master Karyawan'
-  await checkIsStaffHrd()
+  await checkCanViewSalary()
 })
 onMounted(() => {
-  checkIsStaffHrd()
+  checkCanViewSalary()
 })
 
 function parseDate(v) {
@@ -248,8 +266,8 @@ const setStandartGaji = async () => {
       values.m_standart_gaji_id = data[0]?.id
     }
 
-    // Auto-populate gaji_pokok & gaji_acuan jika belum diisi atau 0
-    if (data && data.length > 0 && data[0]?.gaji_pokok) {
+    // Auto-populate gaji_pokok & gaji_acuan jika belum diisi atau 0 dan role diizinkan
+    if (canViewSalary.value && data && data.length > 0 && data[0]?.gaji_pokok) {
       if (values.gaji_pokok === null || values.gaji_pokok === undefined || values.gaji_pokok === '' || Number(String(values.gaji_pokok).replace(/\D/g, '')) === 0) {
         values.gaji_pokok = formatThousand(data[0].gaji_pokok)
       }
@@ -276,6 +294,7 @@ const onInputGajiAcuan = (v) => {
 }
 
 const onStandartGajiSelect = (item) => {
+  if (!canViewSalary.value) return
   if (item && item.gaji_pokok) {
     if (values.gaji_pokok === null || values.gaji_pokok === undefined || values.gaji_pokok === '' || Number(String(values.gaji_pokok).replace(/\D/g, '')) === 0) {
       values.gaji_pokok = formatThousand(item.gaji_pokok)
@@ -651,12 +670,17 @@ onBeforeMount(async () => {
   if (values.tgl_lahir) values.tgl_lahir = formatDateDisplay(values.tgl_lahir)
   if (values.npwp_tgl_berlaku) values.npwp_tgl_berlaku = formatDateDisplay(values.npwp_tgl_berlaku)
 
-  // Format gaji_pokok & gaji_acuan with thousand separator
-  if (values.gaji_pokok !== null && values.gaji_pokok !== undefined && values.gaji_pokok !== '') {
-    values.gaji_pokok = formatThousand(values.gaji_pokok)
-  }
-  if (values.gaji_acuan !== null && values.gaji_acuan !== undefined && values.gaji_acuan !== '') {
-    values.gaji_acuan = formatThousand(values.gaji_acuan)
+  // Format gaji_pokok & gaji_acuan with thousand separator (fail-closed jika tidak berhak)
+  if (!canViewSalary.value) {
+    values.gaji_pokok = null
+    values.gaji_acuan = null
+  } else {
+    if (values.gaji_pokok !== null && values.gaji_pokok !== undefined && values.gaji_pokok !== '') {
+      values.gaji_pokok = formatThousand(values.gaji_pokok)
+    }
+    if (values.gaji_acuan !== null && values.gaji_acuan !== undefined && values.gaji_acuan !== '') {
+      values.gaji_acuan = formatThousand(values.gaji_acuan)
+    }
   }
   if (values.lama_kontrak_awal) values.lama_kontrak_awal = formatDateDisplay(values.lama_kontrak_awal)
   if (values.lama_kontrak_akhir) values.lama_kontrak_akhir = formatDateDisplay(values.lama_kontrak_akhir)
@@ -1535,11 +1559,16 @@ function onReset() {
       for (const key in initialValues) {
         values[key] = initialValues[key]
       }
-      if (values.gaji_pokok !== null && values.gaji_pokok !== undefined && values.gaji_pokok !== '') {
-        values.gaji_pokok = formatThousand(values.gaji_pokok)
-      }
-      if (values.gaji_acuan !== null && values.gaji_acuan !== undefined && values.gaji_acuan !== '') {
-        values.gaji_acuan = formatThousand(values.gaji_acuan)
+      if (!canViewSalary.value) {
+        values.gaji_pokok = null
+        values.gaji_acuan = null
+      } else {
+        if (values.gaji_pokok !== null && values.gaji_pokok !== undefined && values.gaji_pokok !== '') {
+          values.gaji_pokok = formatThousand(values.gaji_pokok)
+        }
+        if (values.gaji_acuan !== null && values.gaji_acuan !== undefined && values.gaji_acuan !== '') {
+          values.gaji_acuan = formatThousand(values.gaji_acuan)
+        }
       }
     }
   })
@@ -1678,7 +1707,7 @@ async function onSave() {
     if (payload.lama_kontrak_awal) payload.lama_kontrak_awal = formatDateApi(payload.lama_kontrak_awal)
     if (payload.lama_kontrak_akhir) payload.lama_kontrak_akhir = formatDateApi(payload.lama_kontrak_akhir)
 
-    if (isStaffHrd.value) {
+    if (!canViewSalary.value) {
       delete payload.gaji_pokok
       delete payload.gaji_acuan
     } else {

@@ -23,13 +23,202 @@ const detailArrOpen = reactive({items: []})
 const openedRincian = ref([])
 const tsId = `ts=`+(Date.parse(new Date()))
 
+const isTruthyFlag = (val) => val === true || val === 1 || val === '1' || String(val || '').toLowerCase() === 'true' || String(val || '').toLowerCase() === 't'
+
+const getUserSnapshot = () => {
+  const storeData = store.user?.data || {}
+  let localData = {}
+  if (typeof window !== 'undefined' && window.localStorage?.user) {
+    try {
+      localData = JSON.parse(window.localStorage.user)?.data || {}
+    } catch (e) {}
+  }
+  return { ...localData, ...storeData }
+}
+
+const detectSyncCanViewSalary = () => {
+  const userData = getUserSnapshot()
+  if (userData.username === 'developer') return true
+  if (isTruthyFlag(userData.is_superadmin)) return true
+  if (isTruthyFlag(userData.can_view_salary)) return true
+  return false
+}
+
+const canViewSalary = ref(detectSyncCanViewSalary())
+
+const clearRestrictedSalaryData = () => {
+  if (canViewSalary.value) return
+  if (typeof values !== 'undefined') {
+    values.total_gaji = null
+    values.total_tax = null
+    values.netto = null
+    values.detail_gaji = null
+  }
+  detailArr.value = []
+  detailArrOpen.items = []
+  modalOpen.value = false
+}
+
+const syncSalaryLandingAccess = (allowed) => {
+  const baseSearchField = 'this.id, this.nomor, m_kary.nik, m_kary.nama_lengkap, m_kary_dir.nama, m_kary_divisi.nama, m_kary_dept.nama, this.periode, periode.value'
+  landing.api.params.searchfield = allowed ? `${baseSearchField}, this.netto` : baseSearchField
+
+  const hasNettoCol = landing.columns.some(col => col.field === 'netto')
+  if (allowed && !hasNettoCol) {
+    landing.columns.push(nettoColumn)
+  } else if (!allowed && hasNettoCol) {
+    for (let i = landing.columns.length - 1; i >= 0; i--) {
+      if (landing.columns[i].field === 'netto') {
+        landing.columns.splice(i, 1)
+      }
+    }
+  }
+}
+
+const checkCanViewSalary = async () => {
+  const prev = canViewSalary.value
+  try {
+    const userData = getUserSnapshot()
+    if (userData.username === 'developer') {
+      canViewSalary.value = true
+      syncSalaryLandingAccess(true)
+      return true
+    }
+
+    const userId = userData.id
+    if (!userId) {
+      canViewSalary.value = detectSyncCanViewSalary()
+      syncSalaryLandingAccess(canViewSalary.value)
+      clearRestrictedSalaryData()
+      return canViewSalary.value
+    }
+
+    const authHeader = {
+      'Content-Type': 'application/json',
+      Authorization: `${store.user.token_type} ${store.user.token}`
+    }
+
+    let inRespoMode = isTruthyFlag(userData.has_respo)
+    let respoResolved = false
+    try {
+      const resMyRespo = await fetch(`${store.server.url_backend}/operation/default_users_respo/getMyRespo`, {
+        headers: authHeader
+      })
+      if (resMyRespo.ok) {
+        const jsonMyRespo = await resMyRespo.json()
+        const respoList = Array.isArray(jsonMyRespo.list) ? jsonMyRespo.list : []
+        if (isTruthyFlag(jsonMyRespo.has_respo) || respoList.length > 0 || Number(jsonMyRespo.count || 0) > 0) {
+          inRespoMode = true
+          const activeRespo = jsonMyRespo.active_respo || respoList[0]
+          if (activeRespo?.m_respo_id) {
+            const resDetail = await fetch(`${store.server.url_backend}/operation/m_respo_d?join=true&where=this.m_respo_id=${activeRespo.m_respo_id}&paginate=200`, {
+              headers: authHeader
+            })
+            if (resDetail.ok) {
+              const jsonDetail = await resDetail.json()
+              const detailRows = jsonDetail.data || []
+              const allowed = detailRows.some(item => {
+                const activeRole = item['m_role.is_active'] ?? item.m_role?.is_active
+                if (activeRole !== undefined && !isTruthyFlag(activeRole)) return false
+                const isSuper = item['m_role.is_superadmin'] ?? item.m_role?.is_superadmin
+                const canSalary = item['m_role.can_view_salary'] ?? item.m_role?.can_view_salary
+                return isTruthyFlag(isSuper) || isTruthyFlag(canSalary)
+              })
+              canViewSalary.value = allowed
+              respoResolved = true
+            }
+          } else {
+            canViewSalary.value = false
+            respoResolved = true
+          }
+        }
+      }
+    } catch (e) {
+      console.warn('Check getMyRespo failed:', e)
+    }
+
+    if (!inRespoMode) {
+      let legacyResolved = false
+      try {
+        const resRole = await fetch(`${store.server.url_backend}/operation/m_role_access?join=true&where=this.user_id=${userId}&paginate=200`, {
+          headers: authHeader
+        })
+        if (resRole.ok) {
+          const jsonRole = await resRole.json()
+          const userRoles = jsonRole.data || []
+          const hasJoinedRole = userRoles.some(item => (item['m_role.is_superadmin'] !== undefined || item['m_role.can_view_salary'] !== undefined || item.m_role))
+          if (userRoles.length === 0) {
+            canViewSalary.value = false
+            legacyResolved = true
+          } else if (hasJoinedRole) {
+            const allowed = userRoles.some(item => {
+              const activeRole = item['m_role.is_active'] ?? item.m_role?.is_active
+              if (activeRole !== undefined && !isTruthyFlag(activeRole)) return false
+              const isSuper = item['m_role.is_superadmin'] ?? item.m_role?.is_superadmin
+              const canSalary = item['m_role.can_view_salary'] ?? item.m_role?.can_view_salary
+              return isTruthyFlag(isSuper) || isTruthyFlag(canSalary)
+            })
+            canViewSalary.value = allowed
+            legacyResolved = true
+          } else {
+            const roleIds = userRoles.map(a => a.m_role_id).filter(Boolean)
+            if (roleIds.length > 0) {
+              const resRoles = await fetch(`${store.server.url_backend}/operation/m_role?where=this.id in (${roleIds.join(',')})&paginate=200`, {
+                headers: authHeader
+              })
+              if (resRoles.ok) {
+                const jsonRoles = await resRoles.json()
+                const rolesData = jsonRoles.data || []
+                const allowed = rolesData.some(r => {
+                  if (r.is_active !== undefined && !isTruthyFlag(r.is_active)) return false
+                  return isTruthyFlag(r.is_superadmin) || isTruthyFlag(r.can_view_salary)
+                })
+                canViewSalary.value = allowed
+                legacyResolved = true
+              }
+            }
+          }
+        }
+      } catch (e) {
+        console.warn('Check legacy m_role_access failed:', e)
+      }
+      if (!legacyResolved) {
+        canViewSalary.value = detectSyncCanViewSalary()
+      }
+    } else if (!respoResolved) {
+      canViewSalary.value = detectSyncCanViewSalary()
+    }
+  } catch (err) {
+    console.error('Failed to check salary permission:', err)
+    canViewSalary.value = false
+  }
+
+  syncSalaryLandingAccess(canViewSalary.value)
+  clearRestrictedSalaryData()
+  if (prev !== canViewSalary.value && apiTable.value) {
+    apiTable.value.reload()
+  }
+  return canViewSalary.value
+}
+
 // ------------------------------ PERSIAPAN
 const endpointApi = '/t_perhitungan_gaji'
 onBeforeMount(()=>{
   document.title = 'Perhitungan Gaji'
+  checkCanViewSalary()
+})
+onMounted(() => {
+  checkCanViewSalary()
 })
 
 function openDetailFromLanding(row) {
+  if (!canViewSalary.value) {
+    swal.fire({
+      icon: 'warning',
+      text: 'Anda tidak memiliki hak akses untuk melihat rincian nominal gaji.'
+    })
+    return
+  }
   titleOpen.value = row['m_kary.nama_lengkap'] + ' - ' +row['m_kary.nik']
   openedRincian.value = []
   let dataFormat =  row?.detail_gaji ?? []
@@ -279,6 +468,13 @@ const values = reactive({
 })
 
 function openDetail(i) {
+  if (!canViewSalary.value) {
+    swal.fire({
+      icon: 'warning',
+      text: 'Anda tidak memiliki hak akses untuk melihat rincian nominal gaji.'
+    })
+    return
+  }
   titleOpen.value = detailArr.value[i]?.nama_lengkap ?? '-' +' - ' +detailArr.value[i]?.nama_lengkap ?? ''
   openedRincian.value = []
   let dataFormat =  detailArr.value[i]?.detail_gaji ?? []
@@ -300,6 +496,7 @@ onBeforeMount(async () => {
   console.log(values.periode_awal)
   // tampilkan default direktorat dengan store user comp.nama
   values.direktorat = store.user.data?.direktorat
+  await checkCanViewSalary()
 
   if (isRead) {
     //  READ DATA
@@ -345,6 +542,14 @@ onBeforeMount(async () => {
   }
 
   if (isRead && initialValues && initialValues.id) {
+    if (!canViewSalary.value) {
+      values.total_gaji = null
+      values.total_tax = null
+      values.netto = null
+      values.detail_gaji = null
+      detailArr.value = []
+      return
+    }
     const itemData = { ...initialValues }
     itemData.karyawan = itemData['m_kary.nama_lengkap'] || itemData.karyawan || itemData.nama_lengkap || '-'
     itemData.deskripsi = itemData.deskripsi || ''
@@ -406,6 +611,12 @@ function formatDate(dateStr) {
 }
 
 async function generatePerhitungan() {
+    if (!canViewSalary.value) {
+      return swal.fire({
+        icon: 'error',
+        text: 'Anda tidak memiliki hak akses untuk melakukan perhitungan gaji.'
+      })
+    }
     if (!values.periode_awal || !values.periode_akhir) {
       return swal.fire({
         icon: 'warning',
@@ -467,6 +678,12 @@ async function generatePerhitungan() {
 }
 
 async function onSave() {
+  if (!canViewSalary.value) {
+    return swal.fire({
+      icon: 'error',
+      text: 'Anda tidak memiliki hak akses untuk menyimpan perhitungan gaji.'
+    })
+  }
   // merging detail data
     const payload = {
           ...values,
@@ -507,6 +724,26 @@ async function onSave() {
 }
 
 //  @else----------------------- LANDING
+const baseSearchField = 'this.id, this.nomor, m_kary.nik, m_kary.nama_lengkap, m_kary_dir.nama, m_kary_divisi.nama, m_kary_dept.nama, this.periode, periode.value'
+
+const nettoColumn = {
+  field: 'netto',
+  headerName: 'Gaji',
+  filter: true,
+  wrapText: true,
+  sortable: true,
+  flex: 1,
+  filter: 'ColFilter',
+  resizable: true,
+  cellClass: ['border-r', '!border-gray-200', 'justify-end'],
+  cellRenderer: ({ value }) => {
+    if (!canViewSalary.value || value === null || value === undefined || value === '') {
+      return '-'
+    }
+    return formatRupiah(value)
+  },
+}
+
 const landing = reactive({
   actions: [
     // {
@@ -554,7 +791,7 @@ const landing = reactive({
       icon: 'eye',
       title: "Read",
       class: 'bg-green-600 text-light-100',
-      // show: (row) => (currentMenu?.can_read)||store.user.data.username==='developer',
+      show: () => canViewSalary.value,
       click(row) {
         openDetailFromLanding(row)
       }
@@ -568,9 +805,18 @@ const landing = reactive({
     },
     params: {
       simplest: true,
-      searchfield:'this.id, this.nomor, m_kary.nik, m_kary.nama_lengkap, m_kary_dir.nama, m_kary_divisi.nama, m_kary_dept.nama, this.periode, periode.value, this.netto',
+      searchfield: canViewSalary.value ? `${baseSearchField}, this.netto` : baseSearchField,
     },
     onsuccess(response) {
+      if (!canViewSalary.value && response && Array.isArray(response.data)) {
+        response.data = response.data.map(item => ({
+          ...item,
+          total_gaji: null,
+          total_tax: null,
+          netto: null,
+          detail_gaji: null
+        }))
+      }
       response.page = response.current_page
       response.hasNext = response.has_next
       return response
@@ -672,20 +918,7 @@ const landing = reactive({
     resizable: true,
     cellClass: [ 'border-r', '!border-gray-200', 'justify-start']
   },
-  {
-    field: 'netto',
-    headerName: 'Gaji',
-    filter: true,
-    wrapText: true,
-    sortable: true,
-    flex:1,
-    filter: 'ColFilter',
-    resizable: true,
-    cellClass: [ 'border-r', '!border-gray-200', 'justify-end'],
-    cellRenderer: ({ value }) => {
-      return formatRupiah(value);
-    },
-  },
+  ...(canViewSalary.value ? [nettoColumn] : [])
   ]
 })
 onActivated(() => {

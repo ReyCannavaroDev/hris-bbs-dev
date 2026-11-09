@@ -249,7 +249,8 @@
                 {
                   field: 'm_dir.nama',
                   headerName: 'Company',
-                  flex: 1
+                  flex: 1,
+                  valueGetter: (p) => p.data?.['m_dir.nama'] || (!p.data?.m_dir_id ? 'Holding (Semua Company)' : '-')
                 },
                 {
                   field: 'm_divisi.nama',
@@ -295,7 +296,7 @@
             <tbody class="divide-y divide-gray-200 bg-white">
               <tr v-for="(item, i) in trx_respo" :key="item.m_respo_id || i" class="hover:bg-gray-50 transition-colors">
                 <td class="p-3 text-center border-r border-gray-200 font-medium text-gray-600">{{ i + 1 }}.</td>
-                <td class="p-3 border-r border-gray-200 font-medium text-gray-800">{{ item.company_nama || '-' }}</td>
+                <td class="p-3 border-r border-gray-200 font-medium text-gray-800">{{ item.company_nama || (!item.m_dir_id ? 'Holding (Semua Company)' : '-') }}</td>
                 <td class="p-3 border-r border-gray-200 text-gray-600">{{ item.divisi_nama || '-' }}</td>
                 <td class="p-3 border-r border-gray-200 text-gray-600">{{ item.dept_nama || '-' }}</td>
                 <td class="p-3 border-r border-gray-200 font-semibold text-primary">{{ item.respo_nama || '-' }}</td>

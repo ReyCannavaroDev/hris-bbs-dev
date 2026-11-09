@@ -58,9 +58,18 @@ function deleteAll() {
 detail.value.key++
 }
 
+const parseRoleBool = (val) => (val === true || val === 1 || val === '1' || val === 'true' || val === 't')
+
 const values = reactive({
   is_superadmin: false,
+  can_view_salary: false,
   is_active: true
+})
+
+watch(() => values.is_superadmin, (val) => {
+  if (val) {
+    values.can_view_salary = true
+  }
 })
 
 
@@ -121,8 +130,9 @@ onBeforeMount(async () => {
   for (const key in initialValues) {
     values[key] = initialValues[key]
   }
-  values.is_superadmin = (values.is_superadmin === true || values.is_superadmin === 1 || values.is_superadmin === '1' || values.is_superadmin === 'true' || values.is_superadmin === 't')
-  values.is_active = (values.is_active === true || values.is_active === 1 || values.is_active === '1' || values.is_active === 'true' || values.is_active === 't')
+  values.is_superadmin = parseRoleBool(values.is_superadmin)
+  values.can_view_salary = values.is_superadmin || parseRoleBool(values.can_view_salary)
+  values.is_active = parseRoleBool(values.is_active)
 })
 
 function onBack() {
@@ -160,8 +170,9 @@ function onReset() {
       for (const key in initialValues) {
         values[key] = initialValues[key]
       }
-      values.is_superadmin = (values.is_superadmin === true || values.is_superadmin === 1 || values.is_superadmin === '1' || values.is_superadmin === 'true' || values.is_superadmin === 't')
-      values.is_active = (values.is_active === true || values.is_active === 1 || values.is_active === '1' || values.is_active === 'true' || values.is_active === 't')
+      values.is_superadmin = parseRoleBool(values.is_superadmin)
+      values.can_view_salary = values.is_superadmin || parseRoleBool(values.can_view_salary)
+      values.is_active = parseRoleBool(values.is_active)
     }
   })
 }
@@ -235,6 +246,7 @@ function onSave() {
         const payload = Object.assign({}, values, {
           is_active: values.is_active ? 1 : 0,
           is_superadmin: values.is_superadmin ? 1 : 0,
+          can_view_salary: (values.is_superadmin || values.can_view_salary) ? 1 : 0,
           m_role_det: detailList
         })
         delete payload.direktorat
@@ -293,7 +305,7 @@ function transformRoleUrl(url) {
   try {
     if (!url || typeof url !== 'string') return url
     if (!url.includes('m_role')) return url
-    if (!url.includes('filter_is_superadmin') && !url.includes('filter_superadmin') && !url.includes('filter_is_active') && !url.includes('filter_status')) {
+    if (!url.includes('filter_is_superadmin') && !url.includes('filter_superadmin') && !url.includes('filter_can_view_salary') && !url.includes('filter_view_salary') && !url.includes('filter_is_active') && !url.includes('filter_status')) {
       return url
     }
 
@@ -301,6 +313,7 @@ function transformRoleUrl(url) {
     const base = typeof window !== 'undefined' && window.location ? window.location.origin : 'http://localhost'
     const urlObj = new URL(url, base)
     const isSuperadmin = urlObj.searchParams.get('filter_is_superadmin') ?? urlObj.searchParams.get('filter_superadmin')
+    const canViewSalary = urlObj.searchParams.get('filter_can_view_salary') ?? urlObj.searchParams.get('filter_view_salary')
     const isActive = urlObj.searchParams.get('filter_is_active') ?? urlObj.searchParams.get('filter_status')
     const currentWhere = urlObj.searchParams.get('where') || ''
 
@@ -318,6 +331,17 @@ function transformRoleUrl(url) {
       }
       urlObj.searchParams.delete('filter_is_superadmin')
       urlObj.searchParams.delete('filter_superadmin')
+    }
+
+    if (canViewSalary !== null) {
+      const val = String(canViewSalary).toLowerCase().trim()
+      const boolVal = (val === 'yes' || val === 'true' || val === '1') ? 'true' : ((val === 'no' || val === 'false' || val === '0') ? 'false' : null)
+      conds = conds.filter(c => !/\bthis\.can_view_salary\b/i.test(c))
+      if (boolVal !== null) {
+        conds.push('this.can_view_salary=' + boolVal)
+      }
+      urlObj.searchParams.delete('filter_can_view_salary')
+      urlObj.searchParams.delete('filter_view_salary')
     }
 
     if (isActive !== null) {
@@ -492,10 +516,13 @@ const landing = reactive({
     onsuccess(response) {
       if (response && response.data) {
         response.data = response.data.map((item) => {
-          const isSuper = (item.is_superadmin === true || item.is_superadmin === 1 || item.is_superadmin === '1' || item.is_superadmin === 'true' || item.is_superadmin === 't')
-          const isActive = (item.is_active === true || item.is_active === 1 || item.is_active === '1' || item.is_active === 'true' || item.is_active === 't')
+          const isSuper = parseRoleBool(item.is_superadmin)
+          const canSalary = isSuper || parseRoleBool(item.can_view_salary)
+          const isActive = parseRoleBool(item.is_active)
           item.is_superadmin = isSuper
           item.superadmin = isSuper ? 'Yes' : 'No'
+          item.can_view_salary = canSalary
+          item.view_salary = canSalary ? 'Yes' : 'No'
           item.is_active = isActive
           item.status = isActive ? 'Active' : 'Inactive'
           return item
@@ -561,6 +588,33 @@ const landing = reactive({
     }
   },
   {
+    headerName: 'Akses Gaji',
+    field: 'view_salary',
+    filter: 'ColFilter',
+    filterParams: {
+      options: ['Yes', 'No']
+    },
+    filterValueGetter: (params) => {
+      const isSuper = params.data ? parseRoleBool(params.data.is_superadmin) : false
+      const val = params.data ? (params.data.can_view_salary !== undefined ? params.data.can_view_salary : params.data.view_salary) : params.value
+      return (isSuper || val === 'Yes' || parseRoleBool(val)) ? 'Yes' : 'No'
+    },
+    valueGetter: (params) => {
+      const isSuper = params.data ? parseRoleBool(params.data.is_superadmin) : false
+      const val = params.data ? (params.data.can_view_salary !== undefined ? params.data.can_view_salary : params.data.view_salary) : params.value
+      return (isSuper || val === 'Yes' || parseRoleBool(val)) ? 'Yes' : 'No'
+    },
+    sortable: true,
+    resizable: true,
+    flex: 1,
+    cellClass: [ 'border-r', '!border-gray-200', 'justify-center'],
+    cellRenderer: ({ value }) => {
+      return value === 'Yes' || value === true
+        ? `<span class="bg-emerald-50 text-emerald-700 border border-emerald-200 rounded-md text-xs font-medium px-3 py-0.5 inline-block capitalize">Bisa Lihat</span>`
+        : `<span class="bg-gray-50 text-gray-500 border border-gray-200 rounded-md text-xs font-medium px-3 py-0.5 inline-block capitalize">Tidak</span>`
+    }
+  },
+  {
     headerName: 'Status',
     field: 'status',
     filter: 'ColFilter',
@@ -591,6 +645,7 @@ const landing = reactive({
 watch(() => ({ ...(landing.api && landing.api.params) }), (newParams) => {
   if (!newParams || !landing.api || !landing.api.params) return
   let isSuperadmin = newParams.filter_is_superadmin ?? newParams.filter_superadmin
+  let canViewSalary = newParams.filter_can_view_salary ?? newParams.filter_view_salary
   let isActive = newParams.filter_is_active ?? newParams.filter_status
   let modified = false
   let currentWhere = landing.api.params.where || ''
@@ -605,6 +660,18 @@ watch(() => ({ ...(landing.api && landing.api.params) }), (newParams) => {
     }
     delete landing.api.params.filter_is_superadmin
     delete landing.api.params.filter_superadmin
+    modified = true
+  }
+
+  if (canViewSalary !== undefined) {
+    const val = String(canViewSalary).toLowerCase().trim()
+    const boolVal = (val === 'yes' || val === 'true' || val === '1') ? 'true' : ((val === 'no' || val === 'false' || val === '0') ? 'false' : null)
+    conds = conds.filter(c => !/\bthis\.can_view_salary\b/i.test(c))
+    if (boolVal !== null) {
+      conds.push('this.can_view_salary=' + boolVal)
+    }
+    delete landing.api.params.filter_can_view_salary
+    delete landing.api.params.filter_view_salary
     modified = true
   }
 

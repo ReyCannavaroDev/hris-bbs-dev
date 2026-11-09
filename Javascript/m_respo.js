@@ -135,10 +135,6 @@ async function onSave() {
     swal.fire({ icon: 'warning', text: 'Nama responsibility wajib diisi.' })
     return
   }
-  if (!values.m_dir_id) {
-    swal.fire({ icon: 'warning', text: 'Company wajib dipilih.' })
-    return
-  }
 
   try {
     const isCreating = ['Create', 'Copy', 'Tambah'].includes(actionText.value)
@@ -146,6 +142,11 @@ async function onSave() {
     isRequesting.value = true
 
     values.m_comp_id = 1
+    values.m_dir_id = values.m_dir_id || null
+    if (!values.m_dir_id) {
+      values.m_divisi_id = null
+      values.m_dept_id = null
+    }
     values.is_active = values.is_active === true || values.is_active === 1 ? 1 : 0
     values.m_respo_d = trx_dtl.value.map(d => ({
       m_role_id: d.m_role_id,
@@ -296,6 +297,7 @@ const landing = reactive({
       field: 'm_dir.nama',
       headerName: 'Company',
       flex: 1.2,
+      valueGetter: (params) => params.data?.['m_dir.nama'] || 'Holding (Semua Company)',
       cellClass: ['border-r', '!border-gray-200']
     },
     {

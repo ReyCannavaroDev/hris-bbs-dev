@@ -3,6 +3,283 @@ namespace App\Cores;
 
 class Respo
 {
+    private $userCache = [];
+    private $hasRespoCache = [];
+    private $activeRespoCache = [];
+    private $effectiveRolesCache = [];
+    private $sidebarIconsCache = null;
+    private static $hasCanViewSalaryColCache = null;
+
+    public function resetCache($userId = null)
+    {
+        if ($userId === null) {
+            $this->userCache = [];
+            $this->hasRespoCache = [];
+            $this->activeRespoCache = [];
+            $this->effectiveRolesCache = [];
+            $this->sidebarIconsCache = null;
+        } else {
+            $uid = (int) $userId;
+            unset(
+                $this->userCache[$uid],
+                $this->hasRespoCache[$uid],
+                $this->activeRespoCache[$uid],
+                $this->effectiveRolesCache[$uid]
+            );
+        }
+    }
+
+    private function hasCanViewSalaryColumn(): bool
+    {
+        if (self::$hasCanViewSalaryColCache === null) {
+            try {
+                self::$hasCanViewSalaryColCache = \Schema::hasColumn('m_role', 'can_view_salary');
+            } catch (\Throwable $e) {
+                self::$hasCanViewSalaryColCache = false;
+            }
+        }
+        return self::$hasCanViewSalaryColCache;
+    }
+
+    private function resolveUser($user = null)
+    {
+        if ($user === null) {
+            $authUser = @auth()->user();
+            if (!$authUser) {
+                return null;
+            }
+            $user = $authUser;
+        }
+
+        if (is_numeric($user)) {
+            $uid = (int) $user;
+            if (!$uid) return null;
+            if (!array_key_exists($uid, $this->userCache)) {
+                $this->userCache[$uid] = \DB::table('default_users')->where('id', $uid)->first();
+            }
+            return $this->userCache[$uid];
+        }
+
+        if (is_array($user)) {
+            $uid = (int) ($user['id'] ?? 0);
+            if ($uid) {
+                if (!array_key_exists($uid, $this->userCache)) {
+                    $dbUser = \DB::table('default_users')->where('id', $uid)->first();
+                    $this->userCache[$uid] = $dbUser ?: (object) $user;
+                }
+                return $this->userCache[$uid];
+            }
+            return (object) $user;
+        }
+
+        if (is_object($user)) {
+            $uid = (int) ($user->id ?? 0);
+            if ($uid && !array_key_exists($uid, $this->userCache)) {
+                $this->userCache[$uid] = $user;
+            }
+            return $user;
+        }
+
+        return null;
+    }
+
+    private function getSidebarIcons(): array
+    {
+        if ($this->sidebarIconsCache !== null) {
+            return $this->sidebarIconsCache;
+        }
+
+        $icons = [];
+        try {
+            $rows = \DB::table('m_general')
+                ->where('is_active', true)
+                ->whereRaw("lower(key) = 'sidebar-icon'")
+                ->get(['code', 'value']);
+            foreach ($rows as $r) {
+                $code = strtolower(trim((string) ($r->code ?? '')));
+                if ($code !== '' && !empty($r->value)) {
+                    $icons[$code] = $r->value;
+                }
+            }
+        } catch (\Throwable $e) {
+            $icons = [];
+        }
+
+        $this->sidebarIconsCache = $icons;
+        return $this->sidebarIconsCache;
+    }
+
+    /**
+     * Memeriksa apakah user sudah memiliki assignment pada default_users_respo (Respo Mode vs Legacy Mode)
+     */
+    public function userHasAssignedRespo($userId = null): bool
+    {
+        $uid = (int) ($userId ?? (@auth()->user()->id ?? 0));
+        if (!$uid) {
+            return false;
+        }
+
+        if (!array_key_exists($uid, $this->hasRespoCache)) {
+            try {
+                $this->hasRespoCache[$uid] = \DB::table('default_users_respo')
+                    ->where('default_users_id', $uid)
+                    ->exists();
+            } catch (\Throwable $e) {
+                $this->hasRespoCache[$uid] = false;
+            }
+        }
+
+        return $this->hasRespoCache[$uid];
+    }
+
+    /**
+     * Mengambil role aktif efektif user:
+     * - Respo Mode: dari active default_users_respo -> m_respo_d -> m_role
+     * - Legacy Mode: dari m_role_access -> m_role
+     */
+    public function getEffectiveRoles($user = null): array
+    {
+        $userObj = $this->resolveUser($user);
+        $uid = (int) ($userObj->id ?? 0);
+        if (!$uid) {
+            return [];
+        }
+
+        if (array_key_exists($uid, $this->effectiveRolesCache)) {
+            return $this->effectiveRolesCache[$uid];
+        }
+
+        $selectCols = ['r.id', 'r.name', 'r.is_superadmin', 'r.is_active'];
+        if ($this->hasCanViewSalaryColumn()) {
+            $selectCols[] = 'r.can_view_salary';
+        }
+
+        $rows = [];
+        if ($this->userHasAssignedRespo($uid)) {
+            $activeRespo = $this->checkRespoActive($uid);
+            if ($activeRespo) {
+                $rows = \DB::table('m_respo_d as rd')
+                    ->join('m_role as r', 'r.id', '=', 'rd.m_role_id')
+                    ->where('rd.m_respo_id', $activeRespo->id)
+                    ->where('r.is_active', true)
+                    ->select($selectCols)
+                    ->orderBy('r.id', 'asc')
+                    ->get()
+                    ->toArray();
+            }
+        } else {
+            $rows = \DB::table('m_role_access as ra')
+                ->join('m_role as r', 'r.id', '=', 'ra.m_role_id')
+                ->where('ra.user_id', $uid)
+                ->where('r.is_active', true)
+                ->select($selectCols)
+                ->orderBy('r.id', 'asc')
+                ->get()
+                ->toArray();
+        }
+
+        $unique = [];
+        foreach ($rows as $row) {
+            $rid = (int) ($row->id ?? 0);
+            if ($rid && !isset($unique[$rid])) {
+                $unique[$rid] = $row;
+            }
+        }
+
+        $this->effectiveRolesCache[$uid] = array_values($unique);
+        return $this->effectiveRolesCache[$uid];
+    }
+
+    /**
+     * Memeriksa apakah user diizinkan melihat / mengelola nominal gaji (allowlist / fail-closed)
+     */
+    public function canViewSalary($user = null): bool
+    {
+        $userObj = $this->resolveUser($user);
+        if (!$userObj) {
+            return false;
+        }
+
+        if ($this->isUserSuperadmin($userObj)) {
+            return true;
+        }
+
+        if (!$this->hasCanViewSalaryColumn()) {
+            return false;
+        }
+
+        foreach ($this->getEffectiveRoles($userObj) as $role) {
+            if (!empty($role->can_view_salary)) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    /**
+     * Mengambil company scope aktif untuk user (siap dipakai modul transaksi/master/laporan)
+     */
+    public function getActiveCompanyScope($user = null): array
+    {
+        $userObj = $this->resolveUser($user);
+        $uid = (int) ($userObj->id ?? 0);
+        $hasRespo = $uid ? $this->userHasAssignedRespo($uid) : false;
+        $activeRespo = $hasRespo ? $this->checkRespoActive($uid) : null;
+
+        if ($this->isUserSuperadmin($userObj)) {
+            return [
+                'has_respo'       => $hasRespo,
+                'is_unrestricted' => true,
+                'is_holding'      => true,
+                'm_dir_id'        => null,
+                'm_divisi_id'     => null,
+                'm_dept_id'       => null,
+                'm_respo_id'      => $activeRespo ? (int) $activeRespo->id : null,
+            ];
+        }
+
+        if ($hasRespo) {
+            if (!$activeRespo) {
+                return [
+                    'has_respo'       => true,
+                    'is_unrestricted' => false,
+                    'is_holding'      => false,
+                    'm_dir_id'        => -1,
+                    'm_divisi_id'     => null,
+                    'm_dept_id'       => null,
+                    'm_respo_id'      => null,
+                ];
+            }
+
+            $dirId = ($activeRespo->m_dir_id !== null && $activeRespo->m_dir_id !== '') ? (int) $activeRespo->m_dir_id : null;
+            $isHolding = ($dirId === null);
+
+            return [
+                'has_respo'       => true,
+                'is_unrestricted' => $isHolding,
+                'is_holding'      => $isHolding,
+                'm_dir_id'        => $dirId,
+                'm_divisi_id'     => ($activeRespo->m_divisi_id !== null && $activeRespo->m_divisi_id !== '') ? (int) $activeRespo->m_divisi_id : null,
+                'm_dept_id'       => ($activeRespo->m_dept_id !== null && $activeRespo->m_dept_id !== '') ? (int) $activeRespo->m_dept_id : null,
+                'm_respo_id'      => (int) $activeRespo->id,
+            ];
+        }
+
+        $legacyDirId = ($userObj && !empty($userObj->m_dir_id)) ? (int) $userObj->m_dir_id : null;
+        $isLegacyHolding = ($legacyDirId === null);
+
+        return [
+            'has_respo'       => false,
+            'is_unrestricted' => $isLegacyHolding,
+            'is_holding'      => $isLegacyHolding,
+            'm_dir_id'        => $legacyDirId,
+            'm_divisi_id'     => null,
+            'm_dept_id'       => null,
+            'm_respo_id'      => null,
+        ];
+    }
+
     /**
      * Menyusun format menu dinamis yang siap dikonsumsi oleh frontend
      */
@@ -11,17 +288,10 @@ class Respo
         $req = app()->request;
         $fixedMenu = [];
 
-        $user_id = @auth()->user()->id ?? 0;
-        $user = \DB::table("default_users")->where("id", $user_id)->first();
-        $isSuperadmin = $this->isUserSuperadmin($user);
-
-        // Jika bukan superadmin dan tidak memiliki respo aktif, hanya tampilkan fixedMenu
-        $respo_active = $this->checkRespoActive();
-        if (!$isSuperadmin && empty($respo_active)) {
+        $level1 = $this->qMenu('modul');
+        if (empty($level1)) {
             return $fixedMenu;
         }
-
-        $level1 = $this->qMenu('modul');
 
         foreach ($level1 as $dt) {
             if ($dt["type"] === "multi") {
@@ -32,8 +302,8 @@ class Respo
         }
 
         // Fitur pencarian menu di sidebar
-        if ($req->has("search") && $req->search !== "" && $req->search !== "null") {
-            $searchText = strtolower($req->search);
+        if ($req && $req->has("search") && $req->search !== "" && $req->search !== "null") {
+            $searchText = strtolower((string) $req->search);
 
             $filterMenu = function ($menu, $searchText) use (&$filterMenu) {
                 if (isset($menu["children"])) {
@@ -63,7 +333,32 @@ class Respo
             );
         }
 
+        if ($req && $req->has("notin") && $req->notin !== "" && $req->notin !== "null") {
+            $notinArr = array_map('trim', explode(',', strtolower((string) $req->notin)));
+            $fixedMenu = array_values(
+                array_filter($fixedMenu, function ($menu) use ($notinArr) {
+                    if (!empty($menu["separator"])) {
+                        return true;
+                    }
+                    $label = strtolower((string) ($menu["text"] ?? $menu["modul"] ?? ''));
+                    return !in_array($label, $notinArr, true);
+                })
+            );
+        }
+
         return $fixedMenu;
+    }
+
+    /**
+     * Endpoint kompatibilitas untuk /frontend-menu/{name}
+     */
+    public function getMenu($filterModul = null)
+    {
+        if ($filterModul) {
+            return $this->getMenuItemsByModul($filterModul);
+        }
+
+        return $this->qMenu('modul');
     }
 
     /**
@@ -71,81 +366,93 @@ class Respo
      */
     private function qMenu($type = "modul", $ctx = null)
     {
-        $where = "";
-        $parent_condition = "";
-        $parent_condition_c = "";
-        if ($type === "submodul" || $type === "menu") {
-            $where = " and b.modul = " . \DB::getPdo()->quote($ctx);
-            $parent_condition = " and a.modul = " . \DB::getPdo()->quote($ctx);
-            $parent_condition_c = " and c.modul = " . \DB::getPdo()->quote($ctx);
-        }
-
         $menu_respo = $this->getMenuRespo();
         if (empty($menu_respo)) {
             return [];
         }
 
-        $menu_ids = implode(",", array_map('intval', $menu_respo));
-        $respo_condition = " and b.id in($menu_ids)";
+        $menuIds = array_values(array_unique(array_filter(array_map('intval', $menu_respo))));
+        if (empty($menuIds)) {
+            return [];
+        }
 
-        $data = \DB::select("
-            select 
-                (select case 
-                    when count(1) < 2 then 'single'
-                    else 'multi'
-                end
-                from m_menu a where a.$type = b.$type $parent_condition limit 3) as type,
-                b.$type as modul,
-                (select 
-                    case
-                        when count(1) < 2 then (select c.sequence from m_menu c where c.$type = b.$type $parent_condition_c)
-                        else (select c.sequence from m_menu c where c.$type = b.$type $parent_condition_c order by c.sequence asc limit 1)
-                    end
-                    from m_menu a where a.$type = b.$type $parent_condition group by a.$type limit 2) as sequence,
-                (select 
-                    case
-                        when count(1) < 2 then (select c.path from m_menu c where c.$type = b.$type $parent_condition_c)
-                        else '#'
-                    end
-                    from m_menu a where a.$type = b.$type $parent_condition group by a.$type limit 2) as path,
-                (select 
-                    case
-                        when count(1) < 2 then (select c.endpoint from m_menu c where c.$type = b.$type $parent_condition_c)
-                        else ''
-                    end
-                    from m_menu a where a.$type = b.$type $parent_condition group by a.$type limit 2) as endpoint,
-                (select 
-                    case
-                        when count(1) < 2 then (select c.description from m_menu c where c.$type = b.$type $parent_condition_c)
-                        else '#'
-                    end
-                    from m_menu a where a.$type = b.$type $parent_condition group by a.$type limit 2) as description,
-                (select 
-                    case
-                        when count(1) < 2 then (select c.icon from m_menu c where c.$type = b.$type $parent_condition_c)
-                        else null
-                    end
-                    from m_menu a where a.$type = b.$type $parent_condition group by a.$type limit 2) as icon
-            from m_menu b 
-            where b.is_active = true $where $respo_condition
-            group by b.$type 
-            order by 3 asc
-        ");
+        $query = \DB::table('m_menu as b')
+            ->where('b.is_active', true)
+            ->whereIn('b.id', $menuIds);
 
-        return $this->transformFormatSupportFronted($data);
+        if (($type === "submodul" || $type === "menu") && $ctx !== null) {
+            $query->where('b.modul', $ctx);
+        }
+
+        $rows = $query->select([
+            'b.id',
+            'b.modul',
+            'b.submodul',
+            'b.menu',
+            'b.path',
+            'b.endpoint',
+            'b.description',
+            'b.icon',
+            'b.sequence',
+            'b.truncatable',
+        ])
+        ->orderBy('b.sequence', 'asc')
+        ->orderBy('b.id', 'asc')
+        ->get();
+
+        $grouped = [];
+        foreach ($rows as $row) {
+            $groupKey = (string) ($row->$type ?? $row->modul ?? '');
+            if (!isset($grouped[$groupKey])) {
+                $grouped[$groupKey] = [
+                    'items'       => [],
+                    'minSequence' => $row->sequence ?? 999999,
+                ];
+            }
+            $grouped[$groupKey]['items'][] = $row;
+            if ($row->sequence !== null && $row->sequence < $grouped[$groupKey]['minSequence']) {
+                $grouped[$groupKey]['minSequence'] = $row->sequence;
+            }
+        }
+
+        uasort($grouped, function ($a, $b) {
+            return ($a['minSequence'] <=> $b['minSequence']);
+        });
+
+        $summary = [];
+        foreach ($grouped as $groupKey => $bucket) {
+            $items = $bucket['items'];
+            $isSingle = count($items) < 2;
+            $first = $items[0];
+            $summary[] = (object) [
+                'type'        => $isSingle ? 'single' : 'multi',
+                'modul'       => $groupKey,
+                'sequence'    => $bucket['minSequence'],
+                'path'        => $isSingle ? ($first->path ?? '#') : '#',
+                'endpoint'    => $isSingle ? ($first->endpoint ?? '') : '',
+                'description' => $isSingle ? ($first->description ?? null) : '#',
+                'icon'        => $isSingle ? ($first->icon ?? null) : null,
+                'truncatable' => $isSingle ? ((bool) ($first->truncatable ?? false)) : true,
+            ];
+        }
+
+        return $this->transformFormatSupportFronted($summary);
     }
 
     private function transformFormatSupportFronted($arr)
     {
+        $sidebarIcons = $this->getSidebarIcons();
         $tamp = [];
         foreach ($arr as $dt) {
             $access = $this->checkAccessForm($dt->path);
+            $modulLower = strtolower(trim((string) ($dt->modul ?? '')));
+            $injIcon = $sidebarIcons[$modulLower] ?? null;
             $tamp[] = array_merge([
                 'modul'        => $dt->modul,
                 'text'         => $dt->modul,
                 'path'         => $dt->path,
-                'truncatable'  => true,
-                'icon'         => $dt->icon ?? 'arrow-right',
+                'truncatable'  => isset($dt->truncatable) ? (bool) $dt->truncatable : true,
+                'icon'         => $injIcon ?? ($dt->icon ?? 'cog'),
                 'description'  => $dt->description,
                 'endpoint'     => $dt->endpoint ?? $dt->path,
                 'type'         => $dt->type,
@@ -164,27 +471,31 @@ class Respo
             return [];
         }
 
-        $menu_ids = implode(",", array_map('intval', $menu_respo));
-        $respo_condition = " and b.id in($menu_ids)";
+        $menuIds = array_values(array_unique(array_filter(array_map('intval', $menu_respo))));
+        if (empty($menuIds)) {
+            return [];
+        }
 
-        $rows = \DB::select("
-            select 
-                b.id,
-                b.modul,
-                b.submodul,
-                b.menu,
-                b.path,
-                b.endpoint,
-                b.icon,
-                b.sequence,
-                b.description,
-                b.truncatable
-            from m_menu b
-            where b.is_active = true 
-              and b.modul = ? 
-              $respo_condition
-            order by b.sequence asc, b.id asc
-        ", [$modulName]);
+        $rows = \DB::table('m_menu as b')
+            ->where('b.is_active', true)
+            ->where('b.modul', $modulName)
+            ->whereIn('b.id', $menuIds)
+            ->select([
+                'b.id',
+                'b.modul',
+                'b.submodul',
+                'b.menu',
+                'b.path',
+                'b.endpoint',
+                'b.icon',
+                'b.sequence',
+                'b.description',
+                'b.truncatable',
+            ])
+            ->orderBy('b.sequence', 'asc')
+            ->orderBy('b.id', 'asc')
+            ->get()
+            ->toArray();
 
         if (empty($rows)) {
             return [];
@@ -193,8 +504,8 @@ class Respo
         // Cek apakah modul ini memiliki submodul
         $hasSubmodul = false;
         foreach ($rows as $r) {
-            $sub = trim($r->submodul ?? '');
-            if (!empty($sub) && $sub !== '-' && strtolower($sub) !== strtolower($modulName)) {
+            $sub = trim((string) ($r->submodul ?? ''));
+            if (!empty($sub) && $sub !== '-' && strtolower($sub) !== strtolower((string) $modulName)) {
                 $hasSubmodul = true;
                 break;
             }
@@ -223,7 +534,7 @@ class Respo
         $standalone = [];
 
         foreach ($rows as $r) {
-            $sub = trim($r->submodul ?? '');
+            $sub = trim((string) ($r->submodul ?? ''));
             $access = $this->checkAccessForm($r->path);
             $itemFormatted = array_merge([
                 'modul'       => $r->modul,
@@ -237,7 +548,7 @@ class Respo
                 'type'        => 'single',
             ], $access);
 
-            if (!empty($sub) && $sub !== '-' && strtolower($sub) !== strtolower($modulName)) {
+            if (!empty($sub) && $sub !== '-' && strtolower($sub) !== strtolower((string) $modulName)) {
                 if (!isset($grouped[$sub])) {
                     $grouped[$sub] = [
                         'sequence' => $r->sequence ?? 999,
@@ -265,6 +576,7 @@ class Respo
                 'can_create'  => true,
                 'can_update'  => true,
                 'can_delete'  => true,
+                'can_verify'  => true,
                 'own_data'    => false,
                 'children'    => $groupData['items'],
             ];
@@ -278,33 +590,38 @@ class Respo
     }
 
     /**
-     * Mendapatkan daftar ID menu yang diizinkan untuk responsibility aktif
+     * Mendapatkan daftar ID menu yang diizinkan (Respo Mode & Legacy Mode)
      */
-    public function getMenuRespo()
+    public function getMenuRespo($user = null)
     {
-        $user_id = @auth()->user()->id ?? 0;
-        $user = \DB::table("default_users")->where("id", $user_id)->first();
-
-        // Bypass untuk Superadmin atau Developer
-        if ($this->isUserSuperadmin($user)) {
-            $allMenu = \DB::table("m_menu")
-                ->where("is_active", true)
-                ->pluck("id")
-                ->toArray();
-            return $allMenu;
-        }
-
-        $respo_active = $this->checkRespoActive();
-        if (!$respo_active) {
+        $userObj = $this->resolveUser($user);
+        if (!$userObj) {
             return [];
         }
 
-        // Ambil m_menu_id dari relasi: m_respo_d -> m_role -> m_role_det
-        $menuIds = \DB::table("m_respo_d as rd")
-            ->join("m_role as r", "r.id", "=", "rd.m_role_id")
-            ->join("m_role_det as rdet", "rdet.m_role_id", "=", "r.id")
-            ->where("rd.m_respo_id", $respo_active->id)
+        // Bypass untuk Superadmin atau Developer
+        if ($this->isUserSuperadmin($userObj)) {
+            return \DB::table("m_menu")
+                ->where("is_active", true)
+                ->pluck("id")
+                ->toArray();
+        }
+
+        $roles = $this->getEffectiveRoles($userObj);
+        $roleIds = array_values(array_unique(array_filter(array_map(function ($r) {
+            return (int) ($r->id ?? 0);
+        }, $roles))));
+
+        if (empty($roleIds)) {
+            return [];
+        }
+
+        $menuIds = \DB::table("m_role_det as rdet")
+            ->join("m_role as r", "r.id", "=", "rdet.m_role_id")
+            ->join("m_menu as m", "m.id", "=", "rdet.m_menu_id")
+            ->whereIn("r.id", $roleIds)
             ->where("r.is_active", true)
+            ->where("m.is_active", true)
             ->pluck("rdet.m_menu_id")
             ->unique()
             ->filter()
@@ -315,78 +632,108 @@ class Respo
     }
 
     /**
-     * Mengecek hak akses CRUD form/modul untuk responsibility aktif
+     * Mengecek hak akses CRUD form/modul dengan agregasi OR dari seluruh role aktif user
      */
-    public function checkAccessForm($modul)
+    public function checkAccessForm($modul, $user = null)
     {
-        $user_id = @auth()->user()->id ?? 0;
-        $user = \DB::table('default_users')->where('id', $user_id)->first();
+        $userObj = $this->resolveUser($user);
 
-        if ($this->isUserSuperadmin($user) || in_array($modul, ['#', '/dashboard', 'dashboard', '/notifikasi', 'notifikasi', '/presensi_absen_online', 'presensi_absen_online'])) {
+        if ($this->isUserSuperadmin($userObj) || in_array($modul, ['#', '/dashboard', 'dashboard', '/notifikasi', 'notifikasi', '/presensi_absen_online', 'presensi_absen_online', '/account', 'account'], true)) {
             return [
                 'can_read'   => true,
                 'can_create' => true,
                 'can_update' => true,
                 'can_delete' => true,
+                'can_verify' => true,
                 'own_data'   => false,
             ];
         }
 
-        $respo_active = $this->checkRespoActive();
-        if (!$respo_active) {
+        $roles = $this->getEffectiveRoles($userObj);
+        $roleIds = array_values(array_unique(array_filter(array_map(function ($r) {
+            return (int) ($r->id ?? 0);
+        }, $roles))));
+
+        if (empty($roleIds)) {
             return [
                 'can_read'   => false,
                 'can_create' => false,
                 'can_update' => false,
                 'can_delete' => false,
+                'can_verify' => false,
                 'own_data'   => true,
             ];
         }
 
-        $cleanPath = '/' . ltrim($modul, '/');
+        $trimmedPath = ltrim((string) $modul, '/');
+        $cleanPath = '/' . $trimmedPath;
 
-        $access = \DB::table('m_respo_d as rd')
-            ->join('m_role as r', 'r.id', '=', 'rd.m_role_id')
-            ->join('m_role_det as rdet', 'rdet.m_role_id', '=', 'r.id')
+        $rows = \DB::table('m_role_det as rdet')
+            ->join('m_role as r', 'r.id', '=', 'rdet.m_role_id')
             ->join('m_menu as m', 'm.id', '=', 'rdet.m_menu_id')
-            ->where('rd.m_respo_id', $respo_active->id)
+            ->whereIn('r.id', $roleIds)
             ->where('r.is_active', true)
-            ->where('m.path', $cleanPath)
+            ->where('m.is_active', true)
+            ->where(function ($q) use ($cleanPath, $trimmedPath) {
+                $q->where('m.path', $cleanPath)
+                  ->orWhere('m.path', $trimmedPath);
+            })
             ->select([
                 'rdet.can_read',
                 'rdet.can_create',
                 'rdet.can_update',
                 'rdet.can_delete',
+                'rdet.can_verify',
             ])
-            ->first();
+            ->get();
 
-        if (!$access) {
+        if ($rows->isEmpty()) {
             return [
                 'can_read'   => false,
                 'can_create' => false,
                 'can_update' => false,
                 'can_delete' => false,
+                'can_verify' => false,
                 'own_data'   => true,
             ];
         }
 
+        $canRead = false;
+        $canCreate = false;
+        $canUpdate = false;
+        $canDelete = false;
+        $canVerify = false;
+
+        foreach ($rows as $row) {
+            $canRead = $canRead || (bool) $row->can_read;
+            $canCreate = $canCreate || (bool) $row->can_create;
+            $canUpdate = $canUpdate || (bool) $row->can_update;
+            $canDelete = $canDelete || (bool) $row->can_delete;
+            $canVerify = $canVerify || (bool) $row->can_verify;
+        }
+
         return [
-            'can_read'   => (bool) $access->can_read,
-            'can_create' => (bool) $access->can_create,
-            'can_update' => (bool) $access->can_update,
-            'can_delete' => (bool) $access->can_delete,
+            'can_read'   => $canRead,
+            'can_create' => $canCreate,
+            'can_update' => $canUpdate,
+            'can_delete' => $canDelete,
+            'can_verify' => $canVerify,
             'own_data'   => false,
         ];
     }
 
     /**
-     * Mengambil responsibility yang sedang aktif (is_primary = true)
+     * Mengambil responsibility yang sedang aktif (prioritas is_primary = true, lalu seq asc)
      */
-    public function checkRespoActive()
+    public function checkRespoActive($userId = null)
     {
-        $user_id = @auth()->user()->id ?? 0;
-        if (!$user_id) {
+        $uid = (int) ($userId ?? (@auth()->user()->id ?? 0));
+        if (!$uid) {
             return null;
+        }
+
+        if (array_key_exists($uid, $this->activeRespoCache)) {
+            return $this->activeRespoCache[$uid];
         }
 
         $active = \DB::table("default_users_respo as dur")
@@ -394,62 +741,44 @@ class Respo
             ->leftJoin("m_dir as d", "d.id", "=", "r.m_dir_id")
             ->leftJoin("m_divisi as div", "div.id", "=", "r.m_divisi_id")
             ->leftJoin("m_dept as dept", "dept.id", "=", "r.m_dept_id")
-            ->where("dur.default_users_id", $user_id)
+            ->where("dur.default_users_id", $uid)
             ->where("dur.is_active", true)
             ->where("r.is_active", true)
-            ->where("dur.is_primary", true)
             ->select([
                 "r.*",
                 "d.nama as dir_nama",
                 "div.nama as divisi_nama",
                 "dept.nama as dept_nama",
                 "dur.id as user_respo_id",
+                "dur.is_primary",
                 "dur.seq"
             ])
+            ->orderBy("dur.is_primary", "desc")
+            ->orderBy("dur.seq", "asc")
+            ->orderBy("dur.id", "asc")
             ->first();
 
-        // Fallback: Jika belum ada yang ditandai primary, ambil respo pertama yang aktif
-        if (!$active) {
-            $active = \DB::table("default_users_respo as dur")
-                ->join("m_respo as r", "r.id", "=", "dur.m_respo_id")
-                ->leftJoin("m_dir as d", "d.id", "=", "r.m_dir_id")
-                ->leftJoin("m_divisi as div", "div.id", "=", "r.m_divisi_id")
-                ->leftJoin("m_dept as dept", "dept.id", "=", "r.m_dept_id")
-                ->where("dur.default_users_id", $user_id)
-                ->where("dur.is_active", true)
-                ->where("r.is_active", true)
-                ->select([
-                    "r.*",
-                    "d.nama as dir_nama",
-                    "div.nama as divisi_nama",
-                    "dept.nama as dept_nama",
-                    "dur.id as user_respo_id",
-                    "dur.seq"
-                ])
-                ->orderBy("dur.seq", "asc")
-                ->first();
-        }
-
-        return $active;
+        $this->activeRespoCache[$uid] = $active;
+        return $this->activeRespoCache[$uid];
     }
 
     /**
-     * Memeriksa apakah user adalah Superadmin atau Developer
+     * Memeriksa apakah user adalah Superadmin atau Developer (mendukung Respo Mode & Legacy Mode)
      */
-    private function isUserSuperadmin($user)
+    public function isUserSuperadmin($user = null)
     {
-        if (!$user) return false;
-        if (strtolower($user->username ?? '') === 'developer') return true;
-        if (strtolower($user->user_type ?? '') === 'admin') return true;
+        $userObj = $this->resolveUser($user);
+        if (!$userObj) return false;
+        if (strtolower((string) ($userObj->username ?? '')) === 'developer') return true;
+        if (strtolower((string) ($userObj->user_type ?? '')) === 'admin') return true;
 
-        // Cek m_role_access is_superadmin
-        $hasSuperadminRole = \DB::table('m_role as r')
-            ->join('m_role_access as ra', 'ra.m_role_id', '=', 'r.id')
-            ->where('ra.user_id', $user->id)
-            ->where('r.is_superadmin', true)
-            ->exists();
+        foreach ($this->getEffectiveRoles($userObj) as $role) {
+            if (!empty($role->is_superadmin)) {
+                return true;
+            }
+        }
 
-        return (bool) $hasSuperadminRole;
+        return false;
     }
 }
 

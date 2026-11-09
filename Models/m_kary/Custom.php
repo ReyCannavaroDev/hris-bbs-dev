@@ -67,24 +67,9 @@ class m_kary extends \App\Models\BasicModels\m_kary
             "cuti_sisa_reguler" => $arrayData['cuti_sisa_reguler'] ?? ((!empty($arrayData['tgl_masuk']) && Carbon::parse($arrayData['tgl_masuk'])->diffInYears(Carbon::now()) >= 1) ? 12 : 0),
         ]);
 
-        // Proteksi role Staff HRD: tidak boleh memodifikasi gaji_pokok & gaji_acuan
-        $userAuth = auth()->user();
-        if ($userAuth) {
-            $isSuper = ($userAuth->username === 'developer') || \DB::table('m_role')
-                ->join('m_role_access', 'm_role.id', '=', 'm_role_access.m_role_id')
-                ->where('m_role_access.user_id', $userAuth->id)
-                ->where('m_role.is_superadmin', true)
-                ->exists();
-            if (!$isSuper) {
-                $isStaffHrd = \DB::table('m_role')
-                    ->join('m_role_access', 'm_role.id', '=', 'm_role_access.m_role_id')
-                    ->where('m_role_access.user_id', $userAuth->id)
-                    ->whereRaw('LOWER(m_role.name) LIKE ?', ['%staff%hrd%'])
-                    ->exists();
-                if ($isStaffHrd) {
-                    unset($newArrayData['gaji_pokok'], $newArrayData['gaji_acuan']);
-                }
-            }
+        // Proteksi field gaji berdasarkan izin role aktif (can_view_salary / Superadmin)
+        if (!getCore('Respo')->canViewSalary()) {
+            unset($newArrayData['gaji_pokok'], $newArrayData['gaji_acuan']);
         }
 
         if (isset($newArrayData['gaji_pokok']) && $newArrayData['gaji_pokok'] !== '' && $newArrayData['gaji_pokok'] !== null) {
@@ -171,24 +156,9 @@ class m_kary extends \App\Models\BasicModels\m_kary
             }
         }
 
-        // Proteksi role Staff HRD: tidak boleh memodifikasi gaji_pokok & gaji_acuan
-        $userAuth = auth()->user();
-        if ($userAuth) {
-            $isSuper = ($userAuth->username === 'developer') || \DB::table('m_role')
-                ->join('m_role_access', 'm_role.id', '=', 'm_role_access.m_role_id')
-                ->where('m_role_access.user_id', $userAuth->id)
-                ->where('m_role.is_superadmin', true)
-                ->exists();
-            if (!$isSuper) {
-                $isStaffHrd = \DB::table('m_role')
-                    ->join('m_role_access', 'm_role.id', '=', 'm_role_access.m_role_id')
-                    ->where('m_role_access.user_id', $userAuth->id)
-                    ->whereRaw('LOWER(m_role.name) LIKE ?', ['%staff%hrd%'])
-                    ->exists();
-                if ($isStaffHrd) {
-                    unset($newArrayData['gaji_pokok'], $newArrayData['gaji_acuan']);
-                }
-            }
+        // Proteksi field gaji berdasarkan izin role aktif (can_view_salary / Superadmin)
+        if (!getCore('Respo')->canViewSalary()) {
+            unset($newArrayData['gaji_pokok'], $newArrayData['gaji_acuan']);
         }
 
         if (isset($newArrayData['gaji_pokok']) && $newArrayData['gaji_pokok'] !== '' && $newArrayData['gaji_pokok'] !== null) {
@@ -252,6 +222,27 @@ class m_kary extends \App\Models\BasicModels\m_kary
                     'updated_at' => Carbon::now(),
                 ]);
             }
+        }
+    }
+
+    public function onRetrieved($model)
+    {
+        if (!$model || !is_object($model)) {
+            return;
+        }
+        if (!app()->bound('request') || !app()->request || !app()->request->isMethod('GET')) {
+            return;
+        }
+
+        // Batasi masking khusus pada endpoint GET /operation/m_kary agar query internal payroll tidak ikut terhapus
+        $path = '/' . ltrim(app()->request->getPathInfo(), '/');
+        if (!preg_match('#(?:^|/)operation/m_kary(?:/\d+)?/?$#', $path)) {
+            return;
+        }
+
+        if (!getCore('Respo')->canViewSalary()) {
+            $model->gaji_pokok = null;
+            $model->gaji_acuan = null;
         }
     }
     
@@ -388,6 +379,10 @@ class m_kary extends \App\Models\BasicModels\m_kary
                     $object[$col] = Carbon::parse($row[$col])->format('d/m/Y');
                 } catch (\Exception $e) {}
             }
+        }
+        if (!getCore('Respo')->canViewSalary()) {
+            $object['gaji_pokok'] = null;
+            $object['gaji_acuan'] = null;
         }
         return array_merge( $row, $object );
     }

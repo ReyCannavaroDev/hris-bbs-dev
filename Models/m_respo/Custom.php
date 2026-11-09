@@ -21,6 +21,11 @@ class m_respo extends \App\Models\BasicModels\m_respo
         if (empty($arrayData['m_comp_id'])) {
             $arrayData['m_comp_id'] = 1;
         }
+        $arrayData['m_dir_id'] = !empty($arrayData['m_dir_id']) ? (int)$arrayData['m_dir_id'] : null;
+        if (!$arrayData['m_dir_id']) {
+            $arrayData['m_divisi_id'] = null;
+            $arrayData['m_dept_id'] = null;
+        }
         if (empty($arrayData['kode'])) {
             try {
                 $helper = getCore('Helper');
@@ -31,6 +36,21 @@ class m_respo extends \App\Models\BasicModels\m_respo
                 }
             } catch (\Throwable $e) {
                 $arrayData['kode'] = 'RSP-' . date('ymd') . '-' . rand(100, 999);
+            }
+        }
+        return [
+            "model" => $model,
+            "data"  => $arrayData,
+        ];
+    }
+
+    public function updateBefore($model, $arrayData, $metaData, $id = null)
+    {
+        if (array_key_exists('m_dir_id', $arrayData)) {
+            $arrayData['m_dir_id'] = !empty($arrayData['m_dir_id']) ? (int)$arrayData['m_dir_id'] : null;
+            if (!$arrayData['m_dir_id']) {
+                $arrayData['m_divisi_id'] = null;
+                $arrayData['m_dept_id'] = null;
             }
         }
         return [

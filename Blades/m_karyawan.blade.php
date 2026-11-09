@@ -228,7 +228,7 @@
                   }" valueField="id" displayField="kode" :check="false" />
           </div>
         </div>
-        <div v-if="!isProfile && !isStaffHrd" class="col-span-8 md:col-span-6">
+        <div v-if="!isProfile && canViewSalary" class="col-span-8 md:col-span-6">
           <div class="grid grid-cols-12 items-center">
             <label class="col-span-12">Gaji Pokok (Personal)</label>
             <FieldX :bind="{ readonly: !actionText && !isProfile }" class="col-span-12 !mt-0 w-full"
@@ -237,7 +237,7 @@
               :hints="formErrors.gaji_pokok" :check="false" />
           </div>
         </div>
-        <div v-if="!isProfile && !isStaffHrd" class="col-span-8 md:col-span-6">
+        <div v-if="!isProfile && canViewSalary" class="col-span-8 md:col-span-6">
           <div class="grid grid-cols-12 items-center">
             <label class="col-span-12">Gaji Acuan (Basis BPJS)</label>
             <FieldX :bind="{ readonly: !actionText && !isProfile }" class="col-span-12 !mt-0 w-full"

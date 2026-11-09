@@ -53,16 +53,16 @@
         </div>
 
         <div>
-          <label class="font-semibold">Company <span class="text-red-500">*</span></label>
+          <label class="font-semibold">Company <small class="text-gray-500 font-normal">(Kosongkan untuk Holding / Semua Company)</small></label>
           <FieldSelect
             :bind="{ disabled: !actionText, clearable: true }"
             class="w-full py-2 !mt-0"
             :value="values.m_dir_id"
-            @input="v=>values.m_dir_id=v"
+            @input="v=>{ values.m_dir_id = v || null; values.m_divisi_id = null; values.m_dept_id = null }"
             :errorText="formErrors.m_dir_id?'failed':''"
             :hints="formErrors.m_dir_id"
             label=""
-            placeholder="Pilih Company"
+            placeholder="Pilih Company / Kosongkan untuk Holding (All)"
             displayField="nama"
             valueField="id"
             :api="{
@@ -87,7 +87,7 @@
             :bind="{ disabled: !actionText || !values.m_dir_id, clearable: true }"
             class="w-full py-2 !mt-0"
             :value="values.m_divisi_id"
-            @input="v=>values.m_divisi_id=v"
+            @input="v=>{ values.m_divisi_id = v || null; values.m_dept_id = null }"
             :errorText="formErrors.m_divisi_id?'failed':''"
             :hints="formErrors.m_divisi_id"
             label=""

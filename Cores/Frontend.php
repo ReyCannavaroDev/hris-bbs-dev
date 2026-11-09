@@ -144,14 +144,15 @@ class Frontend
 
         $app->router->get('/frontend-menu', [
             'middleware' => ['auth:api'],
-            function () use ($instance, $fix_default_menu) {
-                return count($instance->formatMenu($instance->getMenu())) ? $instance->formatMenu($instance->getMenu()) : $fix_default_menu;
+            function () use ($fix_default_menu) {
+                $menu = getCore('Respo')->formatMenu();
+                return count($menu) ? $menu : $fix_default_menu;
             }
         ]);
         $app->router->get('/frontend-menu/{name}', [
             'middleware' => ['auth:api'],
-            function ($name) use ($instance) {
-                return $instance->getMenu($name);
+            function ($name) {
+                return getCore('Respo')->getMenu($name);
             }
         ]);
 

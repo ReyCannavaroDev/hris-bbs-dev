@@ -4,12 +4,37 @@ namespace App\Models\CustomModels;
 
 class m_role extends \App\Models\BasicModels\m_role
 {    
+    private static $hasCanViewSalaryColCache = null;
+
+    private static function hasCanViewSalaryColumn(): bool
+    {
+        if (self::$hasCanViewSalaryColCache === null) {
+            try {
+                self::$hasCanViewSalaryColCache = \Schema::hasColumn('m_role', 'can_view_salary');
+            } catch (\Throwable $e) {
+                self::$hasCanViewSalaryColCache = false;
+            }
+        }
+        return self::$hasCanViewSalaryColCache;
+    }
+
     public function __construct()
     {
         parent::__construct();
-        // Override $required agar boolean is_superadmin (0/false) dan is_active (0/false)
+        // Override $required agar boolean is_superadmin (0/false), can_view_salary (0/false), dan is_active (0/false)
         // tidak dianggap 'kosong' oleh generic validator generator Core
         $this->required = ["name"];
+
+        if (self::hasCanViewSalaryColumn()) {
+            foreach (['fillable', 'columns', 'createable', 'updateable', 'searchable'] as $prop) {
+                if (isset($this->$prop) && is_array($this->$prop) && !in_array('can_view_salary', $this->$prop, true)) {
+                    $this->$prop = array_merge($this->$prop, ['can_view_salary']);
+                }
+            }
+            if (isset($this->columnsFull) && is_array($this->columnsFull) && !in_array('can_view_salary:boolean', $this->columnsFull, true)) {
+                $this->columnsFull = array_merge($this->columnsFull, ['can_view_salary:boolean']);
+            }
+        }
     }
     
     public $fileColumns    = [ /*file_column*/ ];
@@ -94,6 +119,43 @@ class m_role extends \App\Models\BasicModels\m_role
             }
         }
 
+        if ($request->has('filter_can_view_salary') || $request->has('filter_view_salary') || isset($_GET['filter_can_view_salary']) || isset($_GET['filter_view_salary'])) {
+            $raw = $request->filter_can_view_salary ?? $request->filter_view_salary ?? $_GET['filter_can_view_salary'] ?? $_GET['filter_view_salary'] ?? null;
+            $val = strtolower(trim((string)$raw));
+            $boolVal = in_array($val, ['yes', 'true', '1'], true) ? 'true' : (in_array($val, ['no', 'false', '0'], true) ? 'false' : null);
+            if ($boolVal !== null && self::hasCanViewSalaryColumn()) {
+                $condition = "this.can_view_salary=$boolVal";
+                $where = $request->where ?? $_GET['where'] ?? '';
+                if (!empty($where)) {
+                    if (preg_match('/\bthis\.can_view_salary\s*=\s*(?:true|false|1|0)\b/i', $where)) {
+                        $where = preg_replace('/\bthis\.can_view_salary\s*=\s*(?:true|false|1|0)\b/i', $condition, $where);
+                    } else {
+                        $where .= " and $condition";
+                    }
+                } else {
+                    $where = $condition;
+                }
+                $request->merge(['where' => $where]);
+                if ($request->query) {
+                    $request->query->set('where', $where);
+                }
+                $_GET['where'] = $where;
+                $_REQUEST['where'] = $where;
+            }
+            if ($request->query) {
+                $request->query->remove('filter_can_view_salary');
+                $request->query->remove('filter_view_salary');
+            }
+            if ($request->request) {
+                $request->request->remove('filter_can_view_salary');
+                $request->request->remove('filter_view_salary');
+            }
+            $request->offsetUnset('filter_can_view_salary');
+            $request->offsetUnset('filter_view_salary');
+            unset($_GET['filter_can_view_salary'], $_GET['filter_view_salary']);
+            unset($_REQUEST['filter_can_view_salary'], $_REQUEST['filter_view_salary']);
+        }
+
         if ($request->has('where') && !empty($request->where)) {
             $where = preg_replace_callback(
                 '/(?:this\.)?(?:superadmin|is_superadmin)\s*(?:=|ilike|like)\s*[\'"]?%?(yes|no|true|false|1|0)%?[\'"]?/i',
@@ -104,6 +166,17 @@ class m_role extends \App\Models\BasicModels\m_role
                 },
                 $request->where
             );
+            if (self::hasCanViewSalaryColumn()) {
+                $where = preg_replace_callback(
+                    '/(?:this\.)?(?:view_salary|can_view_salary)\s*(?:=|ilike|like)\s*[\'"]?%?(yes|no|true|false|1|0)%?[\'"]?/i',
+                    function ($m) {
+                        $val = strtolower($m[1]);
+                        $bool = in_array($val, ['yes', 'true', '1'], true) ? 'true' : 'false';
+                        return "this.can_view_salary=$bool";
+                    },
+                    $where
+                );
+            }
             $where = preg_replace_callback(
                 '/(?:this\.)?(?:status|is_active)\s*(?:=|ilike|like)\s*[\'"]?%?(active|inactive|true|false|1|0)%?[\'"]?/i',
                 function ($m) {
@@ -179,6 +252,11 @@ class m_role extends \App\Models\BasicModels\m_role
         $arrayData['m_comp_id'] = $compId;
         $arrayData['m_dir_id'] = $dirId;
         $arrayData['is_superadmin'] = !empty($arrayData['is_superadmin']) ? 1 : 0;
+        if (self::hasCanViewSalaryColumn()) {
+            $arrayData['can_view_salary'] = ($arrayData['is_superadmin'] || !empty($arrayData['can_view_salary'])) ? 1 : 0;
+        } else {
+            unset($arrayData['can_view_salary']);
+        }
         $arrayData['is_active'] = isset($arrayData['is_active']) ? (!empty($arrayData['is_active']) ? 1 : 0) : 1;
 
         $req = app()->request;
@@ -298,6 +376,15 @@ class m_role extends \App\Models\BasicModels\m_role
         }
         if (isset($arrayData['is_superadmin'])) {
             $arrayData['is_superadmin'] = !empty($arrayData['is_superadmin']) ? 1 : 0;
+        }
+        if (self::hasCanViewSalaryColumn()) {
+            if (!empty($arrayData['is_superadmin'])) {
+                $arrayData['can_view_salary'] = 1;
+            } elseif (array_key_exists('can_view_salary', $arrayData)) {
+                $arrayData['can_view_salary'] = !empty($arrayData['can_view_salary']) ? 1 : 0;
+            }
+        } else {
+            unset($arrayData['can_view_salary']);
         }
         if (isset($arrayData['is_active'])) {
             $arrayData['is_active'] = !empty($arrayData['is_active']) ? 1 : 0;

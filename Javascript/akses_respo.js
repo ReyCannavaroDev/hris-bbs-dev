@@ -46,7 +46,7 @@ const fetchMyRespo = async () => {
 }
 
 const onSwitch = (item) => {
-  const dirName = item.dir_nama || 'Holding'
+  const dirName = item.dir_nama || 'Holding (Semua Company)'
   const respoName = item.respo_nama || 'Responsibility'
 
   swal.fire({
@@ -91,13 +91,44 @@ const onSwitch = (item) => {
           throw new Error(resJson?.error || resJson?.message || 'Gagal beralih responsibility')
         }
 
-        // Sinkronkan state store frontend
+        // Sinkronkan state store frontend & localStorage
+        const nextDirId = resJson?.active_respo ? (resJson.active_respo.m_dir_id ?? null) : (item.m_dir_id ?? null)
+        const nextCompId = resJson?.active_respo?.m_comp_id || item.m_comp_id
+        const nextDirName = resJson?.direktorat || dirName
+
         if (store.user?.data) {
-          store.user.data.m_dir_id = item.m_dir_id
-          store.user.data.direktorat = item.dir_nama
-          if (item.m_comp_id) {
-            store.user.data.m_comp_id = item.m_comp_id
+          store.user.data.m_dir_id = nextDirId
+          store.user.data.direktorat = nextDirName
+          if (nextCompId) {
+            store.user.data.m_comp_id = nextCompId
           }
+          if (resJson) {
+            if (typeof resJson.is_superadmin !== 'undefined') store.user.data.is_superadmin = resJson.is_superadmin
+            if (typeof resJson.can_view_salary !== 'undefined') store.user.data.can_view_salary = resJson.can_view_salary
+            if (Array.isArray(resJson.roles)) store.user.data.roles = resJson.roles
+            if (typeof resJson.role_names !== 'undefined') store.user.data.role_names = resJson.role_names
+            if (resJson.active_respo) store.user.data.active_respo = resJson.active_respo
+          }
+        }
+        if (typeof window !== 'undefined' && window.localStorage?.user) {
+          try {
+            const localUser = JSON.parse(window.localStorage.user)
+            if (localUser?.data) {
+              localUser.data.m_dir_id = nextDirId
+              localUser.data.direktorat = nextDirName
+              if (nextCompId) {
+                localUser.data.m_comp_id = nextCompId
+              }
+              if (resJson) {
+                if (typeof resJson.is_superadmin !== 'undefined') localUser.data.is_superadmin = resJson.is_superadmin
+                if (typeof resJson.can_view_salary !== 'undefined') localUser.data.can_view_salary = resJson.can_view_salary
+                if (Array.isArray(resJson.roles)) localUser.data.roles = resJson.roles
+                if (typeof resJson.role_names !== 'undefined') localUser.data.role_names = resJson.role_names
+                if (resJson.active_respo) localUser.data.active_respo = resJson.active_respo
+              }
+              window.localStorage.user = JSON.stringify(localUser)
+            }
+          } catch (e) {}
         }
 
         swal.fire({

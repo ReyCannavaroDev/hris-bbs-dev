@@ -19,6 +19,75 @@ class t_perhitungan_gaji extends \App\Models\BasicModels\t_perhitungan_gaji
 
     protected $factorAdded = [];
 
+    private function denySalaryAccessResponse()
+    {
+        return $this->helper->customResponse('Anda tidak memiliki hak akses untuk melihat atau mengelola data gaji.', 403);
+    }
+
+    public function createBefore($model, $arrayData, $metaData, $id = null)
+    {
+        if (!getCore('Respo')->canViewSalary()) {
+            return [
+                "status"  => "error",
+                "message" => "Anda tidak memiliki hak akses untuk melihat atau mengelola data gaji.",
+                "errors"  => ["permission" => ["Anda tidak memiliki hak akses untuk melihat atau mengelola data gaji."]]
+            ];
+        }
+        return [
+            "model" => $model,
+            "data"  => $arrayData,
+        ];
+    }
+
+    public function updateBefore($model, $arrayData, $metaData, $id = null)
+    {
+        if (!getCore('Respo')->canViewSalary()) {
+            return [
+                "status"  => "error",
+                "message" => "Anda tidak memiliki hak akses untuk melihat atau mengelola data gaji.",
+                "errors"  => ["permission" => ["Anda tidak memiliki hak akses untuk melihat atau mengelola data gaji."]]
+            ];
+        }
+        return [
+            "model" => $model,
+            "data"  => $arrayData,
+        ];
+    }
+
+    public function onRetrieved($model)
+    {
+        if (!$model || !is_object($model)) {
+            return;
+        }
+        if (!app()->bound('request') || !app()->request || !app()->request->isMethod('GET')) {
+            return;
+        }
+
+        $path = '/' . ltrim(app()->request->getPathInfo(), '/');
+        if (!preg_match('#(?:^|/)operation/t_perhitungan_gaji(?:/\d+)?/?$#', $path)) {
+            return;
+        }
+
+        if (!getCore('Respo')->canViewSalary()) {
+            $model->total_gaji = null;
+            $model->total_tax = null;
+            $model->netto = null;
+            $model->detail_gaji = null;
+        }
+    }
+
+    public function transformRowData(array $row)
+    {
+        $object = [];
+        if (!getCore('Respo')->canViewSalary()) {
+            $object['total_gaji'] = null;
+            $object['total_tax'] = null;
+            $object['netto'] = null;
+            $object['detail_gaji'] = null;
+        }
+        return array_merge($row, $object);
+    }
+
     private function factorSalary($standart_gaji, $kary = null, $periode = null, $periodeAkhir = null)
     {
         $startDate = null;
@@ -1149,6 +1218,9 @@ class t_perhitungan_gaji extends \App\Models\BasicModels\t_perhitungan_gaji
 
     public function generateSalary()
     {
+        if (!getCore('Respo')->canViewSalary()) {
+            return $this->denySalaryAccessResponse();
+        }
         try{
             $req =  app()->request;
             $rawAwal = $req->periode_awal;
@@ -1279,6 +1351,9 @@ class t_perhitungan_gaji extends \App\Models\BasicModels\t_perhitungan_gaji
 
     public function public_generate()
     {
+        if (!getCore('Respo')->canViewSalary()) {
+            return $this->denySalaryAccessResponse();
+        }
         $data =  $this->salaryOfKary(app()->request->id ?? 8, '2024-03');
        
         return response(['msg'=>$data]);
@@ -1291,6 +1366,9 @@ class t_perhitungan_gaji extends \App\Models\BasicModels\t_perhitungan_gaji
 
     public function custom_generatePPH($req)
     {
+        if (!getCore('Respo')->canViewSalary()) {
+            return $this->denySalaryAccessResponse();
+        }
         $netto = $req->netto;
         $kary = m_kary::find($req->m_kary_id);
         return $this->countPPH21($kary, $netto);
@@ -1298,6 +1376,9 @@ class t_perhitungan_gaji extends \App\Models\BasicModels\t_perhitungan_gaji
 
     public function custom_save($req)
     {
+        if (!getCore('Respo')->canViewSalary()) {
+            return $this->denySalaryAccessResponse();
+        }
         $counter = count($req->detail);
         if($counter){
             $nomor = $this->helper->generateNomor('KODE PERHITUNGAN GAJI');

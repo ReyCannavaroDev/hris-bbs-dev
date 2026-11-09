@@ -177,8 +177,9 @@ function onRespoAdd(rows) {
     const hasPrimary = dataArr.some(item => item.is_primary)
     dataArr.push({
       m_respo_id: respoId,
+      m_dir_id: row.m_dir_id ?? null,
       respo_nama: row.nama,
-      company_nama: row['m_dir.nama'] || row.dir_nama || '-',
+      company_nama: row['m_dir.nama'] || row.dir_nama || (!row.m_dir_id ? 'Holding (Semua Company)' : '-'),
       divisi_nama: row['m_divisi.nama'] || row.divisi_nama || '-',
       dept_nama: row['m_dept.nama'] || row.dept_nama || '-',
       is_primary: !hasPrimary,
@@ -526,7 +527,16 @@ const landing = reactive({
     flex:1,
     filter: 'ColFilter',
     resizable: true,
-    cellClass: [ 'border-r', '!border-gray-200']
+    cellClass: [ 'border-r', '!border-gray-200'],
+    valueGetter: (params) => {
+      const data = params.data || {}
+      if (data['m_dir.nama']) return data['m_dir.nama']
+      if (!data.m_dir_id && Array.isArray(data.default_users_respo)) {
+        const primary = data.default_users_respo.find(r => r.is_primary === true || r.is_primary === 1 || r.is_primary === '1') || data.default_users_respo[0]
+        if (primary && !primary.m_dir_id) return 'Holding (Semua Company)'
+      }
+      return '-'
+    }
   },
   {
     headerName: 'Status',

@@ -2,7 +2,7 @@
 <div class="bg-white p-6 rounded-xl h-[570px]">
   <TableApi ref='apiTable' :api="landing.api" :columns="landing.columns" :actions="landing.actions">
     <template #header>
-      <RouterLink v-if="currentMenu?.can_create||true||store.user.data.username==='developer'" :to="$route.path+'/create?'+(Date.parse(new Date()))" class="bg-blue-500 text-white hover:bg-blue-600 rounded-[6px] py-2 px-[12.5px]">
+      <RouterLink v-if="(currentMenu?.can_create||true||store.user.data.username==='developer') && canViewSalary" :to="$route.path+'/create?'+(Date.parse(new Date()))" class="bg-blue-500 text-white hover:bg-blue-600 rounded-[6px] py-2 px-[12.5px]">
         <icon fa="bolt" />Generate Gaji
       </RouterLink>
     </template>
@@ -19,6 +19,9 @@
           Perhitungan Gaji
         </h1>
         <hr>
+      </div>
+      <div v-if="!canViewSalary" class="mb-4 p-4 rounded-lg border border-red-200 bg-red-50 text-red-700 text-sm">
+        Anda tidak memiliki hak akses untuk melihat atau mengelola nominal gaji pada modul ini.
       </div>
       <div class="grid <md:grid-cols-1 grid-cols-2 gap-2">
         <div>
@@ -234,7 +237,7 @@
         </div>
       </div>
       
-      <div class="flex flex-row justify-center space-x-[10px] mt-[1em]">
+      <div v-if="canViewSalary" class="flex flex-row justify-center space-x-[10px] mt-[1em]">
         <button @click="generatePerhitungan" class="bg-blue-500 hover:bg-blue-600 text-white text-sm px-[18px] py-[8px] rounded-[4px] ">
           <Icon fa="bolt"/> Generate
         </button>
@@ -254,7 +257,7 @@
               <td class="text-[#8F8F8F] font-semibold text-[14px] text-capitalize px-2 text-center w-[12%] border bg-[#f8f8f8] border-[#CACACA]">Company</td>
               <td class="text-[#8F8F8F] font-semibold text-[14px] text-capitalize px-2 text-center w-[12%] border bg-[#f8f8f8] border-[#CACACA]">Divisi</td>
               <td class="text-[#8F8F8F] font-semibold text-[14px] text-capitalize px-2 text-center w-[12%] border bg-[#f8f8f8] border-[#CACACA]">Departemen</td>
-              <td class="text-[#8F8F8F] font-semibold text-[14px] text-capitalize px-2 text-center w-[15%] border bg-[#f8f8f8] border-[#CACACA]">Gaji Bersih</td>
+              <td v-if="canViewSalary" class="text-[#8F8F8F] font-semibold text-[14px] text-capitalize px-2 text-center w-[15%] border bg-[#f8f8f8] border-[#CACACA]">Gaji Bersih</td>
               <td class="text-[#8F8F8F] font-semibold text-[14px] text-capitalize px-2 text-center w-[15%] border bg-[#f8f8f8] border-[#CACACA]">Deskripsi</td>
               <td class="text-[#8F8F8F] font-semibold text-[14px] text-capitalize px-2 text-center w-[5%] border bg-[#f8f8f8] border-[#CACACA]">Aksi</td>
             </tr>
@@ -282,7 +285,7 @@
               <td class="text-left border border-[#CACACA] px-2">
                 {{ item['m_kary_dept.nama'] }}
               </td>
-              <td class="text-right border border-[#CACACA] px-2">
+              <td v-if="canViewSalary" class="text-right border border-[#CACACA] px-2">
                 {{ formatRupiah(item.netto) }}
               </td>
               <td class="border border-[#CACACA]">
@@ -296,7 +299,7 @@
               </td>
               <td class="border border-[#CACACA]">
                 <div class="flex justify-center">
-                  <button v-show="actionText" @click="openDetail(i)" class="rounded-lg flex items-center justify-center">
+                  <button v-show="actionText && canViewSalary" @click="openDetail(i)" class="rounded-lg flex items-center justify-center">
                       <icon fa="circle-info" size="lg">
                     </button>
                 </div>
@@ -304,7 +307,7 @@
               </td>
             </tr>
             <tr v-else class="text-center">
-              <td colspan="10" class="py-[20px]">
+              <td :colspan="canViewSalary ? 10 : 9" class="py-[20px]">
                 No data to show
               </td>
             </tr>
@@ -316,7 +319,7 @@
         <button @click="onBack" class="bg-[#EF4444] hover:bg-[#ed3232] text-white px-[36.5px] py-[12px] rounded-[6px] ">
           Batal
         </button>
-        <button v-show="actionText" @click="onSave" class="bg-[#10B981] hover:bg-[#0ea774] text-white px-[36.5px] py-[12px] rounded-[6px] ">
+        <button v-show="actionText && canViewSalary" @click="onSave" class="bg-[#10B981] hover:bg-[#0ea774] text-white px-[36.5px] py-[12px] rounded-[6px] ">
           Simpan
         </button>
       </div>
