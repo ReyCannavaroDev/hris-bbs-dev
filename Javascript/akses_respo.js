@@ -50,23 +50,11 @@ const onSwitch = (item) => {
   const respoName = item.respo_nama || 'Responsibility'
 
   swal.fire({
-    title: 'Ganti Responsibility?',
-    html: `
-      <div class="text-left text-sm space-y-2">
-        <p>Anda akan beralih ke peran kerja:</p>
-        <div class="bg-blue-50 p-3 rounded-lg border border-blue-200 text-xs">
-          <div><b>Responsibility:</b> ${respoName}</div>
-          <div><b>Company / Direktorat:</b> <span class="text-blue-700 font-bold">${dirName}</span></div>
-          <div><b>Divisi:</b> ${item.divisi_nama || 'Semua Divisi'}</div>
-        </div>
-        <p class="text-xs text-gray-500 mt-2">
-          Hak akses menu sidebar dan filter data transaksi akan otomatis menyesuaikan dengan peran yang baru.
-        </p>
-      </div>
-    `,
     icon: 'question',
+    title: 'Ganti Responsibility?',
+    text: `Beralih ke ${respoName} (${dirName})?`,
     showCancelButton: true,
-    confirmButtonText: 'Ya, Gunakan Peran Ini',
+    confirmButtonText: 'Ya, Ganti',
     cancelButtonText: 'Batal',
     confirmButtonColor: '#2563EB',
     cancelButtonColor: '#6B7280'
