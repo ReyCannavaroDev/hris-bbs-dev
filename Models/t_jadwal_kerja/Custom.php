@@ -2,6 +2,8 @@
 
 namespace App\Models\CustomModels;
 
+use Illuminate\Database\Eloquent\Builder;
+
 class t_jadwal_kerja extends \App\Models\BasicModels\t_jadwal_kerja
 {    
     private $helper;
@@ -19,6 +21,26 @@ class t_jadwal_kerja extends \App\Models\BasicModels\t_jadwal_kerja
             "m_dir.id=t_jadwal_kerja.m_dir_id",
             "m_general.id=t_jadwal_kerja.tipe_jam_kerja_id"
         ];
+    }
+
+    protected static function boot()
+    {
+        parent::boot();
+
+        // Isolasi Jadwal Kerja sesuai active Respo (m_dir_id):
+        // Superadmin = semua PT, HRD/Admin/User = PT sesuai active Respo (Holding = semua PT)
+        static::addGlobalScope('respo_scope', function (Builder $builder) {
+            $respoCore = getCore('Respo');
+            if (!$respoCore || !$respoCore->isOperationCrudRequest('t_jadwal_kerja', ['GET', 'PUT', 'PATCH', 'DELETE'])) {
+                return;
+            }
+
+            $respoCore->applyActiveOrgScopeToQuery($builder, 't_jadwal_kerja', [
+                'dir_col'    => 't_jadwal_kerja.m_dir_id',
+                'divisi_col' => null,
+                'dept_col'   => null,
+            ]);
+        });
     }
 
     public function comp() :\Illuminate\Database\Eloquent\Relations\BelongsTo
@@ -57,6 +79,34 @@ class t_jadwal_kerja extends \App\Models\BasicModels\t_jadwal_kerja
                         "errors" => ["Detail baris $no, waktu akhir wajib di isi"]
                     ];
                 }
+            }
+        }
+
+        // Validasi Scope Respo Aktif saat Create Jadwal Kerja
+        $respoCore = getCore('Respo');
+        $authUser = app()->bound('auth') ? app('auth')->user() : null;
+        if ($authUser && $respoCore && !$respoCore->isUserSuperadmin($authUser)) {
+            $scope = $respoCore->getActiveCompanyScope($authUser);
+            if (!$scope || ($scope['m_dir_id'] ?? null) === -1) {
+                return [
+                    "model" => $model,
+                    "data"  => $arrayData,
+                    "errors" => ["Responsibility aktif tidak ditemukan atau sedang nonaktif."],
+                ];
+            }
+
+            // Autofill m_dir_id dari active respo bila belum terisi
+            if (empty($arrayData['m_dir_id']) && !empty($scope['m_dir_id'])) {
+                $arrayData['m_dir_id'] = $scope['m_dir_id'];
+            }
+
+            $effDirId = $arrayData['m_dir_id'] ?? null;
+            if (!$respoCore->matchesActiveCompanyScope($effDirId, null, null, $authUser)) {
+                return [
+                    "model" => $model,
+                    "data"  => $arrayData,
+                    "errors" => ["Perusahaan/Cabang berada di luar scope responsibility aktif."],
+                ];
             }
         }
 
@@ -102,6 +152,37 @@ class t_jadwal_kerja extends \App\Models\BasicModels\t_jadwal_kerja
             }
         }
 
+        // Validasi Scope Respo Aktif saat Update Jadwal Kerja
+        $respoCore = getCore('Respo');
+        $authUser = app()->bound('auth') ? app('auth')->user() : null;
+        if ($authUser && $respoCore && !$respoCore->isUserSuperadmin($authUser)) {
+            $existing = \DB::table('t_jadwal_kerja')->where('id', $id)->first();
+            if (!$existing) {
+                return [
+                    "model" => $model,
+                    "data"  => $arrayData,
+                    "errors" => ["Data jadwal kerja tidak ditemukan."],
+                ];
+            }
+
+            if (!$respoCore->matchesActiveCompanyScope($existing->m_dir_id, null, null, $authUser)) {
+                return [
+                    "model" => $model,
+                    "data"  => $arrayData,
+                    "errors" => ["Data jadwal kerja berada di luar scope responsibility aktif."],
+                ];
+            }
+
+            $targetDirId = array_key_exists('m_dir_id', $arrayData) ? $arrayData['m_dir_id'] : $existing->m_dir_id;
+            if (!$respoCore->matchesActiveCompanyScope($targetDirId, null, null, $authUser)) {
+                return [
+                    "model" => $model,
+                    "data"  => $arrayData,
+                    "errors" => ["Perubahan Perusahaan/Cabang berada di luar scope responsibility aktif."],
+                ];
+            }
+        }
+
         $newArrayData  = array_merge( $arrayData,[] );
         if (!empty($arrayData['m_comp_id'])) {
             $newArrayData['m_comp_id'] = $arrayData['m_comp_id'];
@@ -140,11 +221,21 @@ class t_jadwal_kerja extends \App\Models\BasicModels\t_jadwal_kerja
             // Menambahkan satu hari untuk iterasi berikutnya
             $date_from->add(new \DateInterval('P1D'));
 
-            $kary = m_kary::selectRaw("m_kary.*, m_posisi.desc_kerja posisi, m_jam_kerja.kode jam_kerja")
+            $karyQuery = m_kary::selectRaw("m_kary.*, m_posisi.desc_kerja posisi, m_jam_kerja.kode jam_kerja")
                     ->where('m_dept_id', $grup_kerja->m_dept_id)
                     ->join('m_posisi', 'm_posisi.id','m_kary.m_posisi_id')
-                    ->join('m_jam_kerja', 'm_jam_kerja.id','m_kary.m_jam_kerja_id')
-                    ->get();
+                    ->join('m_jam_kerja', 'm_jam_kerja.id','m_kary.m_jam_kerja_id');
+
+            $respoCore = getCore('Respo');
+            if ($respoCore) {
+                $respoCore->applyActiveOrgScopeToQuery($karyQuery, 'm_kary', [
+                    'dir_col'    => 'm_kary.m_dir_id',
+                    'divisi_col' => 'm_kary.m_divisi_id',
+                    'dept_col'   => 'm_kary.m_dept_id',
+                ]);
+            }
+
+            $kary = $karyQuery->get();
             foreach($kary as $d){
                 $data[] = [
                     'tanggal'   => $date,
@@ -171,8 +262,19 @@ class t_jadwal_kerja extends \App\Models\BasicModels\t_jadwal_kerja
 
      public function custom_get_jadwal_office($req)
     {
-        $data = \DB::table('t_jadwal_kerja as t')->selectRaw("t.*")->join('m_general as g','g.id','t.tipe_jam_kerja_id')->where('g.value','OFFICE')
-                ->where('status','POSTED')->first();
+        $query = \DB::table('t_jadwal_kerja as t')->selectRaw("t.*")->join('m_general as g','g.id','t.tipe_jam_kerja_id')->where('g.value','OFFICE')
+                ->where('status','POSTED');
+
+        $respoCore = getCore('Respo');
+        if ($respoCore) {
+            $respoCore->applyActiveOrgScopeToQuery($query, 't', [
+                'dir_col'    => 't.m_dir_id',
+                'divisi_col' => null,
+                'dept_col'   => null,
+            ]);
+        }
+
+        $data = $query->first();
         return $this->helper->customResponse('OK', 200, $data, true);
     }
 
@@ -197,7 +299,11 @@ class t_jadwal_kerja extends \App\Models\BasicModels\t_jadwal_kerja
             ]);
 
             if(strtolower($tipe_jam_kerja) == 'office'){
-                $update = $this->where('id', '!=' ,$request->id)->where('tipe_jam_kerja_id',$data->tipe_jam_kerja_id)->update([
+                $updateQ = $this->where('id', '!=' ,$request->id)->where('tipe_jam_kerja_id',$data->tipe_jam_kerja_id);
+                if (!empty($data->m_dir_id)) {
+                    $updateQ->where('m_dir_id', $data->m_dir_id);
+                }
+                $update = $updateQ->update([
                     "status" => "EXPIRED",
                 ]);
             }
@@ -250,7 +356,7 @@ class t_jadwal_kerja extends \App\Models\BasicModels\t_jadwal_kerja
 
     public function custom_generate_det_kary($req)
     {
-        $data = m_kary::selectRaw("m_kary.id m_kary_id, m_kary.nama_lengkap, d.nama \"m_dept.nama\", dv.nama \"m_divisi.nama\",m_kary.m_dir_id,m_kary.m_divisi_id,m_kary.m_dept_id")
+        $query = m_kary::selectRaw("m_kary.id m_kary_id, m_kary.nama_lengkap, d.nama \"m_dept.nama\", dv.nama \"m_divisi.nama\",m_kary.m_dir_id,m_kary.m_divisi_id,m_kary.m_dept_id")
             ->leftJoin('m_dept as d','d.id','m_kary.m_dept_id')
             ->leftJoin('m_divisi as dv','dv.id','m_kary.m_divisi_id')
             ->leftJoin('m_general as g','g.id','m_kary.tipe_jam_kerja_id')
@@ -263,8 +369,18 @@ class t_jadwal_kerja extends \App\Models\BasicModels\t_jadwal_kerja
             })
             ->whereRaw("m_kary.id not in(select d.m_kary_id from t_jadwal_kerja_det d 
                 join t_jadwal_kerja t on t.id = d.t_jadwal_kerja_id where t.status = 'POSTED' and d.m_kary_id is not null)")
-            ->where('m_kary.is_active', true)
-            ->get();
+            ->where('m_kary.is_active', true);
+
+        $respoCore = getCore('Respo');
+        if ($respoCore) {
+            $respoCore->applyActiveOrgScopeToQuery($query, 'm_kary', [
+                'dir_col'    => 'm_kary.m_dir_id',
+                'divisi_col' => 'm_kary.m_divisi_id',
+                'dept_col'   => 'm_kary.m_dept_id',
+            ]);
+        }
+
+        $data = $query->get();
         return $this->helper->customResponse('OK', 200, $data);
     }
 

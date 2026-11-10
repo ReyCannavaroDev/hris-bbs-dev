@@ -85,6 +85,12 @@ onBeforeMount(async () => {
     isRequesting.value = false
   } else {
     values.m_comp_id = store.user.data?.m_comp_id || 1
+    const activeRespo = store.user?.data?.active_respo
+    if (activeRespo && activeRespo.m_dir_id) {
+      values.m_dir_id = activeRespo.m_dir_id
+    } else if (store.user?.data?.m_dir_id) {
+      values.m_dir_id = store.user.data.m_dir_id
+    }
   }
 
   for (const key in initialValues) {
