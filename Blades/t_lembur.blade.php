@@ -53,7 +53,7 @@
         <div>
           <label class="font-semibold">Company</label>
           <FieldSelect
-            :bind="{ disabled: isReadOnly, clearable: !isReadOnly }"
+            :bind="{ disabled: !actionText || !isSuperadmin, clearable: Boolean(actionText && isSuperadmin) }"
             class="w-full py-2 !mt-0"
             :value="values.m_dir_id"
             @input="v=>values.m_dir_id=v"

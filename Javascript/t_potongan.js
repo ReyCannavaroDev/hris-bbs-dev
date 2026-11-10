@@ -1,12 +1,23 @@
 //   javascript
 
 import { useRouter, useRoute, RouterLink } from 'vue-router'
-import { ref, readonly, reactive, inject, onMounted, onBeforeMount, watchEffect, onActivated } from 'vue'
+import { ref, readonly, reactive, inject, onMounted, onBeforeMount, watchEffect, onActivated, computed } from 'vue'
 
 const router = useRouter()
 const route = useRoute()
 const store = inject('store')
 const swal = inject('swal')
+
+const isTruthyFlag = (val) => val === true || val === 1 || val === '1' || String(val || '').toLowerCase() === 'true' || String(val || '').toLowerCase() === 't'
+const isSuperadmin = computed(() => {
+  const u = store?.user?.data || {}
+  const ar = u.active_respo || null
+  if (u.username === 'developer') return true
+  if (ar && typeof ar.is_superadmin !== 'undefined') {
+    return isTruthyFlag(ar.is_superadmin)
+  }
+  return isTruthyFlag(u.is_superadmin)
+})
 
 const isRead = route.params.id && route.params.id !== 'create'
 const actionText = ref(route.params.id === 'create' ? 'Tambah' : (route.query.action?.toLowerCase() === 'verifikasi' ? null : route.query.action))
@@ -241,7 +252,9 @@ onBeforeMount(async () => {
 
   if (!isRead) {
     values.m_comp_id = store.user.data?.m_comp_id ?? 1
-    values.m_dir_id = store.user.data?.m_dir_id ?? null
+    const activeRespo = store.user?.data?.active_respo
+    const respoDirId = activeRespo ? (activeRespo.m_dir_id ?? null) : (store.user?.data?.m_dir_id ?? null)
+    values.m_dir_id = respoDirId ? Number(respoDirId) : null
   }
 
   if (isRead) {

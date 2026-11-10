@@ -32,14 +32,36 @@
       <div class="grid <md:grid-cols-1 grid-cols-2 gap-2">
         <!-- START COLUMN -->
         <div>
-          <label for="Direktorat" class="font-semibold select-all">Company <span class="text-red-500 space-x-0 pl-0"></span></label>
-          <FieldX :bind="{ readonly: true }" class="w-full py-2 !mt-0"
-              :value="values.direktorat" :errorText="formErrors.direktorat?'failed':''"
-              @input="v=>values.direktorat=v" :hints="formErrors.direktorat" 
-              :check="false"
-              label=""
-              placeholder=""
-          />
+          <label class="font-semibold">Company<span class="text-red-500 space-x-0 pl-0"></span></label>
+          <FieldSelect
+            :bind="{ disabled: !actionText || !isSuperadmin, clearable: Boolean(actionText && isSuperadmin) }"
+            class="w-full py-2 !mt-0"
+            :value="values.m_dir_id"
+            @input="(v)=>{
+              values.m_dir_id=v
+              values.m_divisi_id=null
+              values.m_dept_id=null
+            }"
+            :errorText="formErrors.m_dir_id?'failed':''"
+            :hints="formErrors.m_dir_id"
+            placeholder="Pilih Company"
+            label=""
+            displayField="nama"
+            valueField="id"
+            :api="{
+                url: `${store.server.url_backend}/operation/m_dir`,
+                headers: {
+                  'Content-Type': 'Application/json',
+                  Authorization: `${store.user.token_type} ${store.user.token}`
+                },
+                params: {
+                  simplest:true,
+                  where: `this.is_active='true'`,
+                  transform:false,
+                  selectfield: 'this.id, this.nama, this.is_active'
+                }
+            }"
+            fa-icon="search" :check="false" />
         </div>
         <div>
           <label class="font-semibold">Kode<span class="text-red-500 space-x-0 pl-0"></span></label>
@@ -74,7 +96,7 @@
                 params: {
                   simplest:true,
                   single:true,
-                  where:`this.is_active='true'`,
+                  where: values.m_dir_id ? `this.m_dir_id=${values.m_dir_id} and this.is_active='true'` : `this.is_active='true'`,
                   transform:false,
                 }
             }"

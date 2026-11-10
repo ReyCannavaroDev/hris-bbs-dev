@@ -1,12 +1,23 @@
 //   javascript
 
 import { useRouter, useRoute, RouterLink } from 'vue-router'
-import { ref, readonly, reactive, inject, onMounted, onBeforeMount, watchEffect, onActivated } from 'vue'
+import { ref, readonly, reactive, inject, onMounted, onBeforeMount, watchEffect, onActivated, computed } from 'vue'
 
 const router = useRouter()
 const route = useRoute()
 const store = inject('store')
 const swal = inject('swal')
+
+const isTruthyFlag = (val) => val === true || val === 1 || val === '1' || String(val || '').toLowerCase() === 'true' || String(val || '').toLowerCase() === 't'
+const isSuperadmin = computed(() => {
+  const u = store?.user?.data || {}
+  const ar = u.active_respo || null
+  if (u.username === 'developer') return true
+  if (ar && typeof ar.is_superadmin !== 'undefined') {
+    return isTruthyFlag(ar.is_superadmin)
+  }
+  return isTruthyFlag(u.is_superadmin)
+})
 
 const isRead = route.params.id && route.params.id !== 'create'
 const actionText = ref(route.params.id === 'create' ? 'Tambah' : route.query.action)
@@ -35,7 +46,11 @@ const values = reactive({
 onBeforeMount(async () => {
   // tampilkan default direktorat dengan store user comp.nama
   values.direktorat = store.user.data?.direktorat
-  values.m_dir_id = store.user.data?.m_dir_id || store.user.data?.company_id
+  const activeRespo = store.user?.data?.active_respo
+  const respoDirId = activeRespo ? (activeRespo.m_dir_id ?? null) : (store.user?.data?.m_dir_id ?? null)
+  if (!isRead && respoDirId) {
+    values.m_dir_id = Number(respoDirId)
+  }
   if (isRead) {
     //  READ DATA
     try {
@@ -71,12 +86,18 @@ onBeforeMount(async () => {
   for (const key in initialValues) {
     values[key] = initialValues[key]
   }
+  if (initialValues.m_dir_id) {
+    values.m_dir_id = Number(initialValues.m_dir_id)
+  }
   if (initialValues.is_active !== undefined) {
     values.is_active = (initialValues.is_active === true || initialValues.is_active === 1 || initialValues.is_active === '1' || initialValues.is_active === 'true' || initialValues.is_active === 't')
   }
   if (actionText.value === 'Copy' || route.query.action === 'Copy') {
     values.kode = null
     delete values.id
+    if (!isSuperadmin.value && respoDirId) {
+      values.m_dir_id = Number(respoDirId)
+    }
   }
 })
 

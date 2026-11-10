@@ -55,7 +55,7 @@
           <label class="font-semibold">Company</label>
           <FieldSelect
             class="w-full py-2 !mt-0"
-            :bind="{ disabled: !actionText, clearable:true }"
+            :bind="{ disabled: !actionText || !isSuperadmin, clearable: Boolean(actionText && isSuperadmin) }"
             :value="values.m_dir_id" 
             :check="false"
             @input="(v)=>{

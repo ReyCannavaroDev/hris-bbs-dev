@@ -2,6 +2,8 @@
 
 namespace App\Models\CustomModels;
 
+use Illuminate\Database\Eloquent\Builder;
+
 class m_lembur extends \App\Models\BasicModels\m_lembur
 {    
     public function __construct()
@@ -15,6 +17,25 @@ class m_lembur extends \App\Models\BasicModels\m_lembur
         // tidak dianggap 'kosong' oleh validator generator
         $this->required = ["besaran"];
     }
+
+    protected static function boot()
+    {
+        parent::boot();
+
+        // Isolasi Scope Master Tarif Lembur (m_lembur.m_dir_id) sesuai active Respo
+        static::addGlobalScope('respo_scope', function (Builder $builder) {
+            $respoCore = getCore('Respo');
+            if (!$respoCore || !$respoCore->isOperationCrudRequest('m_lembur', ['GET', 'PUT', 'PATCH', 'DELETE'])) {
+                return;
+            }
+
+            $respoCore->applyActiveOrgScopeToQuery($builder, 'm_lembur', [
+                'dir_col'    => 'm_lembur.m_dir_id',
+                'divisi_col' => null,
+                'dept_col'   => null,
+            ]);
+        });
+    }
     
     public $fileColumns    = [ /*file_column*/ ];
 
@@ -23,6 +44,33 @@ class m_lembur extends \App\Models\BasicModels\m_lembur
 
     public function createBefore( $model, $arrayData, $metaData, $id=null )
     {
+      // Validasi Scope Respo Aktif saat Create Tarif Lembur
+      $respoCore = getCore('Respo');
+      $authUser = app()->bound('auth') ? app('auth')->user() : null;
+      if ($authUser && $respoCore && !$respoCore->isUserSuperadmin($authUser)) {
+          $scope = $respoCore->getActiveCompanyScope($authUser);
+          if (!$scope || ($scope['m_dir_id'] ?? null) === -1) {
+              return [
+                  "model" => $model,
+                  "data"  => $arrayData,
+                  "errors" => ["Responsibility aktif tidak ditemukan atau sedang nonaktif."],
+              ];
+          }
+
+          if (empty($arrayData['m_dir_id']) && !empty($scope['m_dir_id'])) {
+              $arrayData['m_dir_id'] = $scope['m_dir_id'];
+          }
+
+          $effDirId = $arrayData['m_dir_id'] ?? null;
+          if (!$respoCore->matchesActiveCompanyScope($effDirId, null, null, $authUser)) {
+              return [
+                  "model" => $model,
+                  "data"  => $arrayData,
+                  "errors" => ["Perusahaan/Cabang berada di luar scope responsibility aktif."],
+              ];
+          }
+      }
+
       $dirId = $arrayData['m_dir_id'] ?? (auth()->user()->m_dir_id ?? null);
       $divisiId = !empty($arrayData['m_divisi_id']) ? $arrayData['m_divisi_id'] : null;
       $deptId = !empty($arrayData['m_dept_id']) ? $arrayData['m_dept_id'] : null;
@@ -103,6 +151,29 @@ class m_lembur extends \App\Models\BasicModels\m_lembur
 
     public function updateBefore( $model, $arrayData, $metaData, $id=null )
     {
+      // Validasi Scope Respo Aktif saat Update Tarif Lembur
+      $respoCore = getCore('Respo');
+      $authUser = app()->bound('auth') ? app('auth')->user() : null;
+      if ($authUser && $respoCore && !$respoCore->isUserSuperadmin($authUser)) {
+          $existing = \DB::table('m_lembur')->where('id', $id)->first();
+          if ($existing && !$respoCore->matchesActiveCompanyScope($existing->m_dir_id, null, null, $authUser)) {
+              return [
+                  "model" => $model,
+                  "data"  => $arrayData,
+                  "errors" => ["Data tarif lembur berada di luar scope responsibility aktif."],
+              ];
+          }
+
+          $targetDirId = array_key_exists('m_dir_id', $arrayData) ? $arrayData['m_dir_id'] : ($existing->m_dir_id ?? null);
+          if (!$respoCore->matchesActiveCompanyScope($targetDirId, null, null, $authUser)) {
+              return [
+                  "model" => $model,
+                  "data"  => $arrayData,
+                  "errors" => ["Perubahan Perusahaan/Cabang berada di luar scope responsibility aktif."],
+              ];
+          }
+      }
+
       $newArrayData = $arrayData;
 
       if (array_key_exists('grading_id', $arrayData)) {

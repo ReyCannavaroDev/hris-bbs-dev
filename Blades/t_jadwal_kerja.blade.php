@@ -40,7 +40,7 @@
         <div>
           <label class="font-semibold">Company<span class="text-red-500 space-x-0 pl-0"></span></label>
           <FieldSelect
-            :bind="{ disabled: !actionText, clearable:true }"
+            :bind="{ disabled: !actionText || !isSuperadmin, clearable: Boolean(actionText && isSuperadmin) }"
             class="col-span-12 !mt-0 w-full"
             :value="values.m_dir_id"
             @input="v=>values.m_dir_id=v"

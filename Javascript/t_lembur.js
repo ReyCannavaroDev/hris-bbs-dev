@@ -41,12 +41,22 @@ const getUserSnapshot = () => {
   return { ...localData, ...storeData }
 }
 
+const isSuperadmin = computed(() => {
+  const u = getUserSnapshot()
+  const ar = u.active_respo || null
+  if (u.username === 'developer') return true
+  if (ar && typeof ar.is_superadmin !== 'undefined') {
+    return isTruthyFlag(ar.is_superadmin)
+  }
+  return isTruthyFlag(u.is_superadmin)
+})
+
 const isHrdOrAdminRoleName = (name) => /(?:^|[^a-z])(hr[a-z]*|personalia|sdm|admin[a-z]*|human[\s_]*capital|human[\s_]*resources?)(?:[^a-z]|$)/i.test(String(name || ''))
 
 const getActiveRespoScope = () => {
   const u = getUserSnapshot()
   const ar = u.active_respo || null
-  const isSuper = u.username === 'developer' || isTruthyFlag(u.is_superadmin)
+  const isSuper = isSuperadmin.value
   const hasRespo = isTruthyFlag(u.has_respo) || Boolean(ar)
   const dirId = ar ? (ar.m_dir_id ?? null) : (u.m_dir_id ?? null)
   const divId = ar ? (ar.m_divisi_id ?? null) : null
@@ -163,7 +173,9 @@ onBeforeMount(async () => {
 
   if (!isRead) {
     values.m_comp_id = store.user.data?.m_comp_id ?? 1
-    values.m_dir_id = store.user.data?.m_dir_id ?? null
+    const activeRespo = store.user?.data?.active_respo
+    const respoDirId = activeRespo ? (activeRespo.m_dir_id ?? null) : (store.user?.data?.m_dir_id ?? null)
+    values.m_dir_id = respoDirId ? Number(respoDirId) : null
     if (!values.tanggal) {
       values.tanggal = getTodayDate()
     }
