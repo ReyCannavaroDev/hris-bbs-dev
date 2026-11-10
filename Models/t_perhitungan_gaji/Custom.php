@@ -2,6 +2,8 @@
 
 namespace App\Models\CustomModels;
 
+use Illuminate\Database\Eloquent\Builder;
+
 class t_perhitungan_gaji extends \App\Models\BasicModels\t_perhitungan_gaji
 {    
     private $helper;
@@ -9,6 +11,27 @@ class t_perhitungan_gaji extends \App\Models\BasicModels\t_perhitungan_gaji
     {
         parent::__construct();
         $this->helper = getCore('Helper');
+    }
+
+    protected static function boot()
+    {
+        parent::boot();
+
+        // Isolasi Perhitungan Gaji sesuai active Respo:
+        // Superadmin = semua PT, HRD/Admin = PT/Divisi/Dept active Respo
+        static::addGlobalScope('respo_scope', function (Builder $builder) {
+            $respoCore = getCore('Respo');
+            if (!$respoCore || !$respoCore->isOperationCrudRequest('t_perhitungan_gaji', ['GET', 'PUT', 'PATCH', 'DELETE'])) {
+                return;
+            }
+
+            $respoCore->applyActiveOrgScopeToQuery($builder, 't_perhitungan_gaji', [
+                'dir_col'     => 't_perhitungan_gaji.m_kary_dir_id',
+                'divisi_col'  => 't_perhitungan_gaji.m_kary_divisi_id',
+                'dept_col'    => 't_perhitungan_gaji.m_kary_dept_id',
+                'kary_fk_col' => 't_perhitungan_gaji.m_kary_id',
+            ]);
+        });
     }
     
     public $fileColumns    = [ /*file_column*/ ];
@@ -26,13 +49,40 @@ class t_perhitungan_gaji extends \App\Models\BasicModels\t_perhitungan_gaji
 
     public function createBefore($model, $arrayData, $metaData, $id = null)
     {
-        if (!getCore('Respo')->canViewSalary()) {
+        $respoCore = getCore('Respo');
+        if ($respoCore && !$respoCore->canViewSalary()) {
             return [
                 "status"  => "error",
                 "message" => "Anda tidak memiliki hak akses untuk melihat atau mengelola data gaji.",
                 "errors"  => ["permission" => ["Anda tidak memiliki hak akses untuk melihat atau mengelola data gaji."]]
             ];
         }
+
+        $authUser = app()->bound('auth') ? app('auth')->user() : null;
+        if ($authUser && $respoCore && !$respoCore->isUserSuperadmin($authUser)) {
+            $scope = $respoCore->getActiveCompanyScope($authUser);
+            if (!$scope || ($scope['m_dir_id'] ?? null) === -1) {
+                return [
+                    "model" => $model,
+                    "data" => $arrayData,
+                    "errors" => ["Responsibility aktif tidak ditemukan atau sedang nonaktif."],
+                ];
+            }
+
+            $targetKary = !empty($arrayData['m_kary_id']) ? \DB::table('m_kary')->where('id', $arrayData['m_kary_id'])->first() : null;
+            $effDirId = $arrayData['m_kary_dir_id'] ?? ($targetKary ? $targetKary->m_dir_id : null);
+            $targetDivId = $arrayData['m_kary_divisi_id'] ?? ($targetKary ? $targetKary->m_divisi_id : null);
+            $targetDeptId = $arrayData['m_kary_dept_id'] ?? ($targetKary ? $targetKary->m_dept_id : null);
+
+            if (!$respoCore->matchesActiveCompanyScope($effDirId, $targetDivId, $targetDeptId, $authUser)) {
+                return [
+                    "model" => $model,
+                    "data" => $arrayData,
+                    "errors" => ["Karyawan atau Perusahaan/Cabang berada di luar scope responsibility aktif."],
+                ];
+            }
+        }
+
         return [
             "model" => $model,
             "data"  => $arrayData,
@@ -41,13 +91,51 @@ class t_perhitungan_gaji extends \App\Models\BasicModels\t_perhitungan_gaji
 
     public function updateBefore($model, $arrayData, $metaData, $id = null)
     {
-        if (!getCore('Respo')->canViewSalary()) {
+        $respoCore = getCore('Respo');
+        if ($respoCore && !$respoCore->canViewSalary()) {
             return [
                 "status"  => "error",
                 "message" => "Anda tidak memiliki hak akses untuk melihat atau mengelola data gaji.",
                 "errors"  => ["permission" => ["Anda tidak memiliki hak akses untuk melihat atau mengelola data gaji."]]
             ];
         }
+
+        $authUser = app()->bound('auth') ? app('auth')->user() : null;
+        if ($authUser && $respoCore && !$respoCore->isUserSuperadmin($authUser)) {
+            $scope = $respoCore->getActiveCompanyScope($authUser);
+            if (!$scope || ($scope['m_dir_id'] ?? null) === -1) {
+                return [
+                    "model" => $model,
+                    "data" => $arrayData,
+                    "errors" => ["Responsibility aktif tidak ditemukan atau sedang nonaktif."],
+                ];
+            }
+
+            if ($id) {
+                $existing = \DB::table('t_perhitungan_gaji')->where('id', $id)->first();
+                if ($existing && !$respoCore->matchesActiveCompanyScope($existing->m_kary_dir_id, $existing->m_kary_divisi_id, $existing->m_kary_dept_id, $authUser)) {
+                    return [
+                        "model" => $model,
+                        "data" => $arrayData,
+                        "errors" => ["Tidak diizinkan mengubah data gaji di luar scope responsibility aktif."],
+                    ];
+                }
+            }
+
+            $targetKary = !empty($arrayData['m_kary_id']) ? \DB::table('m_kary')->where('id', $arrayData['m_kary_id'])->first() : null;
+            $effDirId = $arrayData['m_kary_dir_id'] ?? ($targetKary ? $targetKary->m_dir_id : null);
+            $targetDivId = $arrayData['m_kary_divisi_id'] ?? ($targetKary ? $targetKary->m_divisi_id : null);
+            $targetDeptId = $arrayData['m_kary_dept_id'] ?? ($targetKary ? $targetKary->m_dept_id : null);
+
+            if (!$respoCore->matchesActiveCompanyScope($effDirId, $targetDivId, $targetDeptId, $authUser)) {
+                return [
+                    "model" => $model,
+                    "data" => $arrayData,
+                    "errors" => ["Target karyawan atau Perusahaan/Cabang berada di luar scope responsibility aktif."],
+                ];
+            }
+        }
+
         return [
             "model" => $model,
             "data"  => $arrayData,

@@ -2,6 +2,8 @@
 
 namespace App\Models\CustomModels;
 
+use Illuminate\Database\Eloquent\Builder;
+
 class t_potongan extends \App\Models\BasicModels\t_potongan
 {    
     private $helper;
@@ -9,6 +11,29 @@ class t_potongan extends \App\Models\BasicModels\t_potongan
     {
         parent::__construct();
         $this->helper = getCore('Helper');
+    }
+
+    protected static function boot()
+    {
+        parent::boot();
+
+        // Isolasi Transaksi Potongan sesuai active Respo:
+        // Superadmin = semua PT, HRD/Admin = PT/Divisi/Dept active Respo, User biasa = milik sendiri (+ approver saat GET single detail)
+        static::addGlobalScope('respo_scope', function (Builder $builder) {
+            $respoCore = getCore('Respo');
+            if (!$respoCore || !$respoCore->isOperationCrudRequest('t_potongan', ['GET', 'PUT', 'PATCH', 'DELETE'])) {
+                return;
+            }
+
+            $respoCore->applyActiveEmployeeTransactionScopeToQuery($builder, 't_potongan', [
+                'trx_table'                => 't_potongan',
+                'dir_col'                  => 't_potongan.m_dir_id',
+                'divisi_col'               => null,
+                'dept_col'                 => null,
+                'kary_fk_col'              => 't_potongan.m_kary_id',
+                'allow_approver_on_single' => true,
+            ]);
+        });
     }
     
     public $fileColumns    = ['doc'];
@@ -24,11 +49,100 @@ class t_potongan extends \App\Models\BasicModels\t_potongan
         if (empty($newArrayData['m_comp_id'])) {
             $newArrayData['m_comp_id'] = 1;
         }
+        if (empty($newArrayData['m_dir_id']) && !empty($newArrayData['m_kary_id'])) {
+            $newArrayData['m_dir_id'] = \DB::table('m_kary')->where('id', $newArrayData['m_kary_id'])->value('m_dir_id');
+        }
+
+        // Validasi Scope Respo Aktif saat Create Potongan
+        $respoCore = getCore('Respo');
+        $authUser = app()->bound('auth') ? app('auth')->user() : null;
+        if ($authUser && $respoCore && !$respoCore->isUserSuperadmin($authUser)) {
+            $scope = $respoCore->getActiveCompanyScope($authUser);
+            if (!$scope || ($scope['m_dir_id'] ?? null) === -1) {
+                return [
+                    "model" => $model,
+                    "data"  => $arrayData,
+                    "errors" => ["Responsibility aktif tidak ditemukan atau sedang nonaktif."],
+                ];
+            }
+
+            $targetKary = !empty($newArrayData['m_kary_id']) ? \DB::table('m_kary')->where('id', $newArrayData['m_kary_id'])->first() : null;
+            $effDirId = $newArrayData['m_dir_id'] ?? ($targetKary ? $targetKary->m_dir_id : null);
+            $targetDivId = $targetKary ? $targetKary->m_divisi_id : null;
+            $targetDeptId = $targetKary ? $targetKary->m_dept_id : null;
+
+            if (!$respoCore->matchesActiveCompanyScope($effDirId, $targetDivId, $targetDeptId, $authUser)) {
+                return [
+                    "model" => $model,
+                    "data"  => $arrayData,
+                    "errors" => ["Karyawan atau Perusahaan/Cabang berada di luar scope responsibility aktif."],
+                ];
+            }
+        }
        
         return [
             "model"  => $model,
             "data"   => $newArrayData,
-            // "errors" => ['error1']
+        ];
+    }
+
+    public function updateBefore( $model, $arrayData, $metaData, $id=null )
+    {
+        $existing = \DB::table('t_potongan')->where('id', $id)->first();
+        $newArrayData = $arrayData;
+
+        if (empty($newArrayData['m_comp_id'])) {
+            $newArrayData['m_comp_id'] = $existing->m_comp_id ?? 1;
+        }
+        if (empty($newArrayData['m_dir_id']) && !empty($newArrayData['m_kary_id'])) {
+            $newArrayData['m_dir_id'] = \DB::table('m_kary')->where('id', $newArrayData['m_kary_id'])->value('m_dir_id');
+        }
+
+        // Validasi Scope Respo Aktif saat Update Potongan
+        $respoCore = getCore('Respo');
+        $authUser = app()->bound('auth') ? app('auth')->user() : null;
+        if ($authUser && $respoCore && !$respoCore->isUserSuperadmin($authUser)) {
+            $scope = $respoCore->getActiveCompanyScope($authUser);
+            if (!$scope || ($scope['m_dir_id'] ?? null) === -1) {
+                return [
+                    "model" => $model,
+                    "data"  => $arrayData,
+                    "errors" => ["Responsibility aktif tidak ditemukan atau sedang nonaktif."],
+                ];
+            }
+
+            if ($existing) {
+                $existKary = !empty($existing->m_kary_id) ? \DB::table('m_kary')->where('id', $existing->m_kary_id)->first() : null;
+                $existDirId = $existing->m_dir_id ?? ($existKary ? $existKary->m_dir_id : null);
+                $existDivId = $existKary ? $existKary->m_divisi_id : null;
+                $existDeptId = $existKary ? $existKary->m_dept_id : null;
+
+                if (!$respoCore->matchesActiveCompanyScope($existDirId, $existDivId, $existDeptId, $authUser)) {
+                    return [
+                        "model" => $model,
+                        "data"  => $arrayData,
+                        "errors" => ["Tidak diizinkan mengubah transaksi potongan di luar scope responsibility aktif."],
+                    ];
+                }
+            }
+
+            $targetKary = !empty($newArrayData['m_kary_id']) ? \DB::table('m_kary')->where('id', $newArrayData['m_kary_id'])->first() : null;
+            $effDirId = $newArrayData['m_dir_id'] ?? ($targetKary ? $targetKary->m_dir_id : null);
+            $targetDivId = $targetKary ? $targetKary->m_divisi_id : null;
+            $targetDeptId = $targetKary ? $targetKary->m_dept_id : null;
+
+            if (!$respoCore->matchesActiveCompanyScope($effDirId, $targetDivId, $targetDeptId, $authUser)) {
+                return [
+                    "model" => $model,
+                    "data"  => $arrayData,
+                    "errors" => ["Target karyawan atau Perusahaan/Cabang berada di luar scope responsibility aktif."],
+                ];
+            }
+        }
+
+        return [
+            "model"  => $model,
+            "data"   => $newArrayData,
         ];
     }
 

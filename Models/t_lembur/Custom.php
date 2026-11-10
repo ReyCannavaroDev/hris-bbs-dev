@@ -3,6 +3,7 @@
 namespace App\Models\CustomModels;
 use Carbon\Carbon;
 use Carbon\CarbonPeriod;
+use Illuminate\Database\Eloquent\Builder;
 
 class t_lembur extends \App\Models\BasicModels\t_lembur
 {
@@ -23,6 +24,29 @@ class t_lembur extends \App\Models\BasicModels\t_lembur
         ]);
     }
 
+    protected static function boot()
+    {
+        parent::boot();
+
+        // Isolasi Transaksi Lembur sesuai active Respo:
+        // Superadmin = semua PT, HRD/Admin = PT/Divisi/Dept active Respo, User biasa = milik sendiri (+ atasan/approver saat GET single detail)
+        static::addGlobalScope('respo_scope', function (Builder $builder) {
+            $respoCore = getCore('Respo');
+            if (!$respoCore || !$respoCore->isOperationCrudRequest('t_lembur', ['GET', 'PUT', 'PATCH', 'DELETE'])) {
+                return;
+            }
+
+            $respoCore->applyActiveEmployeeTransactionScopeToQuery($builder, 't_lembur', [
+                'trx_table'                => 't_lembur',
+                'dir_col'                  => 't_lembur.m_dir_id',
+                'divisi_col'               => null,
+                'dept_col'                 => null,
+                'kary_fk_col'              => 't_lembur.m_kary_id',
+                'allow_approver_on_single' => true,
+            ]);
+        });
+    }
+
     public $fileColumns = ["doc"];
 
     public $createAdditionalData = ["creator_id" => "auth:id"];
@@ -30,35 +54,10 @@ class t_lembur extends \App\Models\BasicModels\t_lembur
 
     public function scopeFilter($model)
     {
-     
-
-        if(app()->request->header('Source') === 'mobile') {
-            // $model->where
-        }
-        
         if (req("date_from") && req("date_to")) {
             $model = $model->whereBetween("tanggal", [req("date_from"), req("date_to")]);
-            $respoCore = getCore("Respo");
-            $scope = $respoCore ? $respoCore->getActiveCompanyScope() : null;
-            if ($scope && empty($scope['is_unrestricted'])) {
-                if (($scope['m_dir_id'] ?? null) === -1) {
-                    return $model->whereRaw('1 = 0');
-                }
-                if (!empty($scope['m_dir_id'])) {
-                    $dirId = intval($scope['m_dir_id']);
-                    $model->whereRaw("(t_lembur.m_dir_id = {$dirId} or exists (select 1 from m_kary mk where mk.id = t_lembur.m_kary_id and mk.m_dir_id = {$dirId}))");
-                }
-                if (!empty($scope['m_divisi_id'])) {
-                    $divId = intval($scope['m_divisi_id']);
-                    $model->whereRaw("exists (select 1 from m_kary mk where mk.id = t_lembur.m_kary_id and mk.m_divisi_id = {$divId})");
-                }
-                if (!empty($scope['m_dept_id'])) {
-                    $deptId = intval($scope['m_dept_id']);
-                    $model->whereRaw("exists (select 1 from m_kary mk where mk.id = t_lembur.m_kary_id and mk.m_dept_id = {$deptId})");
-                }
-            }
-            return $model;
         }
+        return $model;
     }
 
     public function transformRowData( array $row )
@@ -395,6 +394,48 @@ class t_lembur extends \App\Models\BasicModels\t_lembur
             $newArrayData['m_dir_id'] = \DB::table('m_kary')->where('id', $newArrayData['m_kary_id'])->value('m_dir_id');
         }
 
+        // Validasi Scope Respo Aktif saat Create Lembur
+        $respoCore = getCore('Respo');
+        $authUser = app()->bound('auth') ? app('auth')->user() : null;
+        if ($authUser && $respoCore && !$respoCore->isUserSuperadmin($authUser)) {
+            $scope = $respoCore->getActiveCompanyScope($authUser);
+            if (!$scope || ($scope['m_dir_id'] ?? null) === -1) {
+                return [
+                    "model" => $model,
+                    "data"  => $arrayData,
+                    "errors" => ["Responsibility aktif tidak ditemukan atau sedang nonaktif."],
+                ];
+            }
+
+            if ($existing) {
+                $existKary = !empty($existing->m_kary_id) ? \DB::table('m_kary')->where('id', $existing->m_kary_id)->first() : null;
+                $existDirId = $existing->m_dir_id ?? ($existKary ? $existKary->m_dir_id : null);
+                $existDivId = $existKary ? $existKary->m_divisi_id : null;
+                $existDeptId = $existKary ? $existKary->m_dept_id : null;
+
+                if (!$respoCore->matchesActiveCompanyScope($existDirId, $existDivId, $existDeptId, $authUser)) {
+                    return [
+                        "model" => $model,
+                        "data"  => $arrayData,
+                        "errors" => ["Tidak diizinkan mengubah transaksi lembur di luar scope responsibility aktif."],
+                    ];
+                }
+            }
+
+            $targetKary = !empty($newArrayData['m_kary_id']) ? \DB::table('m_kary')->where('id', $newArrayData['m_kary_id'])->first() : null;
+            $effDirId = $newArrayData['m_dir_id'] ?? ($targetKary ? $targetKary->m_dir_id : null);
+            $targetDivId = $targetKary ? $targetKary->m_divisi_id : null;
+            $targetDeptId = $targetKary ? $targetKary->m_dept_id : null;
+
+            if (!$respoCore->matchesActiveCompanyScope($effDirId, $targetDivId, $targetDeptId, $authUser)) {
+                return [
+                    "model" => $model,
+                    "data"  => $arrayData,
+                    "errors" => ["Karyawan atau Perusahaan/Cabang berada di luar scope responsibility aktif."],
+                ];
+            }
+        }
+
         if (app()->request->header("Source") == "mobile") {
             $newArrayData["status"] = "IN APPROVAL";
         }
@@ -436,6 +477,48 @@ class t_lembur extends \App\Models\BasicModels\t_lembur
         }
         if (empty($newArrayData['m_dir_id']) && !empty($newArrayData['m_kary_id'])) {
             $newArrayData['m_dir_id'] = \DB::table('m_kary')->where('id', $newArrayData['m_kary_id'])->value('m_dir_id');
+        }
+
+        // Validasi Scope Respo Aktif saat Create Lembur
+        $respoCore = getCore('Respo');
+        $authUser = app()->bound('auth') ? app('auth')->user() : null;
+        if ($authUser && $respoCore && !$respoCore->isUserSuperadmin($authUser)) {
+            $scope = $respoCore->getActiveCompanyScope($authUser);
+            if (!$scope || ($scope['m_dir_id'] ?? null) === -1) {
+                return [
+                    "model" => $model,
+                    "data"  => $arrayData,
+                    "errors" => ["Responsibility aktif tidak ditemukan atau sedang nonaktif."],
+                ];
+            }
+
+            if ($existing) {
+                $existKary = !empty($existing->m_kary_id) ? \DB::table('m_kary')->where('id', $existing->m_kary_id)->first() : null;
+                $existDirId = $existing->m_dir_id ?? ($existKary ? $existKary->m_dir_id : null);
+                $existDivId = $existKary ? $existKary->m_divisi_id : null;
+                $existDeptId = $existKary ? $existKary->m_dept_id : null;
+
+                if (!$respoCore->matchesActiveCompanyScope($existDirId, $existDivId, $existDeptId, $authUser)) {
+                    return [
+                        "model" => $model,
+                        "data"  => $arrayData,
+                        "errors" => ["Tidak diizinkan mengubah transaksi lembur di luar scope responsibility aktif."],
+                    ];
+                }
+            }
+
+            $targetKary = !empty($newArrayData['m_kary_id']) ? \DB::table('m_kary')->where('id', $newArrayData['m_kary_id'])->first() : null;
+            $effDirId = $newArrayData['m_dir_id'] ?? ($targetKary ? $targetKary->m_dir_id : null);
+            $targetDivId = $targetKary ? $targetKary->m_divisi_id : null;
+            $targetDeptId = $targetKary ? $targetKary->m_dept_id : null;
+
+            if (!$respoCore->matchesActiveCompanyScope($effDirId, $targetDivId, $targetDeptId, $authUser)) {
+                return [
+                    "model" => $model,
+                    "data"  => $arrayData,
+                    "errors" => ["Karyawan atau Perusahaan/Cabang berada di luar scope responsibility aktif."],
+                ];
+            }
         }
 
         return [

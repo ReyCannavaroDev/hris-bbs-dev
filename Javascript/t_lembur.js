@@ -28,6 +28,63 @@ let isFinish = ref(false)
 let isApproved = ref(false)
 
 const is_superadmin = ref(false);
+const isTruthyFlag = (val) => val === true || val === 1 || val === '1' || String(val || '').toLowerCase() === 'true' || String(val || '').toLowerCase() === 't'
+
+const getUserSnapshot = () => {
+  const storeData = store.user?.data || {}
+  let localData = {}
+  if (typeof window !== 'undefined' && window.localStorage?.user) {
+    try {
+      localData = JSON.parse(window.localStorage.user)?.data || {}
+    } catch (e) {}
+  }
+  return { ...localData, ...storeData }
+}
+
+const isHrdOrAdminRoleName = (name) => /(?:^|[^a-z])(hr[a-z]*|personalia|sdm|admin[a-z]*|human[\s_]*capital|human[\s_]*resources?)(?:[^a-z]|$)/i.test(String(name || ''))
+
+const getActiveRespoScope = () => {
+  const u = getUserSnapshot()
+  const ar = u.active_respo || null
+  const isSuper = u.username === 'developer' || isTruthyFlag(u.is_superadmin)
+  const hasRespo = isTruthyFlag(u.has_respo) || Boolean(ar)
+  const dirId = ar ? (ar.m_dir_id ?? null) : (u.m_dir_id ?? null)
+  const divId = ar ? (ar.m_divisi_id ?? null) : null
+  const deptId = ar ? (ar.m_dept_id ?? null) : null
+  const isHolding = hasRespo ? (ar ? !dirId : false) : !dirId
+  const rawRoles = Array.isArray(u.roles) && u.roles.length
+    ? u.roles.map(r => (typeof r === 'string' ? r : (r?.name || '')))
+    : (typeof u.role_names === 'string' && u.role_names.trim()
+        ? u.role_names.split(',').map(s => s.trim())
+        : (Array.isArray(u.role_names) ? u.role_names : []))
+  const respoName = ar ? (ar.nama || ar.name || '') : ''
+  const isHrdOrAdmin = isSuper || (!(hasRespo && !ar) && (rawRoles.some(rn => isHrdOrAdminRoleName(rn)) || isHrdOrAdminRoleName(respoName)))
+  return {
+    isSuper,
+    hasRespo,
+    isHrdOrAdmin,
+    isHolding,
+    isUnrestricted: isSuper || isHolding,
+    dirId: dirId ? Number(dirId) : null,
+    divId: divId ? Number(divId) : null,
+    deptId: deptId ? Number(deptId) : null,
+    isLockedMissing: hasRespo && !ar
+  }
+}
+
+const respoScope = ref(getActiveRespoScope())
+
+const getLandingWhereClause = () => {
+  const scope = getActiveRespoScope()
+  const u = getUserSnapshot()
+  if (scope.isLockedMissing) {
+    return '1=0'
+  }
+  if (!scope.isHrdOrAdmin) {
+    return `this.m_kary_id=${u.m_kary_id || 0}`
+  }
+  return ''
+}
 
 const isReadOnly = computed(() => {
   if (['Create', 'Copy', 'Tambah'].includes(actionText.value)) return false
@@ -36,7 +93,8 @@ const isReadOnly = computed(() => {
 })
 
 const isApproverOrAdmin = computed(() => {
-  if (store.user.data?.is_superadmin) return true
+  const scope = getActiveRespoScope()
+  if (scope.isSuper || scope.isHrdOrAdmin) return true
   // Jika user yang sedang login adalah karyawan pemohon itu sendiri -> selalu HIDE realisasi
   const myKaryId = store.user.data?.m_kary_id
   const myUserId = store.user.data?.id
@@ -71,13 +129,11 @@ const canApprove = computed(() => {
 const endpointApi = '/t_lembur'
 onBeforeMount(() => {
   document.title = is_approval ? 'Approval Lembur' : 'Transaksi Lembur'
-  is_superadmin.value = store.user.data?.is_superadmin ?? false
+  respoScope.value = getActiveRespoScope()
+  is_superadmin.value = respoScope.value.isSuper
 
   // Sembunyikan kolom realisasi di landing table untuk karyawan biasa (bukan superadmin / HRD)
-  const isSuper = store.user.data?.is_superadmin ?? false
-  const userRoles = (store.user.data?.roles || []).map(r => (typeof r === 'string' ? r : (r.name || '')).toLowerCase())
-  const isHrdOrAdminRole = userRoles.some(rn => /(?:^|[^a-z])(hr[a-z]*|personalia|sdm|admin[a-z]*|human[\s_]*capital|human[\s_]*resources?)(?:[^a-z]|$)/i.test(rn))
-  if (!isSuper && !isHrdOrAdminRole && typeof landing !== 'undefined') {
+  if (!respoScope.value.isHrdOrAdmin && typeof landing !== 'undefined') {
     landing.columns = landing.columns.filter(c => !['realisasi', 'diakui_min', 'total_lembur'].includes(c.field))
   }
 })
@@ -722,7 +778,7 @@ const landing = reactive({
     params: {
       simplest: true,
       searchfield: 'm_kary.nama_depan, tanggal, jam_mulai, jam_selesai, tipe_lembur.value, status, m_comp.nama, m_dir.nama',
-      where: `${!store.user.data?.is_superadmin ? ('this.m_kary_id=' + store.user.data?.m_kary_id ?? 0) : ''}`
+      where: getLandingWhereClause()
     },
     onsuccess(response) {
       response.page = response.current_page
