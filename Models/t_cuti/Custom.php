@@ -509,6 +509,7 @@ class t_cuti extends \App\Models\BasicModels\t_cuti
             "trx_nomor" => $trx->nomor,
             "trx_date" => $trxDate,
             "trx_creator_id" => $trx->creator_id,
+            "m_kary_id" => $trx->m_kary_id,
         ];
 
         $app = $this->helper->approvalCreateTicket($conf);

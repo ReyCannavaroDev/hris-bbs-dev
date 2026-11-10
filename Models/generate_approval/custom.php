@@ -72,7 +72,8 @@ class generate_approval extends \App\Models\BasicModels\generate_approval
     public function custom_outstanding()
     {
         $userAuth = auth()->user();
-        $isSuperadmin = (bool) ($userAuth->is_superadmin ?? false);
+        $respoCore = getCore('Respo');
+        $isSuperadmin = $userAuth ? $respoCore->isUserSuperadmin($userAuth) : false;
 
         $query = generate_approval::selectRaw("
             generate_approval.id, generate_approval.m_comp_id, generate_approval.m_dir_id, generate_approval.nomor, generate_approval.m_approval_id, generate_approval.trx_id, generate_approval.trx_name, generate_approval.form_name, generate_approval.trx_table, generate_approval.trx_nomor,
@@ -91,12 +92,12 @@ class generate_approval extends \App\Models\BasicModels\generate_approval
             (select u.name from default_users u where u.id = generate_approval.creator_id) creator")
             ->leftJoin('default_users', 'default_users.id', 'generate_approval.creator_id')
             ->whereIn('generate_approval.status', ['PROGRESS', 'HALF APPROVED'])
-            ->whereRaw("case when generate_approval.trx_table = 't_lembur' then coalesce((select tl.status from t_lembur tl where tl.id = generate_approval.trx_id), generate_approval.status) not in ('APPROVED', 'REJECTED') else true end");
+            ->whereRaw("case when generate_approval.trx_table = 't_lembur' then coalesce((select tl.status from t_lembur tl where tl.id = generate_approval.trx_id), generate_approval.status) not in ('APPROVED', 'REJECTED', 'REVISED') else true end");
 
         // Tiket yang sudah pernah disetujui oleh user bersangkutan tidak boleh muncul lagi di inbox outstanding miliknya
         $query->whereRaw("generate_approval.id not in (
             select d_done.generate_approval_id from generate_approval_det d_done 
-            where d_done.action_user_id = " . intval($userAuth->id) . " and d_done.action_type = 'APPROVED' and d_done.is_done = true
+            where d_done.action_user_id = " . intval($userAuth->id ?? 0) . " and d_done.action_type = 'APPROVED' and d_done.is_done = true
         )");
 
         // Filter agar hanya menampilkan notifikasi approval dari menu yang aktif (is_active = true)
@@ -144,87 +145,150 @@ class generate_approval extends \App\Models\BasicModels\generate_approval
             return response($data);
         }
 
-        // 1. Identifikasi Role user dari m_role_access
-        $userRoleIds = \DB::table('m_role_access')->where('user_id', $userAuth->id)->pluck('m_role_id')->toArray();
-        $userRoleNames = \DB::table('m_role')->whereIn('id', $userRoleIds)->pluck('name')->map(function($n) {
-            return strtolower($n);
-        })->toArray();
+        $uid = intval($userAuth->id ?? 0);
+        $userKaryId = intval($userAuth->m_kary_id ?? 0);
 
-        $isHrd = false;
-        foreach ($userRoleNames as $rn) {
-            if (stripos($rn, 'hr') !== false || stripos($rn, 'personalia') !== false) {
-                $isHrd = true;
-                break;
-            }
-        }
+        // 1. Identifikasi Role aktif & status HRD user melalui Core Respo (mendukung Respo Mode & Legacy Mode)
+        $userRoleIds = $userAuth ? $respoCore->getEffectiveRoleIds($userAuth) : [];
+        $isHrd = $userAuth ? $respoCore->isUserHrd($userAuth) : false;
 
-        // 2. Jika belum terdeteksi dari role, periksa dari Jabatan (m_posisi) atau Divisi (m_divisi) karyawan
-        if (!$isHrd && !empty($userAuth->m_kary_id)) {
-            $userKary = \DB::table('m_kary')
-                ->leftJoin('m_posisi', 'm_posisi.id', '=', 'm_kary.m_posisi_id')
-                ->leftJoin('m_divisi', 'm_divisi.id', '=', 'm_kary.m_divisi_id')
-                ->where('m_kary.id', $userAuth->m_kary_id)
-                ->select('m_posisi.desc_kerja as posisi_nama', 'm_divisi.nama as divisi_nama')
-                ->first();
-            if ($userKary) {
-                $posNama = strtolower($userKary->posisi_nama ?? '');
-                $divNama = strtolower($userKary->divisi_nama ?? '');
-                if (stripos($posNama, 'hr') !== false || stripos($posNama, 'personalia') !== false ||
-                    stripos($divNama, 'hr') !== false || stripos($divNama, 'personalia') !== false) {
-                    $isHrd = true;
-                }
-            }
-        }
-
-        // Dapatkan role-role HRD jika user adalah HRD
+        $allActiveRoles = \DB::table('m_role')->where('is_active', true)->get(['id', 'name']);
         $hrdRoleIds = [];
-        if ($isHrd) {
-            $hrdRoleIds = \DB::table('m_role')
-                ->where(function($q) {
-                    $q->where('name', 'like', '%HR%')
-                      ->orWhere('name', 'like', '%hr%')
-                      ->orWhere('name', 'like', '%Hr%')
-                      ->orWhere('name', 'like', '%Personalia%')
-                      ->orWhere('name', 'like', '%personalia%');
-                })
-                ->pluck('id')->toArray();
+        $atasanRoleIds = [];
+        foreach ($allActiveRoles as $rObj) {
+            $rid = (int) $rObj->id;
+            if (stripos((string) $rObj->name, 'atasan') !== false) {
+                $atasanRoleIds[] = $rid;
+            }
+            if ($respoCore->isHrdKeyword($rObj->name)) {
+                $hrdRoleIds[] = $rid;
+            }
         }
 
-        $combinedRoleIds = array_unique(array_merge($userRoleIds, $hrdRoleIds));
-        $roleIdsIn = !empty($combinedRoleIds) ? implode(',', array_map('intval', $combinedRoleIds)) : '0';
+        $userAtasanRoleIds = array_values(array_intersect($userRoleIds, $atasanRoleIds));
+        $combinedNonAtasanRoles = array_values(array_diff(
+            array_unique(array_merge($userRoleIds, $isHrd ? $hrdRoleIds : [])),
+            $atasanRoleIds
+        ));
 
-        // Alur fleksibel: baik Atasan maupun HRD dapat melihat tiket outstanding jika slotnya belum selesai
-        $data = $query->where(function($q) use ($userAuth, $roleIdsIn, $isHrd) {
-                // Skenario 1: User adalah last_approve_id langsung yang aktif dan slot belum selesai
-                $q->where(function($sub) use ($userAuth) {
-                    $sub->where('generate_approval.last_approve_id', $userAuth->id)
-                        ->whereRaw("generate_approval.id in (
-                            select d.generate_approval_id from generate_approval_det d 
-                            where d.is_done = false
-                              and (d.urutan_level = 1 or lower(coalesce((select r.name from m_role r where r.id = d.m_role_id), '')) like '%atasan%')
+        $atasanRoleIdsIn = !empty($atasanRoleIds) ? implode(',', array_map('intval', $atasanRoleIds)) : '0';
+        $userAtasanRoleIdsIn = !empty($userAtasanRoleIds) ? implode(',', array_map('intval', $userAtasanRoleIds)) : '0';
+        $nonAtasanRoleIdsIn = !empty($combinedNonAtasanRoles) ? implode(',', array_map('intval', $combinedNonAtasanRoles)) : '0';
+
+        $companyScopeSql = $respoCore->buildGenerateApprovalScopeSql('generate_approval', null, $userAuth);
+
+        $mappedSupervisorExistsSql = "(
+            generate_approval.last_approve_id is not null
+            or (
+                generate_approval.trx_table = 't_lembur' and exists (
+                    select 1 from t_lembur tl join m_kary mk on mk.id = tl.m_kary_id join default_users du_at on du_at.m_kary_id = mk.atasan_id
+                    where tl.id = generate_approval.trx_id
+                )
+            )
+            or (
+                generate_approval.trx_table = 't_cuti' and exists (
+                    select 1 from t_cuti tc join m_kary mk on mk.id = tc.m_kary_id join default_users du_at on du_at.m_kary_id = mk.atasan_id
+                    where tc.id = generate_approval.trx_id
+                )
+            )
+            or (
+                generate_approval.trx_table = 't_spd' and exists (
+                    select 1 from t_spd ts left join default_users du_sp on du_sp.id = ts.pic_id join m_kary mk on mk.id = coalesce(ts.m_kary_id, du_sp.m_kary_id) join default_users du_at on du_at.m_kary_id = mk.atasan_id
+                    where ts.id = generate_approval.trx_id
+                )
+            )
+            or (
+                generate_approval.trx_table = 't_rpd' and exists (
+                    select 1 from t_rpd tr join t_spd ts on ts.id = tr.t_spd_id left join default_users du_rp on du_rp.id = coalesce(ts.pic_id, tr.creator_id) join m_kary mk on mk.id = coalesce(ts.m_kary_id, du_rp.m_kary_id) join default_users du_at on du_at.m_kary_id = mk.atasan_id
+                    where tr.id = generate_approval.trx_id
+                )
+            )
+        )";
+
+        // Alur fleksibel + Respo-aware:
+        // - Skenario 1 & 3 (Atasan langsung / explicit default_user_id): BEBAS company scope (mendukung atasan lintas PT/Holding)
+        // - Skenario 2 (HRD / Role dalam active Respo): TERIKAT active company scope
+        $data = $query->where(function($q) use ($uid, $userKaryId, $atasanRoleIdsIn, $userAtasanRoleIdsIn, $nonAtasanRoleIdsIn, $isHrd, $companyScopeSql, $mappedSupervisorExistsSql) {
+                // Skenario 1a: User adalah last_approve_id langsung yang aktif dan slot atasan/level-1 belum selesai
+                $q->where(function($sub) use ($uid, $atasanRoleIdsIn) {
+                    $sub->where('generate_approval.last_approve_id', $uid)
+                        ->whereRaw("exists (
+                            select 1 from generate_approval_det d 
+                            where d.generate_approval_id = generate_approval.id
+                              and d.is_done = false
+                              and (d.urutan_level = 1 or d.m_role_id in ({$atasanRoleIdsIn}))
                         )");
                 })
-                // Skenario 2: Slot approval HRD / role user yang belum selesai
-                ->orWhereRaw("generate_approval.id in (
-                    select d.generate_approval_id from generate_approval_det d 
-                    where d.is_done = false
-                      and (
-                          d.m_role_id in ($roleIdsIn)
-                          " . ($isHrd ? " or d.urutan_level >= 2 or lower(coalesce((select r.name from m_role r where r.id = d.m_role_id), '')) like '%hr%' or lower(coalesce((select r.name from m_role r where r.id = d.m_role_id), '')) like '%personalia%'" : "") . "
+                // Skenario 1b: User ditunjuk spesifik lewat default_user_id pada slot aktif terdepan yang belum selesai
+                ->orWhereRaw("exists (
+                    select 1 from generate_approval_det d
+                    where d.generate_approval_id = generate_approval.id
+                      and d.is_done = false
+                      and d.default_user_id = {$uid}
+                      and not exists (
+                          select 1 from generate_approval_det d_prev
+                          where d_prev.generate_approval_id = generate_approval.id
+                            and d_prev.is_done = false
+                            and d_prev.urutan_level < d.urutan_level
                       )
                 )");
 
-                // Skenario 3: Transaksi t_lembur untuk atasan langsung dari karyawan bersangkutan jika slot atasan belum selesai
-                if (!empty($userAuth->m_kary_id)) {
-                    $q->orWhereRaw("generate_approval.trx_table = 't_lembur' and generate_approval.trx_id in (
-                        select tl.id from t_lembur tl 
-                        join m_kary mk on mk.id = tl.m_kary_id 
-                        where mk.atasan_id = " . intval($userAuth->m_kary_id) . "
-                          and generate_approval.id in (
-                              select d.generate_approval_id from generate_approval_det d 
-                              where d.is_done = false
-                                and (d.urutan_level = 1 or lower(coalesce((select r.name from m_role r where r.id = d.m_role_id), '')) like '%atasan%')
+                // Skenario 2: Slot approval aktif terdepan HRD / Role aktif sesuai active Respo company scope
+                $hrFallbackClause = $isHrd
+                    ? "or ((d.m_role_id is null and d.urutan_level >= 2) or (generate_approval.trx_table = 't_lembur' and d.urutan_level >= 2))"
+                    : "";
+
+                $q->orWhereRaw("(
+                    {$companyScopeSql}
+                    and exists (
+                        select 1 from generate_approval_det d
+                        where d.generate_approval_id = generate_approval.id
+                          and d.is_done = false
+                          and d.default_user_id is null
+                          and not exists (
+                              select 1 from generate_approval_det d_prev
+                              where d_prev.generate_approval_id = generate_approval.id
+                                and d_prev.is_done = false
+                                and d_prev.urutan_level < d.urutan_level
                           )
+                          and not (
+                              generate_approval.trx_table = 't_lembur'
+                              and upper(coalesce((select tl_st.status from t_lembur tl_st where tl_st.id = generate_approval.trx_id), '')) = 'IN APPROVAL'
+                              and d.urutan_level >= 2
+                          )
+                          and (
+                              d.m_role_id in ({$nonAtasanRoleIdsIn})
+                              {$hrFallbackClause}
+                              or (
+                                  d.m_role_id in ({$userAtasanRoleIdsIn})
+                                  and not {$mappedSupervisorExistsSql}
+                              )
+                          )
+                    )
+                )");
+
+                // Skenario 3: Atasan langsung dari karyawan (m_kary.atasan_id) untuk transaksi lembur, cuti, spd, rpd
+                if ($userKaryId > 0) {
+                    $q->orWhereRaw("(
+                        (
+                            (generate_approval.trx_table = 't_lembur' and exists (select 1 from t_lembur tl join m_kary mk on mk.id = tl.m_kary_id where tl.id = generate_approval.trx_id and mk.atasan_id = {$userKaryId}))
+                            or (generate_approval.trx_table = 't_cuti' and exists (select 1 from t_cuti tc join m_kary mk on mk.id = tc.m_kary_id where tc.id = generate_approval.trx_id and mk.atasan_id = {$userKaryId}))
+                            or (generate_approval.trx_table = 't_spd' and exists (select 1 from t_spd ts left join default_users du_sp on du_sp.id = ts.pic_id join m_kary mk on mk.id = coalesce(ts.m_kary_id, du_sp.m_kary_id) where ts.id = generate_approval.trx_id and mk.atasan_id = {$userKaryId}))
+                            or (generate_approval.trx_table = 't_rpd' and exists (select 1 from t_rpd tr join t_spd ts on ts.id = tr.t_spd_id left join default_users du_rp on du_rp.id = coalesce(ts.pic_id, tr.creator_id) join m_kary mk on mk.id = coalesce(ts.m_kary_id, du_rp.m_kary_id) where tr.id = generate_approval.trx_id and mk.atasan_id = {$userKaryId}))
+                        )
+                        and exists (
+                            select 1 from generate_approval_det d
+                            where d.generate_approval_id = generate_approval.id
+                              and d.is_done = false
+                              and d.default_user_id is null
+                              and not exists (
+                                  select 1 from generate_approval_det d_prev
+                                  where d_prev.generate_approval_id = generate_approval.id
+                                    and d_prev.is_done = false
+                                    and d_prev.urutan_level < d.urutan_level
+                              )
+                              and (d.m_role_id in ({$atasanRoleIdsIn}) or (d.urutan_level = 1 and (d.m_role_id is null or generate_approval.trx_table = 't_lembur')))
+                        )
                     )");
                 }
             })
@@ -373,51 +437,43 @@ class generate_approval extends \App\Models\BasicModels\generate_approval
                 }
             }
 
-            // Identifikasi peran user (Atasan / HRD / Superadmin)
-            $isSuperadmin = (bool) ($userAuth->is_superadmin ?? false);
-            $userRoleIds = \DB::table('m_role_access')->where('user_id', $userAuth->id)->pluck('m_role_id')->toArray();
-            $userRoleNames = \DB::table('m_role')->whereIn('id', $userRoleIds)->pluck('name')->map(function($n) {
-                return strtolower($n);
-            })->toArray();
+            // Identifikasi peran & active Respo scope user
+            $respoCore = getCore('Respo');
+            $isSuperadmin = $userAuth ? $respoCore->isUserSuperadmin($userAuth) : false;
+            $uid = (int) ($userAuth->id ?? 0);
+            $userKaryId = (int) ($userAuth->m_kary_id ?? 0);
 
-            $isAtasan = false;
-            if ($datas->trx_table === 't_lembur') {
-                $trxKary = \DB::table('t_lembur')->where('id', $datas->trx_id)->first();
-                if ($trxKary && !empty($userAuth->m_kary_id)) {
-                    $atasanId = \DB::table('m_kary')->where('id', $trxKary->m_kary_id)->value('atasan_id');
-                    if ($atasanId && $atasanId == $userAuth->m_kary_id) {
-                        $isAtasan = true;
-                    }
-                }
-            }
+            $userRoleIds = $userAuth ? $respoCore->getEffectiveRoleIds($userAuth) : [];
+            $userRoleNames = $userAuth ? $respoCore->getEffectiveRoleNames($userAuth, true) : [];
+            $ticketMeta = $respoCore->getApprovalTicketScopeMetadata($datas->trx_table, $datas->trx_id, $datas);
+            $inCompanyScope = $userAuth
+                ? $respoCore->matchesActiveCompanyScope($ticketMeta['m_dir_id'], $ticketMeta['m_divisi_id'], $ticketMeta['m_dept_id'], $userAuth)
+                : false;
+
+            $isDirectAtasan = (!empty($datas->last_approve_id) && $uid > 0 && (int) $datas->last_approve_id === $uid)
+                || ($userKaryId > 0 && !empty($ticketMeta['atasan_kary_id']) && $userKaryId === (int) $ticketMeta['atasan_kary_id']);
+
+            $hasAtasanRole = false;
             foreach ($userRoleNames as $rn) {
                 if (stripos($rn, 'atasan') !== false) {
-                    $isAtasan = true;
-                }
-            }
-
-            $isHrd = false;
-            foreach ($userRoleNames as $rn) {
-                if (stripos($rn, 'hr') !== false || stripos($rn, 'personalia') !== false) {
-                    $isHrd = true;
+                    $hasAtasanRole = true;
                     break;
                 }
             }
-            if (!$isHrd && !empty($userAuth->m_kary_id)) {
-                $userKary = \DB::table('m_kary')
-                    ->leftJoin('m_posisi', 'm_posisi.id', '=', 'm_kary.m_posisi_id')
-                    ->leftJoin('m_divisi', 'm_divisi.id', '=', 'm_kary.m_divisi_id')
-                    ->where('m_kary.id', $userAuth->m_kary_id)
-                    ->select('m_posisi.desc_kerja as posisi_nama', 'm_divisi.nama as divisi_nama')
-                    ->first();
-                if ($userKary) {
-                    $posNama = strtolower($userKary->posisi_nama ?? '');
-                    $divNama = strtolower($userKary->divisi_nama ?? '');
-                    if (stripos($posNama, 'hr') !== false || stripos($posNama, 'personalia') !== false ||
-                        stripos($divNama, 'hr') !== false || stripos($divNama, 'personalia') !== false) {
-                        $isHrd = true;
-                    }
-                }
+
+            $isAtasan = $isDirectAtasan || ($inCompanyScope && $hasAtasanRole && empty($ticketMeta['has_mapped_supervisor']));
+            $isHrdInScope = $inCompanyScope && $userAuth && $respoCore->isUserHrd($userAuth);
+
+            // Cegah double-approve oleh user yang sama (kecuali Superadmin)
+            $alreadyApprovedByMe = $uid > 0 && \DB::table('generate_approval_det')
+                ->where('generate_approval_id', $datas->id)
+                ->where('action_user_id', $uid)
+                ->where('action_type', 'APPROVED')
+                ->where('is_done', true)
+                ->exists();
+
+            if ($alreadyApprovedByMe && !$isSuperadmin) {
+                return $this->helper->customResponse('Anda sudah memberikan persetujuan sebelumnya untuk transaksi ini', 403);
             }
 
             // Ambil slot detail approval yang belum selesai
@@ -427,32 +483,71 @@ class generate_approval extends \App\Models\BasicModels\generate_approval
                 ->where('generate_approval_det.is_done', false)
                 ->select('generate_approval_det.*', 'm_role.name as role_name')
                 ->orderBy('generate_approval_det.urutan_level', 'asc')
+                ->orderBy('generate_approval_det.id', 'asc')
                 ->get();
 
             if ($undoneDets->isEmpty()) {
                 return $this->helper->customResponse('Seluruh persetujuan sudah selesai dilakukan', 422);
             }
 
-            // Tentukan target detail slot secara fleksibel:
+            // Tentukan target detail slot secara fleksibel + Respo/Scope aware:
             $targetDet = null;
-            if ($isAtasan) {
-                $targetDet = $undoneDets->first(function($d) {
-                    return stripos(strtolower($d->role_name ?? ''), 'atasan') !== false || $d->urutan_level == 1;
+
+            // 0. Slot eksplisit default_user_id (bebas company scope)
+            if ($uid > 0) {
+                $targetDet = $undoneDets->first(function($d) use ($uid) {
+                    return !empty($d->default_user_id) && (int) $d->default_user_id === $uid;
                 });
             }
-            if (!$targetDet && $isHrd) {
-                $targetDet = $undoneDets->first(function($d) use ($userRoleIds) {
-                    return stripos(strtolower($d->role_name ?? ''), 'hr') !== false 
-                        || stripos(strtolower($d->role_name ?? ''), 'personalia') !== false
-                        || in_array($d->m_role_id, $userRoleIds)
-                        || $d->urutan_level >= 2;
+
+            // 1. Direct Supervisor (bebas company scope) / Atasan fallback in-scope tanpa mapped supervisor
+            if (!$targetDet && $isAtasan) {
+                $targetDet = $undoneDets->first(function($d) use ($datas) {
+                    if (!empty($d->default_user_id)) {
+                        return false;
+                    }
+                    $rn = strtolower($d->role_name ?? '');
+                    return stripos($rn, 'atasan') !== false
+                        || ((int) $d->urutan_level === 1 && (empty($d->m_role_id) || $datas->trx_table === 't_lembur'));
                 });
             }
-            if (!$targetDet) {
-                $targetDet = $undoneDets->first(function($d) use ($userRoleIds) {
-                    return in_array($d->m_role_id, $userRoleIds);
+
+            // 2. HRD in-scope (t_lembur IN APPROVAL tetap menunggu tahap 1 Atasan terlebih dahulu)
+            $isLemburWaitingAtasan = ($datas->trx_table === 't_lembur' && $cek && strtoupper(trim((string) ($cek->status ?? ''))) === 'IN APPROVAL');
+            if (!$targetDet && $isHrdInScope && !$isLemburWaitingAtasan) {
+                $targetDet = $undoneDets->first(function($d) use ($userRoleIds, $respoCore, $datas) {
+                    if (!empty($d->default_user_id)) {
+                        return false;
+                    }
+                    $rn = strtolower($d->role_name ?? '');
+                    if (stripos($rn, 'atasan') !== false) {
+                        return false;
+                    }
+                    return $respoCore->isHrdKeyword($rn)
+                        || (!empty($d->m_role_id) && in_array((int) $d->m_role_id, $userRoleIds, true))
+                        || (empty($d->m_role_id) && (int) $d->urutan_level >= 2)
+                        || ($datas->trx_table === 't_lembur' && (int) $d->urutan_level >= 2);
                 });
             }
+
+            // 3. Role aktif user dalam active company scope (role non-atasan, atau atasan bila tanpa mapped supervisor)
+            if (!$targetDet && $inCompanyScope && !empty($userRoleIds)) {
+                $targetDet = $undoneDets->first(function($d) use ($userRoleIds, $ticketMeta, $isLemburWaitingAtasan) {
+                    if (!empty($d->default_user_id) || empty($d->m_role_id)) {
+                        return false;
+                    }
+                    $rn = strtolower($d->role_name ?? '');
+                    if (stripos($rn, 'atasan') !== false && !empty($ticketMeta['has_mapped_supervisor'])) {
+                        return false;
+                    }
+                    if ($isLemburWaitingAtasan && (int) $d->urutan_level >= 2) {
+                        return false;
+                    }
+                    return in_array((int) $d->m_role_id, $userRoleIds, true);
+                });
+            }
+
+            // 4. Superadmin bypass
             if (!$targetDet && $isSuperadmin) {
                 $targetDet = $undoneDets->first();
             }
@@ -495,12 +590,14 @@ class generate_approval extends \App\Models\BasicModels\generate_approval
             $remainingDets = \DB::table('generate_approval_det')
                 ->where('generate_approval_id', $datas->id)
                 ->where('is_done', false)
+                ->orderBy('urutan_level', 'asc')
+                ->orderBy('id', 'asc')
                 ->get();
 
-            if ($req->type === 'REJECTED') {
-                \DB::table($datas->trx_table)->where('id', $datas->trx_id)->update(['status' => 'REJECTED']);
+            if ($req->type === 'REJECTED' || $req->type === 'REVISED') {
+                \DB::table($datas->trx_table)->where('id', $datas->trx_id)->update(['status' => $req->type]);
                 \DB::table('generate_approval')->where('id', $datas->id)->update([
-                    'status' => 'REJECTED',
+                    'status' => $req->type,
                     'last_approve_id' => null,
                     'last_approve_det_id' => null
                 ]);

@@ -191,6 +191,386 @@ class Respo
     }
 
     /**
+     * Mengambil daftar ID role efektif user (Respo Mode & Legacy Mode)
+     */
+    public function getEffectiveRoleIds($user = null): array
+    {
+        $ids = [];
+        foreach ($this->getEffectiveRoles($user) as $role) {
+            $rid = (int) ($role->id ?? 0);
+            if ($rid > 0 && !in_array($rid, $ids, true)) {
+                $ids[] = $rid;
+            }
+        }
+        return $ids;
+    }
+
+    /**
+     * Mengambil daftar nama role efektif user (Respo Mode & Legacy Mode)
+     */
+    public function getEffectiveRoleNames($user = null, bool $lowercase = false): array
+    {
+        $names = [];
+        foreach ($this->getEffectiveRoles($user) as $role) {
+            $name = trim((string) ($role->name ?? ''));
+            if ($name === '') {
+                continue;
+            }
+            if ($lowercase) {
+                $name = strtolower($name);
+            }
+            if (!in_array($name, $names, true)) {
+                $names[] = $name;
+            }
+        }
+        return $names;
+    }
+
+    /**
+     * Memeriksa kata kunci peran/jabatan HR (dengan boundary agar tidak false-positive pada nama orang seperti 'Fahrizal')
+     */
+    public function isHrdKeyword(?string $text): bool
+    {
+        $str = strtolower(trim((string) $text));
+        if ($str === '') {
+            return false;
+        }
+        return (bool) preg_match('/(?:^|[^a-z])(hr[a-z]*|personalia|sdm|human[\s_]*capital|human[\s_]*resources?)(?:[^a-z]|$)/i', $str);
+    }
+
+    /**
+     * Memeriksa apakah user berperan sebagai HRD melalui active Respo role / legacy role,
+     * dengan fallback ke jabatan/divisi m_kary pada Legacy Mode atau respo tanpa role.
+     */
+    public function isUserHrd($user = null, bool $allowKaryFallback = true): bool
+    {
+        $userObj = $this->resolveUser($user);
+        $uid = (int) ($userObj->id ?? 0);
+        if (!$uid) {
+            return false;
+        }
+
+        $hasRespo = $this->userHasAssignedRespo($uid);
+        $activeRespo = $hasRespo ? $this->checkRespoActive($uid) : null;
+        if ($hasRespo && !$activeRespo) {
+            return false;
+        }
+
+        $roles = $this->getEffectiveRoles($userObj);
+        foreach ($roles as $role) {
+            if ($this->isHrdKeyword($role->name ?? '')) {
+                return true;
+            }
+        }
+
+        // Pada Respo Mode yang sudah memiliki role spesifik, percayai daftar role active Respo
+        // agar pergantian Respo (mis. HRD <-> Finance/User) konsisten. Fallback m_kary tetap aktif
+        // pada Legacy Mode atau bila active Respo belum memiliki detail role.
+        if ($allowKaryFallback && (!$hasRespo || empty($roles)) && !empty($userObj->m_kary_id)) {
+            $userKary = \DB::table('m_kary')
+                ->leftJoin('m_posisi', 'm_posisi.id', '=', 'm_kary.m_posisi_id')
+                ->leftJoin('m_divisi', 'm_divisi.id', '=', 'm_kary.m_divisi_id')
+                ->where('m_kary.id', $userObj->m_kary_id)
+                ->select('m_posisi.desc_kerja as posisi_nama', 'm_divisi.nama as divisi_nama')
+                ->first();
+
+            if ($userKary) {
+                if ($this->isHrdKeyword($userKary->posisi_nama ?? '') || $this->isHrdKeyword($userKary->divisi_nama ?? '')) {
+                    return true;
+                }
+            }
+        }
+
+        return false;
+    }
+
+    /**
+     * Memeriksa apakah target company / divisi / departemen sesuai active company scope user.
+     * Catatan: Direct supervisor (atasan langsung) dan explicit default_user_id perlu dibebaskan
+     * sebelum memanggil helper ini.
+     */
+    public function matchesActiveCompanyScope($targetDirId = null, $targetDivisiId = null, $targetDeptId = null, $user = null): bool
+    {
+        $scope = $this->getActiveCompanyScope($user);
+
+        if (!empty($scope['is_unrestricted'])) {
+            return true;
+        }
+
+        if (($scope['m_dir_id'] ?? null) === -1) {
+            return false;
+        }
+
+        if (!empty($scope['m_dir_id'])) {
+            if (empty($targetDirId) || (int) $targetDirId !== (int) $scope['m_dir_id']) {
+                return false;
+            }
+        }
+
+        if (!empty($scope['m_divisi_id'])) {
+            if (empty($targetDivisiId) || (int) $targetDivisiId !== (int) $scope['m_divisi_id']) {
+                return false;
+            }
+        }
+
+        if (!empty($scope['m_dept_id'])) {
+            if (empty($targetDeptId) || (int) $targetDeptId !== (int) $scope['m_dept_id']) {
+                return false;
+            }
+        }
+
+        return true;
+    }
+
+    /**
+     * Mengambil metadata company/divisi/dept/karyawan/atasan untuk tiket approval
+     * secara konsisten across t_lembur, t_cuti, t_spd, t_rpd, maupun tabel transaksi lain.
+     */
+    public function getApprovalTicketScopeMetadata($trxTable, $trxId, $genApp = null): array
+    {
+        $meta = [
+            'm_comp_id'                 => null,
+            'm_dir_id'                  => null,
+            'm_divisi_id'               => null,
+            'm_dept_id'                 => null,
+            'm_kary_id'                 => null,
+            'atasan_kary_id'            => null,
+            'pic_id'                    => null,
+            'creator_id'                => null,
+            'has_mapped_supervisor'     => false,
+        ];
+
+        $genObj = is_object($genApp) ? $genApp : (is_array($genApp) ? (object) $genApp : null);
+        $table = $trxTable ?: ($genObj->trx_table ?? null);
+        $id = $trxId ?: ($genObj->trx_id ?? null);
+
+        $trx = null;
+        $spd = null;
+        if ($table && $id) {
+            try {
+                if (\Schema::hasTable($table)) {
+                    $trx = \DB::table($table)->where('id', $id)->first();
+                }
+            } catch (\Throwable $e) {
+                $trx = null;
+            }
+        }
+
+        if ($table === 't_rpd' && $trx && !empty($trx->t_spd_id)) {
+            $spd = \DB::table('t_spd')->where('id', $trx->t_spd_id)->first();
+        }
+
+        $sourceForOrg = $spd ?: $trx;
+        $picId = $trx->pic_id ?? ($spd->pic_id ?? null);
+        $creatorId = $trx->creator_id ?? ($genObj->trx_creator_id ?? ($genObj->creator_id ?? null));
+
+        $karyId = null;
+        if (!empty($sourceForOrg->m_kary_id)) {
+            $karyId = (int) $sourceForOrg->m_kary_id;
+        } elseif (!empty($picId)) {
+            $karyId = (int) (\DB::table('default_users')->where('id', $picId)->value('m_kary_id') ?? 0) ?: null;
+        } elseif (!empty($creatorId)) {
+            $karyId = (int) (\DB::table('default_users')->where('id', $creatorId)->value('m_kary_id') ?? 0) ?: null;
+        }
+
+        $kary = $karyId ? \DB::table('m_kary')->where('id', $karyId)->first() : null;
+        $creatorUser = $creatorId ? \DB::table('default_users')->where('id', $creatorId)->first() : null;
+        $picUser = $picId ? \DB::table('default_users')->where('id', $picId)->first() : null;
+
+        $meta['m_comp_id'] = !empty($trx->m_comp_id)
+            ? (int) $trx->m_comp_id
+            : (!empty($spd->m_comp_id)
+                ? (int) $spd->m_comp_id
+                : (!empty($kary->m_comp_id)
+                    ? (int) $kary->m_comp_id
+                    : (!empty($genObj->m_comp_id)
+                        ? (int) $genObj->m_comp_id
+                        : (!empty($creatorUser->m_comp_id) ? (int) $creatorUser->m_comp_id : null))));
+
+        $meta['m_dir_id'] = !empty($sourceForOrg->m_dir_id)
+            ? (int) $sourceForOrg->m_dir_id
+            : (!empty($kary->m_dir_id)
+                ? (int) $kary->m_dir_id
+                : (!empty($genObj->m_dir_id)
+                    ? (int) $genObj->m_dir_id
+                    : (!empty($picUser->m_dir_id)
+                        ? (int) $picUser->m_dir_id
+                        : (!empty($creatorUser->m_dir_id) ? (int) $creatorUser->m_dir_id : null))));
+
+        $meta['m_divisi_id'] = !empty($sourceForOrg->m_divisi_id)
+            ? (int) $sourceForOrg->m_divisi_id
+            : (!empty($kary->m_divisi_id) ? (int) $kary->m_divisi_id : null);
+
+        $meta['m_dept_id'] = !empty($sourceForOrg->m_dept_id)
+            ? (int) $sourceForOrg->m_dept_id
+            : (!empty($kary->m_dept_id) ? (int) $kary->m_dept_id : null);
+
+        $meta['m_kary_id'] = $karyId;
+        $meta['atasan_kary_id'] = !empty($kary->atasan_id) ? (int) $kary->atasan_id : null;
+        $meta['pic_id'] = $picId ? (int) $picId : null;
+        $meta['creator_id'] = $creatorId ? (int) $creatorId : null;
+
+        $hasSupervisorUser = false;
+        if (!empty($genObj->last_approve_id)) {
+            $hasSupervisorUser = true;
+        } elseif (!empty($meta['atasan_kary_id'])) {
+            $hasSupervisorUser = \DB::table('default_users')
+                ->where('m_kary_id', $meta['atasan_kary_id'])
+                ->exists();
+        }
+        $meta['has_mapped_supervisor'] = $hasSupervisorUser;
+
+        return $meta;
+    }
+
+    /**
+     * Menyusun klausa SQL PostgreSQL untuk memfilter baris generate_approval berdasarkan
+     * active company/divisi/dept scope user (hanya untuk approver berbasis Role / HRD).
+     */
+    public function buildGenerateApprovalScopeSql(string $genAlias = 'generate_approval', ?array $scope = null, $user = null): string
+    {
+        $activeScope = $scope ?? $this->getActiveCompanyScope($user);
+
+        if (!empty($activeScope['is_unrestricted'])) {
+            return '1 = 1';
+        }
+
+        if (($activeScope['m_dir_id'] ?? null) === -1) {
+            return '1 = 0';
+        }
+
+        $conditions = [];
+
+        if (!empty($activeScope['m_dir_id'])) {
+            $dirId = (int) $activeScope['m_dir_id'];
+            $effDirSql = "coalesce(
+                case
+                    when {$genAlias}.trx_table = 't_lembur' then (
+                        select coalesce(tl.m_dir_id, mk_l.m_dir_id)
+                        from t_lembur tl
+                        left join m_kary mk_l on mk_l.id = tl.m_kary_id
+                        where tl.id = {$genAlias}.trx_id
+                    )
+                    when {$genAlias}.trx_table = 't_cuti' then (
+                        select coalesce(tc.m_dir_id, mk_c.m_dir_id)
+                        from t_cuti tc
+                        left join m_kary mk_c on mk_c.id = tc.m_kary_id
+                        where tc.id = {$genAlias}.trx_id
+                    )
+                    when {$genAlias}.trx_table = 't_spd' then (
+                        select coalesce(ts.m_dir_id, mk_s.m_dir_id, mk_sp.m_dir_id, du_sp.m_dir_id)
+                        from t_spd ts
+                        left join m_kary mk_s on mk_s.id = ts.m_kary_id
+                        left join default_users du_sp on du_sp.id = ts.pic_id
+                        left join m_kary mk_sp on mk_sp.id = du_sp.m_kary_id
+                        where ts.id = {$genAlias}.trx_id
+                    )
+                    when {$genAlias}.trx_table = 't_rpd' then (
+                        select coalesce(ts2.m_dir_id, mk_r.m_dir_id, mk_rp.m_dir_id, du_rp.m_dir_id)
+                        from t_rpd tr
+                        left join t_spd ts2 on ts2.id = tr.t_spd_id
+                        left join m_kary mk_r on mk_r.id = ts2.m_kary_id
+                        left join default_users du_rp on du_rp.id = ts2.pic_id
+                        left join m_kary mk_rp on mk_rp.id = du_rp.m_kary_id
+                        where tr.id = {$genAlias}.trx_id
+                    )
+                    else null
+                end,
+                (select mk_u.m_dir_id from default_users du join m_kary mk_u on mk_u.id = du.m_kary_id where du.id = coalesce({$genAlias}.trx_creator_id, {$genAlias}.creator_id)),
+                {$genAlias}.m_dir_id,
+                (select du2.m_dir_id from default_users du2 where du2.id = coalesce({$genAlias}.trx_creator_id, {$genAlias}.creator_id))
+            )";
+            $conditions[] = "({$effDirSql}) = {$dirId}";
+        }
+
+        if (!empty($activeScope['m_divisi_id'])) {
+            $divId = (int) $activeScope['m_divisi_id'];
+            $effDivSql = "coalesce(
+                case
+                    when {$genAlias}.trx_table = 't_lembur' then (
+                        select mk_l.m_divisi_id
+                        from t_lembur tl
+                        join m_kary mk_l on mk_l.id = tl.m_kary_id
+                        where tl.id = {$genAlias}.trx_id
+                    )
+                    when {$genAlias}.trx_table = 't_cuti' then (
+                        select mk_c.m_divisi_id
+                        from t_cuti tc
+                        join m_kary mk_c on mk_c.id = tc.m_kary_id
+                        where tc.id = {$genAlias}.trx_id
+                    )
+                    when {$genAlias}.trx_table = 't_spd' then (
+                        select coalesce(ts.m_divisi_id, mk_s.m_divisi_id, mk_sp.m_divisi_id)
+                        from t_spd ts
+                        left join m_kary mk_s on mk_s.id = ts.m_kary_id
+                        left join default_users du_sp on du_sp.id = ts.pic_id
+                        left join m_kary mk_sp on mk_sp.id = du_sp.m_kary_id
+                        where ts.id = {$genAlias}.trx_id
+                    )
+                    when {$genAlias}.trx_table = 't_rpd' then (
+                        select coalesce(ts2.m_divisi_id, mk_r.m_divisi_id, mk_rp.m_divisi_id)
+                        from t_rpd tr
+                        left join t_spd ts2 on ts2.id = tr.t_spd_id
+                        left join m_kary mk_r on mk_r.id = ts2.m_kary_id
+                        left join default_users du_rp on du_rp.id = ts2.pic_id
+                        left join m_kary mk_rp on mk_rp.id = du_rp.m_kary_id
+                        where tr.id = {$genAlias}.trx_id
+                    )
+                    else null
+                end,
+                (select mk_u.m_divisi_id from default_users du join m_kary mk_u on mk_u.id = du.m_kary_id where du.id = coalesce({$genAlias}.trx_creator_id, {$genAlias}.creator_id))
+            )";
+            $conditions[] = "({$effDivSql}) = {$divId}";
+        }
+
+        if (!empty($activeScope['m_dept_id'])) {
+            $deptId = (int) $activeScope['m_dept_id'];
+            $effDeptSql = "coalesce(
+                case
+                    when {$genAlias}.trx_table = 't_lembur' then (
+                        select mk_l.m_dept_id
+                        from t_lembur tl
+                        join m_kary mk_l on mk_l.id = tl.m_kary_id
+                        where tl.id = {$genAlias}.trx_id
+                    )
+                    when {$genAlias}.trx_table = 't_cuti' then (
+                        select mk_c.m_dept_id
+                        from t_cuti tc
+                        join m_kary mk_c on mk_c.id = tc.m_kary_id
+                        where tc.id = {$genAlias}.trx_id
+                    )
+                    when {$genAlias}.trx_table = 't_spd' then (
+                        select coalesce(ts.m_dept_id, mk_s.m_dept_id, mk_sp.m_dept_id)
+                        from t_spd ts
+                        left join m_kary mk_s on mk_s.id = ts.m_kary_id
+                        left join default_users du_sp on du_sp.id = ts.pic_id
+                        left join m_kary mk_sp on mk_sp.id = du_sp.m_kary_id
+                        where ts.id = {$genAlias}.trx_id
+                    )
+                    when {$genAlias}.trx_table = 't_rpd' then (
+                        select coalesce(ts2.m_dept_id, mk_r.m_dept_id, mk_rp.m_dept_id)
+                        from t_rpd tr
+                        left join t_spd ts2 on ts2.id = tr.t_spd_id
+                        left join m_kary mk_r on mk_r.id = ts2.m_kary_id
+                        left join default_users du_rp on du_rp.id = ts2.pic_id
+                        left join m_kary mk_rp on mk_rp.id = du_rp.m_kary_id
+                        where tr.id = {$genAlias}.trx_id
+                    )
+                    else null
+                end,
+                (select mk_u.m_dept_id from default_users du join m_kary mk_u on mk_u.id = du.m_kary_id where du.id = coalesce({$genAlias}.trx_creator_id, {$genAlias}.creator_id))
+            )";
+            $conditions[] = "({$effDeptSql}) = {$deptId}";
+        }
+
+        if (empty($conditions)) {
+            return '1 = 1';
+        }
+
+        return '(' . implode(' and ', $conditions) . ')';
+    }
+
+    /**
      * Memeriksa apakah user diizinkan melihat / mengelola nominal gaji (allowlist / fail-closed)
      */
     public function canViewSalary($user = null): bool

@@ -279,21 +279,22 @@ class Helper
         $next = true;
         $kode = "";
 
+        $approvalId = $m_approval->m_approval_id ?? $m_approval->id;
         $fixedConfig = "select d.* from m_approval_det d join m_approval a on a.id = d.m_approval_id where a.id= ? AND tipe = 'MENGAJUKAN' ORDER BY d.level ASC";
-        $details = DB::select($fixedConfig, [$m_approval->id]);
+        $details = DB::select($fixedConfig, [$approvalId]);
 
         if (!count($details)) {
             $text = "Setting approval tipe MENGAJUKAN tidak ditemukan";
             $next = false;
             $kode = "0000001";
-        }
+        } else {
+            $detail = $details[0];
 
-        $detail = $details[0];
-
-        if ($detail->default_user_id && $detail->default_user_id !== $userAuth->id) {
-            $text = "Anda tidak memiliki akses untuk membuat tiket approval ini";
-            $next = false;
-            $kode = "0000003";
+            if (!empty($detail->default_user_id) && (int) $detail->default_user_id !== (int) $userAuth->id) {
+                $text = "Anda tidak memiliki akses untuk membuat tiket approval ini";
+                $next = false;
+                $kode = "0000003";
+            }
         }
 
         if (!$next) {
@@ -313,27 +314,80 @@ class Helper
             $kode = "0000001";
         }
 
-        if (!($userAuth->is_superadmin ?? false)) {
-            $check = generate_approval::whereRaw("generate_approval.status = 'PROGRESS' 
-                    and generate_approval.id = $approval_det->generate_approval_id
-                    and case when generate_approval.last_approve_id is not null then
-                        generate_approval.last_approve_id = $userAuth->id
-                    else
-                        generate_approval.id in(select d.generate_approval_id from generate_approval_det d where 
-                            d.m_role_id in(select r.m_role_id from m_role_access r where r.user_id = $userAuth->id)
-                        )
-                    end
-                ")->exists();
-                
-            if(!$check){
+        $respoCore = getCore('Respo');
+        $isSuperadmin = $userAuth ? $respoCore->isUserSuperadmin($userAuth) : false;
+
+        if (!$isSuperadmin) {
+            $genApp = generate_approval::where('id', $approval_det->generate_approval_id)
+                ->whereIn('status', [self::STATUS_PROGRESS, 'HALF APPROVED'])
+                ->first();
+
+            if (!$genApp || !$userAuth) {
                 $next = false;
                 $kode = "0000002, $text";
+            } else {
+                $uid = (int) $userAuth->id;
+                $userKaryId = (int) ($userAuth->m_kary_id ?? 0);
+                $meta = $respoCore->getApprovalTicketScopeMetadata($genApp->trx_table, $genApp->trx_id, $genApp);
+
+                $slotRoleName = '';
+                if (!empty($approval_det->m_role_id)) {
+                    $slotRoleName = strtolower(trim((string) DB::table('m_role')->where('id', $approval_det->m_role_id)->value('name')));
+                }
+                $slotIsAtasan = (stripos($slotRoleName, 'atasan') !== false)
+                    || (empty($approval_det->m_role_id) && (int) $approval_det->urutan_level === 1)
+                    || ($genApp->trx_table === 't_lembur' && (int) $approval_det->urutan_level === 1);
+
+                $allowed = false;
+
+                // 1. Explicit default_user_id pada slot aktif (bebas company scope)
+                if (!empty($approval_det->default_user_id)) {
+                    $allowed = ((int) $approval_det->default_user_id === $uid);
+                } else {
+                    // 2. Direct Supervisor via last_approve_id / m_kary.atasan_id (bebas company scope)
+                    $isDirectAtasan = false;
+                    if (!empty($genApp->last_approve_id) && (int) $genApp->last_approve_id === $uid) {
+                        $isDirectAtasan = true;
+                    } elseif ($userKaryId > 0 && !empty($meta['atasan_kary_id']) && $userKaryId === (int) $meta['atasan_kary_id']) {
+                        $isDirectAtasan = true;
+                    }
+
+                    if ($isDirectAtasan && ($slotIsAtasan || (!empty($genApp->last_approve_id) && (int) $genApp->last_approve_id === $uid))) {
+                        $allowed = true;
+                    } elseif ($respoCore->matchesActiveCompanyScope($meta['m_dir_id'], $meta['m_divisi_id'], $meta['m_dept_id'], $userAuth)) {
+                        // 3. Approver berbasis Role / HRD wajib sesuai active Respo company scope
+                        $effectiveRoleIds = $respoCore->getEffectiveRoleIds($userAuth);
+
+                        if ($slotIsAtasan) {
+                            // Hanya fallback ke role 'Atasan' dalam company sama jika atasan langsung belum terpetakan ke user
+                            if (empty($meta['has_mapped_supervisor']) && !empty($approval_det->m_role_id) && in_array((int) $approval_det->m_role_id, $effectiveRoleIds, true)) {
+                                $allowed = true;
+                            }
+                        } else {
+                            if (!empty($approval_det->m_role_id) && in_array((int) $approval_det->m_role_id, $effectiveRoleIds, true)) {
+                                $allowed = true;
+                            } elseif (
+                                ($respoCore->isHrdKeyword($slotRoleName)
+                                    || (empty($approval_det->m_role_id) && (int) $approval_det->urutan_level >= 2)
+                                    || ($genApp->trx_table === 't_lembur' && (int) $approval_det->urutan_level >= 2))
+                                && $respoCore->isUserHrd($userAuth)
+                            ) {
+                                $allowed = true;
+                            }
+                        }
+                    }
+                }
+
+                if (!$allowed) {
+                    $next = false;
+                    $kode = "0000002, $text";
+                }
             }
         }
 
         $check_log = generate_approval_log::where('generate_approval_det_id', $approval_det->id)->exists();
 
-        if ($check_log) {
+        if ($check_log || !empty($approval_det->is_done)) {
             $next = false;
             $kode = "0000003, Approval sudah dilakukan sebelumnya";
         }
@@ -380,6 +434,7 @@ class Helper
 
         $m_approval = m_approval_det::join("m_approval as a", "a.id", "m_approval_det.m_approval_id")
             ->where("a.nama", $app_name)
+            ->select("m_approval_det.*", "a.id as approval_id", "a.nama as approval_nama")
             ->first();
 
         if (!$m_approval) {
@@ -391,24 +446,35 @@ class Helper
 
         $this->checkUserCanCreateTicket($m_approval);
 
-        $check_approve_atasan = m_approval_det::join('m_role','m_role.id','m_approval_det.m_role_id')
-            ->where('m_approval_id',$m_approval->id)
-            ->where('level', 2)
-            ->first();
+        $respoCore = getCore('Respo');
+        $ticketMeta = $respoCore->getApprovalTicketScopeMetadata(
+            $trx_table,
+            $trx_id,
+            (object) ['trx_creator_id' => $trx_creator_id, 'creator_id' => auth()->user()->id ?? null]
+        );
 
-        
-        if(strtolower(@$check_approve_atasan->name) == 'atasan'){
-            if (!empty($config['m_kary_id'])) {
-                $atasan_id = m_kary::where('id', $config['m_kary_id'])->value('atasan_id') ?? 0;
-            } else {
-                $atasan_id = m_kary::join('default_users as u','u.m_kary_id','m_kary.id')->where('u.id',auth()->user()->id)->pluck('atasan_id')->first() ?? 0;
+        $user_atasan_id = null;
+        if (!empty($details)) {
+            $firstApprover = $details[0];
+            $firstRoleName = !empty($firstApprover->m_role_id)
+                ? strtolower((string) DB::table('m_role')->where('id', $firstApprover->m_role_id)->value('name'))
+                : '';
+
+            if (empty($firstApprover->default_user_id) && (stripos($firstRoleName, 'atasan') !== false || ($trx_table === 't_lembur' && empty($firstApprover->m_role_id)))) {
+                $ticketKaryId = !empty($config['m_kary_id'])
+                    ? (int) $config['m_kary_id']
+                    : ($ticketMeta['m_kary_id'] ?? (!empty(auth()->user()->m_kary_id) ? (int) auth()->user()->m_kary_id : null));
+
+                $atasan_id = $ticketKaryId ? (int) (m_kary::where('id', $ticketKaryId)->value('atasan_id') ?? 0) : 0;
+                if ($atasan_id > 0) {
+                    $user_atasan_id = default_users::where('m_kary_id', $atasan_id)->orderBy('id', 'asc')->value('id');
+                }
             }
-            $user_atasan_id = default_users::whereRaw("default_users.m_kary_id = $atasan_id")->orderBy('id','asc')->pluck('id')->first();
         }
 
         $header = [
-            "m_comp_id" => auth()->user()->m_comp_id,
-            "m_dir_id" => auth()->user()->m_dir_id,
+            "m_comp_id" => $ticketMeta['m_comp_id'] ?? auth()->user()->m_comp_id,
+            "m_dir_id" => $ticketMeta['m_dir_id'] ?? auth()->user()->m_dir_id,
             "nomor" => $this->generateNomor('KODE APPROVAL'),
             "m_approval_id" => $m_approval->m_approval_id,
             "trx_id" => $trx_id,
@@ -420,7 +486,7 @@ class Helper
             "trx_creator_id" => $trx_creator_id,
             "creator_id" => auth()->user()->id,
             "status" => self::STATUS_PROGRESS,
-            "last_approve_id" => @$user_atasan_id ?? null
+            "last_approve_id" => $user_atasan_id ?? null
         ];
 
         DB::beginTransaction();
@@ -549,31 +615,36 @@ class Helper
                 ->where('urutan_level', '>', $process_data->urutan_level)
                 ->exists();
             
-            // Jika masih ada outstanding, update waktu assign approval selanjutnya
-            if ($outstanding && $app_type != 'REJECTED') {
+            // Jika masih ada outstanding dan status approved, update waktu assign approval selanjutnya
+            if ($outstanding && !in_array($app_type, [self::STATUS_REJECTED, self::STATUS_REVISED], true)) {
                 $finish = false;
                 //update last approver by detail approval
-               $last_det_approver = generate_approval_det::where('generate_approval_id',$generate_approval->id)
-                ->where('tipe','MENYETUJUI')
-                ->where('is_done',false)
-                ->orderBy('id','asc')->pluck('id')->first();
+                $last_det_approver = generate_approval_det::where('generate_approval_id', $generate_approval->id)
+                    ->where('tipe', 'MENYETUJUI')
+                    ->where('is_done', false)
+                    ->orderBy('urutan_level', 'asc')
+                    ->orderBy('id', 'asc')
+                    ->pluck('id')
+                    ->first();
 
-                generate_approval::where('id',$generate_approval->id)->update([
-                    'last_approve_det_id' => $last_det_approver
+                generate_approval::where('id', $generate_approval->id)->update([
+                    'last_approve_det_id' => $last_det_approver,
+                    'last_approve_id' => null,
                 ]);
 
-                generate_approval_det::where('id',$last_det_approver)->update(['assigned_at' => $this->timestamp]);
-                generate_approval::find($generate_approval->id)->update(['last_approve_id'=>null]);
+                if ($last_det_approver) {
+                    generate_approval_det::where('id', $last_det_approver)->update(['assigned_at' => $this->timestamp]);
+                }
             } else {
                 $finish = true;
 
-                // Jika tidak ada, update status header approval
-                generate_approval::find($generate_approval->id)->update(['status' => $app_type, 'last_approve_id'=>null,'last_approve_det_id'=>null]);
+                // Jika tidak ada atau REJECTED / REVISED, update status header approval
+                generate_approval::find($generate_approval->id)->update(['status' => $app_type, 'last_approve_id' => null, 'last_approve_det_id' => null]);
             }
             $log_insert = generate_approval_log::create([
                 'nomor'                     => $generate_approval->nomor,
                 'generate_approval_id'      => $generate_approval->id,
-                'generate_approval_det_id'  => @$proccess_data->id ?? 0,
+                'generate_approval_det_id'  => $process_data->id ?? 0,
                 'trx_id'                    => $generate_approval->trx_id,
                 'trx_table'                 => $generate_approval->trx_table,
                 'trx_name'                  => $generate_approval->trx_name,
@@ -611,7 +682,8 @@ class Helper
     public function approvalOustanding()
     {
         $userAuth = auth()->user();
-        $isSuperadmin = (bool) ($userAuth->is_superadmin ?? false);
+        $respoCore = getCore('Respo');
+        $isSuperadmin = $userAuth ? $respoCore->isUserSuperadmin($userAuth) : false;
         $model = new generate_approval;
 
         $query = generate_approval::selectRaw("
@@ -663,21 +735,145 @@ class Helper
                 )
             ");
 
+        $query->whereRaw("case when generate_approval.trx_table = 't_lembur' then coalesce((select tl.status from t_lembur tl where tl.id = generate_approval.trx_id), generate_approval.status) not in ('APPROVED', 'REJECTED', 'REVISED') else true end");
+
         if ($isSuperadmin) {
-            $data = $query->where('generate_approval.status', 'PROGRESS')
+            $data = $query->whereIn('generate_approval.status', ['PROGRESS', 'HALF APPROVED'])
                 ->orderBy('generate_approval.id', 'desc')
                 ->search(['trx_name', 'nomor', 'trx_date', 'trx_nomor', 'default_users.name'])
                 ->paginate(app()->request->paginate ?? 50);
         } else {
-            $data = $query->whereRaw("generate_approval.status = 'PROGRESS' 
-                    and case when generate_approval.last_approve_id is not null then
-                        generate_approval.last_approve_id = $userAuth->id
-                    else
-                        generate_approval.id in(select d.generate_approval_id from generate_approval_det d where 
-                            d.m_role_id in(select r.m_role_id from m_role_access r where r.user_id = $userAuth->id)
-                               and d.is_done = false and d.id = generate_approval.last_approve_det_id
+            $uid = (int) ($userAuth->id ?? 0);
+            $userKaryId = (int) ($userAuth->m_kary_id ?? 0);
+            $userRoleIds = $userAuth ? $respoCore->getEffectiveRoleIds($userAuth) : [];
+            $isHrd = $userAuth ? $respoCore->isUserHrd($userAuth) : false;
+
+            $allActiveRoles = DB::table('m_role')->where('is_active', true)->get(['id', 'name']);
+            $hrdRoleIds = [];
+            $atasanRoleIds = [];
+            foreach ($allActiveRoles as $rObj) {
+                $rid = (int) $rObj->id;
+                if (stripos((string) $rObj->name, 'atasan') !== false) {
+                    $atasanRoleIds[] = $rid;
+                }
+                if ($respoCore->isHrdKeyword($rObj->name)) {
+                    $hrdRoleIds[] = $rid;
+                }
+            }
+
+            $userAtasanRoleIds = array_values(array_intersect($userRoleIds, $atasanRoleIds));
+            $combinedNonAtasanRoles = array_values(array_diff(
+                array_unique(array_merge($userRoleIds, $isHrd ? $hrdRoleIds : [])),
+                $atasanRoleIds
+            ));
+
+            $atasanRoleIdsIn = !empty($atasanRoleIds) ? implode(',', array_map('intval', $atasanRoleIds)) : '0';
+            $userAtasanRoleIdsIn = !empty($userAtasanRoleIds) ? implode(',', array_map('intval', $userAtasanRoleIds)) : '0';
+            $nonAtasanRoleIdsIn = !empty($combinedNonAtasanRoles) ? implode(',', array_map('intval', $combinedNonAtasanRoles)) : '0';
+
+            $companyScopeSql = $respoCore->buildGenerateApprovalScopeSql('generate_approval', null, $userAuth);
+
+            $activeDetIdSql = "coalesce(generate_approval.last_approve_det_id, (
+                select d_cur.id from generate_approval_det d_cur
+                where d_cur.generate_approval_id = generate_approval.id
+                  and d_cur.is_done = false
+                order by d_cur.urutan_level asc, d_cur.id asc
+                limit 1
+            ))";
+
+            $mappedSupervisorExistsSql = "(
+                generate_approval.last_approve_id is not null
+                or (
+                    generate_approval.trx_table = 't_lembur' and exists (
+                        select 1 from t_lembur tl join m_kary mk on mk.id = tl.m_kary_id join default_users du_at on du_at.m_kary_id = mk.atasan_id
+                        where tl.id = generate_approval.trx_id
+                    )
+                )
+                or (
+                    generate_approval.trx_table = 't_cuti' and exists (
+                        select 1 from t_cuti tc join m_kary mk on mk.id = tc.m_kary_id join default_users du_at on du_at.m_kary_id = mk.atasan_id
+                        where tc.id = generate_approval.trx_id
+                    )
+                )
+                or (
+                    generate_approval.trx_table = 't_spd' and exists (
+                        select 1 from t_spd ts left join default_users du_sp on du_sp.id = ts.pic_id join m_kary mk on mk.id = coalesce(ts.m_kary_id, du_sp.m_kary_id) join default_users du_at on du_at.m_kary_id = mk.atasan_id
+                        where ts.id = generate_approval.trx_id
+                    )
+                )
+                or (
+                    generate_approval.trx_table = 't_rpd' and exists (
+                        select 1 from t_rpd tr join t_spd ts on ts.id = tr.t_spd_id left join default_users du_rp on du_rp.id = coalesce(ts.pic_id, tr.creator_id) join m_kary mk on mk.id = coalesce(ts.m_kary_id, du_rp.m_kary_id) join default_users du_at on du_at.m_kary_id = mk.atasan_id
+                        where tr.id = generate_approval.trx_id
+                    )
+                )
+            )";
+
+            $directAtasanSql = "1 = 0";
+            if ($userKaryId > 0) {
+                $directAtasanSql = "(
+                    (generate_approval.trx_table = 't_lembur' and exists (select 1 from t_lembur tl join m_kary mk on mk.id = tl.m_kary_id where tl.id = generate_approval.trx_id and mk.atasan_id = {$userKaryId}))
+                    or (generate_approval.trx_table = 't_cuti' and exists (select 1 from t_cuti tc join m_kary mk on mk.id = tc.m_kary_id where tc.id = generate_approval.trx_id and mk.atasan_id = {$userKaryId}))
+                    or (generate_approval.trx_table = 't_spd' and exists (select 1 from t_spd ts left join default_users du_sp on du_sp.id = ts.pic_id join m_kary mk on mk.id = coalesce(ts.m_kary_id, du_sp.m_kary_id) where ts.id = generate_approval.trx_id and mk.atasan_id = {$userKaryId}))
+                    or (generate_approval.trx_table = 't_rpd' and exists (select 1 from t_rpd tr join t_spd ts on ts.id = tr.t_spd_id left join default_users du_rp on du_rp.id = coalesce(ts.pic_id, tr.creator_id) join m_kary mk on mk.id = coalesce(ts.m_kary_id, du_rp.m_kary_id) where tr.id = generate_approval.trx_id and mk.atasan_id = {$userKaryId}))
+                ) and exists (
+                    select 1 from generate_approval_det d
+                    where d.generate_approval_id = generate_approval.id
+                      and d.id = {$activeDetIdSql}
+                      and d.is_done = false
+                      and d.default_user_id is null
+                      and (d.m_role_id in ({$atasanRoleIdsIn}) or (d.urutan_level = 1 and (d.m_role_id is null or generate_approval.trx_table = 't_lembur')))
+                )";
+            }
+
+            $hrFallbackClause = $isHrd
+                ? "or ((d.m_role_id is null and d.urutan_level >= 2) or (generate_approval.trx_table = 't_lembur' and d.urutan_level >= 2))"
+                : "";
+
+            $roleClause = "(
+                d.m_role_id in ({$nonAtasanRoleIdsIn})
+                {$hrFallbackClause}
+                or (
+                    d.m_role_id in ({$userAtasanRoleIdsIn})
+                    and not {$mappedSupervisorExistsSql}
+                )
+            )";
+
+            $data = $query->whereRaw("generate_approval.status in ('PROGRESS', 'HALF APPROVED')
+                    and not exists (
+                        select 1 from generate_approval_det d_done
+                        where d_done.generate_approval_id = generate_approval.id
+                          and d_done.action_user_id = {$uid}
+                          and d_done.action_type = 'APPROVED'
+                          and d_done.is_done = true
+                    )
+                    and (
+                        generate_approval.last_approve_id = {$uid}
+                        or exists (
+                            select 1 from generate_approval_det d
+                            where d.generate_approval_id = generate_approval.id
+                              and d.id = {$activeDetIdSql}
+                              and d.is_done = false
+                              and d.default_user_id = {$uid}
                         )
-                    end
+                        or ({$directAtasanSql})
+                        or (
+                            {$companyScopeSql}
+                            and generate_approval.last_approve_id is null
+                            and not (
+                                generate_approval.trx_table = 't_lembur'
+                                and upper(coalesce((select tl_st.status from t_lembur tl_st where tl_st.id = generate_approval.trx_id), '')) = 'IN APPROVAL'
+                            )
+                            and exists (
+                                select 1 from generate_approval_det d
+                                where d.generate_approval_id = generate_approval.id
+                                  and d.id = {$activeDetIdSql}
+                                  and d.is_done = false
+                                  and d.default_user_id is null
+                                  and {$roleClause}
+                            )
+                        )
+                    )
                 ")
                 ->orderBy('generate_approval.id', 'desc')
                 ->search(['trx_name', 'nomor', 'trx_date', 'trx_nomor', 'default_users.name'])

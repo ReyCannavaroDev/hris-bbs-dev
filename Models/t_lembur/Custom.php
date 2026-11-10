@@ -37,12 +37,27 @@ class t_lembur extends \App\Models\BasicModels\t_lembur
         }
         
         if (req("date_from") && req("date_to")) {
-            return $model
-                ->whereBetween("tanggal", [req("date_from"), req("date_to")])
-                ->whereRaw(
-                    "t_lembur.m_dir_id in(select u.m_dir_id from default_users u where u.id = ?)",
-                    [auth()->user()->id ?? 0]
-                );
+            $model = $model->whereBetween("tanggal", [req("date_from"), req("date_to")]);
+            $respoCore = getCore("Respo");
+            $scope = $respoCore ? $respoCore->getActiveCompanyScope() : null;
+            if ($scope && empty($scope['is_unrestricted'])) {
+                if (($scope['m_dir_id'] ?? null) === -1) {
+                    return $model->whereRaw('1 = 0');
+                }
+                if (!empty($scope['m_dir_id'])) {
+                    $dirId = intval($scope['m_dir_id']);
+                    $model->whereRaw("(t_lembur.m_dir_id = {$dirId} or exists (select 1 from m_kary mk where mk.id = t_lembur.m_kary_id and mk.m_dir_id = {$dirId}))");
+                }
+                if (!empty($scope['m_divisi_id'])) {
+                    $divId = intval($scope['m_divisi_id']);
+                    $model->whereRaw("exists (select 1 from m_kary mk where mk.id = t_lembur.m_kary_id and mk.m_divisi_id = {$divId})");
+                }
+                if (!empty($scope['m_dept_id'])) {
+                    $deptId = intval($scope['m_dept_id']);
+                    $model->whereRaw("exists (select 1 from m_kary mk where mk.id = t_lembur.m_kary_id and mk.m_dept_id = {$deptId})");
+                }
+            }
+            return $model;
         }
     }
 
@@ -69,7 +84,9 @@ class t_lembur extends \App\Models\BasicModels\t_lembur
         // HIDE REALISASI DI SISI USER / KARYAWAN / PENGAJU:
         try {
             $userAuth = auth()->user();
-            if ($userAuth && !$userAuth->is_superadmin) {
+            $respoCore = getCore('Respo');
+            $isSuperadmin = $userAuth && $respoCore ? $respoCore->isUserSuperadmin($userAuth) : false;
+            if ($userAuth && !$isSuperadmin) {
                 $userKaryId = $userAuth->m_kary_id ?? null;
                 $userId = $userAuth->id ?? null;
 
@@ -619,7 +636,10 @@ class t_lembur extends \App\Models\BasicModels\t_lembur
             }
 
             $userAuth = auth()->user();
-            $isSuperadmin = (bool) ($userAuth->is_superadmin ?? false);
+            $respoCore = getCore('Respo');
+            $isSuperadmin = $userAuth ? $respoCore->isUserSuperadmin($userAuth) : false;
+            $uid = (int) ($userAuth->id ?? 0);
+            $userKaryId = (int) ($userAuth->m_kary_id ?? 0);
 
             $trx = $this->find($generateApproval->trx_id);
             if (!$trx) {
@@ -647,69 +667,74 @@ class t_lembur extends \App\Models\BasicModels\t_lembur
                 ->where('generate_approval_det.is_done', false)
                 ->select('generate_approval_det.*', 'm_role.name as role_name')
                 ->orderBy('generate_approval_det.urutan_level', 'asc')
+                ->orderBy('generate_approval_det.id', 'asc')
                 ->get();
 
             if ($undoneDetails->isEmpty()) {
                 return $this->helper->customResponse("Semua tahap approval untuk data ini sudah selesai.", 400);
             }
 
-            // Identifikasi relasi Atasan (dari m_kary.atasan_id)
-            $atasanKaryId = \DB::table('m_kary')->where('id', $trx->m_kary_id)->value('atasan_id');
-            $isAtasan = ($atasanKaryId && !empty($userAuth->m_kary_id) && $atasanKaryId == $userAuth->m_kary_id);
-
             // Cek apakah user yang login adalah karyawan pemohon lembur itu sendiri
-            $isApplicant = (!empty($userAuth->m_kary_id) && $trx->m_kary_id == $userAuth->m_kary_id)
-                        || ($trx->creator_id == $userAuth->id);
+            $isApplicant = ($userKaryId > 0 && (int) $trx->m_kary_id === $userKaryId)
+                        || ($uid > 0 && (int) $trx->creator_id === $uid);
 
             if ($isApplicant && !$isSuperadmin) {
                 return $this->helper->customResponse("Anda tidak dapat melakukan persetujuan (approval) terhadap pengajuan lembur Anda sendiri.", 403);
             }
 
-            // Identifikasi Role user
-            $userRoleIds = \DB::table('m_role_access')->where('user_id', $userAuth->id)->pluck('m_role_id')->toArray();
-            $userRoleNames = \DB::table('m_role')->whereIn('id', $userRoleIds)->pluck('name')->map(function($n) {
-                return strtolower($n);
-            })->toArray();
+            // Identifikasi metadata scope & relasi Atasan (m_kary.atasan_id & last_approve_id bebas company scope)
+            $ticketMeta = $respoCore->getApprovalTicketScopeMetadata('t_lembur', $trx->id, $generateApproval);
+            $atasanKaryId = $ticketMeta['atasan_kary_id'];
+            $inCompanyScope = $userAuth
+                ? $respoCore->matchesActiveCompanyScope($ticketMeta['m_dir_id'], $ticketMeta['m_divisi_id'], $ticketMeta['m_dept_id'], $userAuth)
+                : false;
 
-            // Cek apakah user ber-role Atasan
+            $isDirectAtasan = ($atasanKaryId && $userKaryId > 0 && (int) $atasanKaryId === $userKaryId)
+                || (!empty($generateApproval->last_approve_id) && $uid > 0 && (int) $generateApproval->last_approve_id === $uid);
+
+            // Identifikasi Role & HRD melalui Core Respo
+            $userRoleIds = $userAuth ? $respoCore->getEffectiveRoleIds($userAuth) : [];
+            $userRoleNames = $userAuth ? $respoCore->getEffectiveRoleNames($userAuth, true) : [];
+
+            $hasAtasanRole = false;
             foreach ($userRoleNames as $rn) {
                 if (stripos($rn, 'atasan') !== false) {
-                    $isAtasan = true;
+                    $hasAtasanRole = true;
                     break;
                 }
             }
 
-            // Identifikasi HRD: via ROLE ATAU JABATAN (m_posisi) ATAU DIVISI (m_divisi)
-            $isHrd = false;
-            foreach ($userRoleNames as $rn) {
-                if (stripos($rn, 'hr') !== false || stripos($rn, 'personalia') !== false || stripos($rn, 'sdm') !== false || stripos($rn, 'human capital') !== false) {
-                    $isHrd = true;
-                    break;
-                }
-            }
+            // Direct atasan bebas company scope; fallback role 'Atasan' hanya berlaku dalam scope & tanpa mapped supervisor
+            $isAtasan = $isDirectAtasan || ($inCompanyScope && $hasAtasanRole && empty($ticketMeta['has_mapped_supervisor']));
 
-            // Jika belum terdeteksi dari role, periksa dari Jabatan (Posisi) dan Divisi Karyawan
-            if (!$isHrd && !empty($userAuth->m_kary_id)) {
-                $userKary = \DB::table('m_kary')
-                    ->leftJoin('m_posisi', 'm_posisi.id', '=', 'm_kary.m_posisi_id')
-                    ->leftJoin('m_divisi', 'm_divisi.id', '=', 'm_kary.m_divisi_id')
-                    ->where('m_kary.id', $userAuth->m_kary_id)
-                    ->select('m_posisi.desc_kerja as posisi_nama', 'm_divisi.nama as divisi_nama')
-                    ->first();
-                if ($userKary) {
-                    $posNama = strtolower($userKary->posisi_nama ?? '');
-                    $divNama = strtolower($userKary->divisi_nama ?? '');
-                    if (stripos($posNama, 'hr') !== false || stripos($posNama, 'personalia') !== false || stripos($posNama, 'sdm') !== false || stripos($posNama, 'human capital') !== false ||
-                        stripos($divNama, 'hr') !== false || stripos($divNama, 'personalia') !== false || stripos($divNama, 'sdm') !== false || stripos($divNama, 'human capital') !== false) {
-                        $isHrd = true;
-                    }
+            // HRD wajib sesuai active Respo company scope
+            $isHrd = $inCompanyScope && $userAuth && $respoCore->isUserHrd($userAuth);
+
+            // Cek slot explicit default_user_id (bebas scope) & role stage-2 in-scope
+            $explicitSlotStage1 = $uid > 0 ? $undoneDetails->first(function($d) use ($uid) {
+                return !empty($d->default_user_id) && (int) $d->default_user_id === $uid
+                    && ((int) $d->urutan_level === 1 || stripos(strtolower($d->role_name ?? ''), 'atasan') !== false);
+            }) : null;
+
+            $explicitSlotStage2 = $uid > 0 ? $undoneDetails->first(function($d) use ($uid, $respoCore) {
+                return !empty($d->default_user_id) && (int) $d->default_user_id === $uid
+                    && ((int) $d->urutan_level >= 2 || $respoCore->isHrdKeyword($d->role_name ?? ''));
+            }) : null;
+
+            $stage2RoleSlot = ($inCompanyScope && !empty($userRoleIds)) ? $undoneDetails->first(function($d) use ($userRoleIds) {
+                if (!empty($d->default_user_id) || empty($d->m_role_id)) {
+                    return false;
                 }
-            }
+                if (stripos(strtolower($d->role_name ?? ''), 'atasan') !== false) {
+                    return false;
+                }
+                return (int) $d->urutan_level >= 2 && in_array((int) $d->m_role_id, $userRoleIds, true);
+            }) : null;
 
             // Cek apakah user ini sudah pernah approve pada tiket ini sebelumnya (mencegah double-approve oleh 1 orang yang sama kecuali superadmin)
-            $alreadyApprovedByMe = \DB::table('generate_approval_det')
+            $alreadyApprovedByMe = $uid > 0 && \DB::table('generate_approval_det')
                 ->where('generate_approval_id', $generateApproval->id)
-                ->where('action_user_id', $userAuth->id)
+                ->where('action_user_id', $uid)
                 ->where('action_type', 'APPROVED')
                 ->where('is_done', true)
                 ->exists();
@@ -722,15 +747,15 @@ class t_lembur extends \App\Models\BasicModels\t_lembur
             // Tahap 1 (IN APPROVAL): Persetujuan Pengajuan Rencana oleh Atasan Langsung
             // Tahap 2 (HALF APPROVED): Persetujuan Realisasi Lembur oleh HRD
             if ($trx->status === 'IN APPROVAL') {
-                if (!$isAtasan && !$isSuperadmin) {
+                if (!$isAtasan && !$explicitSlotStage1 && !$isSuperadmin) {
                     return $this->helper->customResponse("Persetujuan Tahap 1 (Pengajuan Rencana Lembur) hanya dapat dilakukan oleh Atasan langsung dari karyawan.", 403);
                 }
                 if ($appType === 'APPROVED' && (empty($appNote) || $appNote === '-')) {
                     $appNote = 'Persetujuan Pengajuan Rencana Lembur (Tahap 1 - Atasan)';
                 }
             } elseif ($trx->status === 'HALF APPROVED') {
-                if (!$isHrd && !$isSuperadmin) {
-                    return $this->helper->customResponse("Persetujuan Tahap 2 (Realisasi Lembur) hanya dapat dilakukan oleh HRD.", 403);
+                if (!$isHrd && !$explicitSlotStage2 && !$stage2RoleSlot && !$isSuperadmin) {
+                    return $this->helper->customResponse("Persetujuan Tahap 2 (Realisasi Lembur) hanya dapat dilakukan oleh HRD pada cakupan company terkait.", 403);
                 }
                 // Sebelum HRD approve realisasi, sinkronkan otomatis data realisasi dari checkout absensi
                 $this->sinkronkanRealisasiDariAbsen($trx);
@@ -741,37 +766,44 @@ class t_lembur extends \App\Models\BasicModels\t_lembur
                 }
             }
 
-            // Tentukan target slot yang diproses oleh user secara fleksibel / paralel
+            // Tentukan target slot yang diproses oleh user secara fleksibel + Respo-aware
             $targetSlot = null;
 
-            // 0. Cek jika slot ditugaskan spesifik ke default_user_id
-            $targetSlot = $undoneDetails->first(function($d) use ($userAuth) {
-                return !empty($d->default_user_id) && $d->default_user_id == $userAuth->id;
-            });
+            // 0. Cek jika slot pada tahap aktif ditugaskan spesifik ke default_user_id (bebas scope)
+            if ($trx->status === 'IN APPROVAL' && $explicitSlotStage1) {
+                $targetSlot = $explicitSlotStage1;
+            } elseif ($trx->status === 'HALF APPROVED' && $explicitSlotStage2) {
+                $targetSlot = $explicitSlotStage2;
+            } elseif ($uid > 0 && $trx->status !== 'IN APPROVAL' && $trx->status !== 'HALF APPROVED') {
+                $targetSlot = $undoneDetails->first(function($d) use ($uid) {
+                    return !empty($d->default_user_id) && (int) $d->default_user_id === $uid;
+                });
+            }
 
-            // 1. Jika pada tahap 1 (IN APPROVAL) dan Atasan langsung / role atasan
+            // 1. Jika pada tahap 1 (IN APPROVAL) dan Atasan langsung / Superadmin
             if (!$targetSlot && $trx->status === 'IN APPROVAL' && ($isAtasan || $isSuperadmin)) {
                 $targetSlot = $undoneDetails->first(function($d) {
-                    return $d->urutan_level == 1 || stripos(strtolower($d->role_name ?? ''), 'atasan') !== false;
-                });
-            }
-
-            // 2. Jika pada tahap 2 (HALF APPROVED) dan HRD / Superadmin
-            if (!$targetSlot && $trx->status === 'HALF APPROVED' && ($isHrd || $isSuperadmin)) {
-                $targetSlot = $undoneDetails->first(function($d) {
-                    $rnLower = strtolower($d->role_name ?? '');
-                    return $d->urutan_level >= 2 || (stripos($rnLower, 'hr') !== false) || (stripos($rnLower, 'personalia') !== false) || (stripos($rnLower, 'sdm') !== false);
-                });
-            }
-
-            // 3. Fallback pencocokan role
-            if (!$targetSlot) {
-                foreach ($undoneDetails as $d) {
-                    if (in_array($d->m_role_id, $userRoleIds)) {
-                        $targetSlot = $d;
-                        break;
+                    if (!empty($d->default_user_id)) {
+                        return false;
                     }
-                }
+                    return (int) $d->urutan_level === 1 || stripos(strtolower($d->role_name ?? ''), 'atasan') !== false;
+                });
+            }
+
+            // 2. Jika pada tahap 2 (HALF APPROVED) dan HRD in-scope / Superadmin
+            if (!$targetSlot && $trx->status === 'HALF APPROVED' && ($isHrd || $isSuperadmin)) {
+                $targetSlot = $undoneDetails->first(function($d) use ($respoCore) {
+                    if (!empty($d->default_user_id)) {
+                        return false;
+                    }
+                    $rnLower = strtolower($d->role_name ?? '');
+                    return (int) $d->urutan_level >= 2 || $respoCore->isHrdKeyword($rnLower);
+                });
+            }
+
+            // 3. Fallback pencocokan role dalam active company scope (sesuai tahap)
+            if (!$targetSlot && $trx->status === 'HALF APPROVED' && $stage2RoleSlot) {
+                $targetSlot = $stage2RoleSlot;
             }
 
             // 4. Fallback Superadmin: ambil slot pertama yang tersedia
@@ -781,7 +813,7 @@ class t_lembur extends \App\Models\BasicModels\t_lembur
 
             // Jika tidak memenuhi kriteria approver manapun
             if (!$targetSlot) {
-                return $this->helper->customResponse("Anda tidak memiliki akses untuk melakukan approval ini. Hanya Atasan dari karyawan bersangkutan, HRD, atau Superadmin yang berhak.", 403);
+                return $this->helper->customResponse("Anda tidak memiliki akses untuk melakukan approval ini. Hanya Atasan dari karyawan bersangkutan, HRD pada company terkait, atau Superadmin yang berhak.", 403);
             }
 
             $timestamp = date('Y-m-d H:i:s');
@@ -831,6 +863,7 @@ class t_lembur extends \App\Models\BasicModels\t_lembur
                     $nextSlotId = \DB::table('generate_approval_det')
                         ->where('generate_approval_id', $generateApproval->id)
                         ->where('is_done', false)
+                        ->orderBy('urutan_level', 'asc')
                         ->orderBy('id', 'asc')
                         ->value('id');
 
@@ -954,9 +987,10 @@ class t_lembur extends \App\Models\BasicModels\t_lembur
             $data = $this->helper->approvalDetail($id);
 
             $userAuth = auth()->user();
-            $userId = $userAuth ? $userAuth->id : 0;
-            $userKaryId = $userAuth ? ($userAuth->m_kary_id ?? null) : null;
-            $isSuperadmin = (bool) ($userAuth->is_superadmin ?? false);
+            $respoCore = getCore('Respo');
+            $userId = (int) ($userAuth ? $userAuth->id : 0);
+            $userKaryId = (int) ($userAuth ? ($userAuth->m_kary_id ?? 0) : 0);
+            $isSuperadmin = $userAuth ? $respoCore->isUserSuperadmin($userAuth) : false;
 
             $trx = \DB::table('t_lembur')->where('id', $app->trx_id)->first();
             if ($trx) {
@@ -971,13 +1005,18 @@ class t_lembur extends \App\Models\BasicModels\t_lembur
                     $data->approval->status = $trx->status;
                 }
             }
-            $isAtasan = false;
-            if ($trx && $trx->m_kary_id) {
-                $atasanKaryId = \DB::table('m_kary')->where('id', $trx->m_kary_id)->value('atasan_id');
-                if ($atasanKaryId && !empty($userKaryId) && $atasanKaryId == $userKaryId) {
-                    $isAtasan = true;
-                }
-            }
+
+            $ticketMeta = $trx
+                ? $respoCore->getApprovalTicketScopeMetadata('t_lembur', $trx->id, $app)
+                : $respoCore->getApprovalTicketScopeMetadata('t_lembur', $app->trx_id, $app);
+
+            $inCompanyScope = $userAuth
+                ? $respoCore->matchesActiveCompanyScope($ticketMeta['m_dir_id'], $ticketMeta['m_divisi_id'], $ticketMeta['m_dept_id'], $userAuth)
+                : false;
+
+            $atasanKaryId = $ticketMeta['atasan_kary_id'];
+            $isDirectAtasan = ($atasanKaryId && $userKaryId > 0 && (int) $atasanKaryId === $userKaryId)
+                || (!empty($app->last_approve_id) && $userId > 0 && (int) $app->last_approve_id === $userId);
 
             // Cek slot yang masih tersisa
             $undoneDetails = \DB::table('generate_approval_det')
@@ -985,6 +1024,8 @@ class t_lembur extends \App\Models\BasicModels\t_lembur
                 ->where('generate_approval_det.generate_approval_id', $app->id)
                 ->where('generate_approval_det.is_done', false)
                 ->select('generate_approval_det.*', 'm_role.name as role_name')
+                ->orderBy('generate_approval_det.urutan_level', 'asc')
+                ->orderBy('generate_approval_det.id', 'asc')
                 ->get();
 
             $alreadyApprovedByMe = false;
@@ -997,47 +1038,43 @@ class t_lembur extends \App\Models\BasicModels\t_lembur
                     ->exists();
             }
 
-            $userRoleIds = [];
-            $userRoleNames = [];
-            if ($userId) {
-                $userRoleIds = \DB::table('m_role_access')->where('user_id', $userId)->pluck('m_role_id')->toArray();
-                $userRoleNames = \DB::table('m_role')->whereIn('id', $userRoleIds)->pluck('name')->map(function($n) {
-                    return strtolower($n);
-                })->toArray();
-            }
+            $userRoleIds = $userAuth ? $respoCore->getEffectiveRoleIds($userAuth) : [];
+            $userRoleNames = $userAuth ? $respoCore->getEffectiveRoleNames($userAuth, true) : [];
 
-            // Cek role Atasan
+            // Cek role Atasan (hanya fallback dalam company scope jika atasan langsung belum terpetakan ke user)
+            $hasAtasanRole = false;
             foreach ($userRoleNames as $rn) {
                 if (stripos($rn, 'atasan') !== false) {
-                    $isAtasan = true;
+                    $hasAtasanRole = true;
                     break;
                 }
             }
 
-            // Identifikasi HRD: via Role ATAU Jabatan/Divisi
-            $isHrd = false;
-            foreach ($userRoleNames as $rn) {
-                if (stripos($rn, 'hr') !== false || stripos($rn, 'personalia') !== false || stripos($rn, 'sdm') !== false || stripos($rn, 'human capital') !== false) {
-                    $isHrd = true;
-                    break;
+            $isAtasan = $isDirectAtasan || ($inCompanyScope && $hasAtasanRole && empty($ticketMeta['has_mapped_supervisor']));
+
+            // Identifikasi HRD melalui Core Respo (wajib sesuai active company scope)
+            $isHrd = $inCompanyScope && $userAuth && $respoCore->isUserHrd($userAuth);
+
+            // Cek slot explicit default_user_id (bebas scope) & role stage-2 in-scope
+            $explicitSlotStage1 = $userId > 0 ? $undoneDetails->first(function($d) use ($userId) {
+                return !empty($d->default_user_id) && (int) $d->default_user_id === $userId
+                    && ((int) $d->urutan_level === 1 || stripos(strtolower($d->role_name ?? ''), 'atasan') !== false);
+            }) : null;
+
+            $explicitSlotStage2 = $userId > 0 ? $undoneDetails->first(function($d) use ($userId, $respoCore) {
+                return !empty($d->default_user_id) && (int) $d->default_user_id === $userId
+                    && ((int) $d->urutan_level >= 2 || $respoCore->isHrdKeyword($d->role_name ?? ''));
+            }) : null;
+
+            $stage2RoleSlot = ($inCompanyScope && !empty($userRoleIds)) ? $undoneDetails->first(function($d) use ($userRoleIds) {
+                if (!empty($d->default_user_id) || empty($d->m_role_id)) {
+                    return false;
                 }
-            }
-            if (!$isHrd && !empty($userKaryId)) {
-                $userKary = \DB::table('m_kary')
-                    ->leftJoin('m_posisi', 'm_posisi.id', '=', 'm_kary.m_posisi_id')
-                    ->leftJoin('m_divisi', 'm_divisi.id', '=', 'm_kary.m_divisi_id')
-                    ->where('m_kary.id', $userKaryId)
-                    ->select('m_posisi.desc_kerja as posisi_nama', 'm_divisi.nama as divisi_nama')
-                    ->first();
-                if ($userKary) {
-                    $posNama = strtolower($userKary->posisi_nama ?? '');
-                    $divNama = strtolower($userKary->divisi_nama ?? '');
-                    if (stripos($posNama, 'hr') !== false || stripos($posNama, 'personalia') !== false || stripos($posNama, 'sdm') !== false || stripos($posNama, 'human capital') !== false ||
-                        stripos($divNama, 'hr') !== false || stripos($divNama, 'personalia') !== false || stripos($divNama, 'sdm') !== false || stripos($divNama, 'human capital') !== false) {
-                        $isHrd = true;
-                    }
+                if (stripos(strtolower($d->role_name ?? ''), 'atasan') !== false) {
+                    return false;
                 }
-            }
+                return (int) $d->urutan_level >= 2 && in_array((int) $d->m_role_id, $userRoleIds, true);
+            }) : null;
 
             $canApprove = false;
             if ($undoneDetails->isNotEmpty() && $trx && in_array($trx->status, ['IN APPROVAL', 'HALF APPROVED'])) {
@@ -1045,13 +1082,13 @@ class t_lembur extends \App\Models\BasicModels\t_lembur
                     $canApprove = true;
                 } elseif (!$alreadyApprovedByMe) {
                     if ($trx->status === 'IN APPROVAL') {
-                        // Tahap 1: Hanya Atasan langsung dari karyawan
-                        if ($isAtasan) {
+                        // Tahap 1: Atasan langsung atau explicit slot tahap 1
+                        if ($isAtasan || $explicitSlotStage1) {
                             $canApprove = true;
                         }
                     } elseif ($trx->status === 'HALF APPROVED') {
-                        // Tahap 2: Hanya HRD
-                        if ($isHrd) {
+                        // Tahap 2: HRD / role stage-2 in-scope atau explicit slot tahap 2
+                        if ($isHrd || $explicitSlotStage2 || $stage2RoleSlot) {
                             $canApprove = true;
                         }
                     }
@@ -1059,8 +1096,8 @@ class t_lembur extends \App\Models\BasicModels\t_lembur
             }
 
             // Cek apakah user yang melihat adalah karyawan pemohon lembur itu sendiri
-            $isApplicant = ($userKaryId && !empty($trx->m_kary_id) && $trx->m_kary_id == $userKaryId)
-                        || ($userId && !empty($trx->creator_id) && $trx->creator_id == $userId);
+            $isApplicant = ($userKaryId > 0 && !empty($trx->m_kary_id) && (int) $trx->m_kary_id === $userKaryId)
+                        || ($userId > 0 && !empty($trx->creator_id) && (int) $trx->creator_id === $userId);
 
             if ($isApplicant && !$isSuperadmin) {
                 // User yang melihat adalah pemohon/karyawan:
@@ -1077,7 +1114,7 @@ class t_lembur extends \App\Models\BasicModels\t_lembur
                     $data->trx->total_lembur = null;
                 }
             } else {
-                $isApproverOrAdmin = ($isSuperadmin || $isAtasan || $isHrd);
+                $isApproverOrAdmin = ($isSuperadmin || $isAtasan || $isHrd || (bool) $explicitSlotStage1 || (bool) $explicitSlotStage2 || (bool) $stage2RoleSlot);
             }
 
             // Jika status masih DRAFT / IN APPROVAL (menunggu persetujuan Atasan), realisasi belum diisi

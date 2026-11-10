@@ -76,8 +76,8 @@ onBeforeMount(() => {
   // Sembunyikan kolom realisasi di landing table untuk karyawan biasa (bukan superadmin / HRD)
   const isSuper = store.user.data?.is_superadmin ?? false
   const userRoles = (store.user.data?.roles || []).map(r => (typeof r === 'string' ? r : (r.name || '')).toLowerCase())
-  const isHrdOrAdminRole = userRoles.some(rn => /hr|personalia|sdm|admin|human capital/i.test(rn))
-  if (!isSuper && !isHrdOrAdminRole) {
+  const isHrdOrAdminRole = userRoles.some(rn => /(?:^|[^a-z])(hr[a-z]*|personalia|sdm|admin[a-z]*|human[\s_]*capital|human[\s_]*resources?)(?:[^a-z]|$)/i.test(rn))
+  if (!isSuper && !isHrdOrAdminRole && typeof landing !== 'undefined') {
     landing.columns = landing.columns.filter(c => !['realisasi', 'diakui_min', 'total_lembur'].includes(c.field))
   }
 })
@@ -265,7 +265,7 @@ onBeforeMount(async () => {
   hitungDurasi()
 })
 onMounted(() => {
-  if (!is_superadmin.value) {
+  if (!isRead && !is_approval && !is_superadmin.value) {
     values.m_kary_id = store.user.data?.m_kary_id
   }
   hitungDurasi()

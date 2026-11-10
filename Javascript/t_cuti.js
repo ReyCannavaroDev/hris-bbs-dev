@@ -376,7 +376,7 @@ onBeforeMount(async () => {
 })
 
 onMounted(()=>{
-  if(!is_superadmin.value){
+  if(!isRead && !is_approval && !is_superadmin.value){
     values.m_kary_id = store.user.data?.m_kary_id
     if (!values.m_dir_id) values.m_dir_id = store.user.data?.m_dir_id
     if (!values.m_comp_id) values.m_comp_id = store.user.data?.m_comp_id || 1
