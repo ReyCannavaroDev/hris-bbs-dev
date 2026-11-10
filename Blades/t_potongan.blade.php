@@ -2,7 +2,7 @@
 <div class="bg-white p-6 rounded-xl h-[570px]">
   <TableApi ref='apiTable' :api="landing.api" :columns="landing.columns" :actions="landing.actions">
     <template #header>
-      <RouterLink v-if="currentMenu?.can_create||true||store.user.data.username==='developer'" :to="$route.path+'/create?'+(Date.parse(new Date()))" class="bg-green-500 text-white hover:bg-green-600 rounded-[6px] py-2 px-[12.5px]">
+      <RouterLink v-if="(currentMenu?.can_create||true||store.user.data.username==='developer') && respoScope.isHrdOrAdmin && !respoScope.isLockedMissing" :to="$route.path+'/create?'+(Date.parse(new Date()))" class="bg-green-500 text-white hover:bg-green-600 rounded-[6px] py-2 px-[12.5px]">
         Tambah
         <icon fa="plus" />
       </RouterLink>
@@ -26,10 +26,10 @@
         <div>
           <label class="font-semibold">Company</label>
           <FieldSelect
-            :bind="{ disabled: !actionText || !isSuperadmin, clearable: Boolean(actionText && isSuperadmin) }"
+            :bind="{ disabled: !actionText || !respoScope.isUnrestricted || !respoScope.isHrdOrAdmin, clearable: Boolean(actionText && respoScope.isUnrestricted && respoScope.isHrdOrAdmin) }"
             class="w-full py-2 !mt-0"
             :value="values.m_dir_id"
-            @input="v=>values.m_dir_id=v"
+            @input="v=>{ values.m_dir_id=v; values.m_kary_id=null }"
             :errorText="formErrors.m_dir_id?'failed':''"
             :hints="formErrors.m_dir_id"
             placeholder="Pilih Company"
@@ -44,7 +44,7 @@
                 },
                 params: {
                   simplest:true,
-                  where: `this.is_active='true'`,
+                  where: respoScope.isLockedMissing ? '1=0' : ((!respoScope.isUnrestricted && respoScope.dirId) ? `this.id=${respoScope.dirId} AND this.is_active='true'` : `this.is_active='true'`),
                   transform:false,
                   selectfield: 'this.id, this.nama, this.is_active'
                 }
@@ -63,9 +63,10 @@
         </div>
         <div>
           <label class="font-semibold">Karyawan<span class="text-red-500 space-x-0 pl-0" v-if="!values.is_all_kary">*</span> <small v-if="values.is_all_kary" class="text-blue-600 font-normal text-xs">(Semua Karyawan)</small></label>
-          <FieldPopup :bind="{ readonly: !actionText || values.is_all_kary }" class="w-full py-2 !mt-0" :value="values.m_kary_id"
+          <FieldPopup :bind="{ readonly: !actionText || values.is_all_kary || !respoScope.isHrdOrAdmin }" class="w-full py-2 !mt-0" :value="values.m_kary_id"
             @input="(v)=>values.m_kary_id=v" :errorText="formErrors.m_kary_id?'failed':''" :hints="formErrors.m_kary_id"
             valueField="id" displayField="nama_depan" @update:valueFull="(objVal)=>{
+          if (!objVal) return
           values.m_divisi_lama_id = objVal['m_divisi.id']
           values.m_dept_lama_id = objVal['m_dept.id']
           values.m_posisi_lama_id = objVal['m_posisi.id']
@@ -77,7 +78,7 @@
           headers: { 'Content-Type': 'Application/json', Authorization: `${store.user.token_type} ${store.user.token}`},
           params: {
             simplest:true,
-            where: (values.m_dir_id ? `this.m_dir_id=${values.m_dir_id} AND ` : '') + `this.is_active='true'`,
+            where: respoScope.isLockedMissing ? '1=0' : ((values.m_dir_id ? `this.m_dir_id=${values.m_dir_id} AND ` : (!respoScope.isUnrestricted && respoScope.dirId ? `this.m_dir_id=${respoScope.dirId} AND ` : '')) + (!respoScope.isUnrestricted && respoScope.divId ? `this.m_divisi_id=${respoScope.divId} AND ` : '') + (!respoScope.isUnrestricted && respoScope.deptId ? `this.m_dept_id=${respoScope.deptId} AND ` : '') + `this.is_active='true'`),
             searchfield:'nik, kode, nama_depan, m_dir.nama, m_divisi.nama, id'
           }
         }"  placeholder="Pilih Karyawan" label="" :check="false" :columns="[
@@ -261,11 +262,11 @@
             <div class="col-span-12">
               <div class="grid grid-cols-12">
                 <div class="flex items-center col-span-6">
-                  <input type="radio" :value="true" v-model="values.is_all_kary" class="w-4 h-4 text-blue-600 bg-gray-100 border-gray-300 focus:ring-blue-500 dark:focus:ring-blue-600 dark:ring-offset-gray-800 focus:ring-2 dark:bg-gray-700 dark:border-gray-600"/>
+                  <input type="radio" :value="true" v-model="values.is_all_kary" :disabled="!actionText || !respoScope.isHrdOrAdmin" @change="values.m_kary_id = null" class="w-4 h-4 text-blue-600 bg-gray-100 border-gray-300 focus:ring-blue-500 dark:focus:ring-blue-600 dark:ring-offset-gray-800 focus:ring-2 dark:bg-gray-700 dark:border-gray-600"/>
                   <label class="ml-2  font-medium text-gray-900 dark:text-gray-300">Iya</label>
                 </div>
                 <div class="flex items-center col-span-6">
-                  <input type="radio" :value="false" v-model="values.is_all_kary" class="w-4 h-4 text-blue-600 bg-gray-100 border-gray-300 focus:ring-blue-500 dark:focus:ring-blue-600 dark:ring-offset-gray-800 focus:ring-2 dark:bg-gray-700 dark:border-gray-600"/>
+                  <input type="radio" :value="false" v-model="values.is_all_kary" :disabled="!actionText || !respoScope.isHrdOrAdmin" class="w-4 h-4 text-blue-600 bg-gray-100 border-gray-300 focus:ring-blue-500 dark:focus:ring-blue-600 dark:ring-offset-gray-800 focus:ring-2 dark:bg-gray-700 dark:border-gray-600"/>
                   <label class="ml-2  font-medium text-gray-900 dark:text-gray-300">Tidak</label>
                 </div>
               </div>
@@ -318,18 +319,18 @@
           <button @click="onBack" class="bg-[#EF4444] hover:bg-[#ed3232] text-white px-[36.5px] py-[12px] rounded-[6px] ">
             Batal
           </button>
-          <button v-show="route.query.action?.toLowerCase() === 'verifikasi'" @click="posted" class="bg-orange-500 hover:bg-orange-600 text-white px-[36.5px] py-[12px] rounded-[6px] ">
+          <button v-show="route.query.action?.toLowerCase() === 'verifikasi' && respoScope.isHrdOrAdmin" @click="posted" class="bg-orange-500 hover:bg-orange-600 text-white px-[36.5px] py-[12px] rounded-[6px] ">
             Posted
           </button>
-          <button v-show="isRead && values.status === 'POSTED' && !values.is_lunas" @click="onPelunasanManualForm" class="bg-emerald-600 hover:bg-emerald-700 text-white px-[24px] py-[12px] rounded-[6px] flex items-center gap-2">
+          <button v-show="isRead && values.status?.trim()?.toUpperCase() === 'POSTED' && !values.is_lunas && respoScope.isHrdOrAdmin" @click="onPelunasanManualForm" class="bg-emerald-600 hover:bg-emerald-700 text-white px-[24px] py-[12px] rounded-[6px] flex items-center gap-2">
             <icon fa="check-circle" />
             Pelunasan Manual
           </button>
-          <button v-show="isRead && values.status === 'POSTED'" @click="onShowHistoryBayarForm" class="bg-blue-600 hover:bg-blue-700 text-white px-[24px] py-[12px] rounded-[6px] flex items-center gap-2">
+          <button v-show="isRead && values.status?.trim()?.toUpperCase() === 'POSTED'" @click="onShowHistoryBayarForm" class="bg-blue-600 hover:bg-blue-700 text-white px-[24px] py-[12px] rounded-[6px] flex items-center gap-2">
             <icon fa="history" />
             Riwayat Pembayaran
           </button>
-          <button v-show="actionText" @click="onSave" class="bg-[#10B981] hover:bg-[#0ea774] text-white px-[36.5px] py-[12px] rounded-[6px] ">
+          <button v-show="actionText && respoScope.isHrdOrAdmin" @click="onSave" class="bg-[#10B981] hover:bg-[#0ea774] text-white px-[36.5px] py-[12px] rounded-[6px] ">
             Simpan
           </button>
         </div>

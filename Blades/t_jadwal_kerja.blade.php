@@ -5,7 +5,7 @@
       <button @click="openReport" class="bg-blue-500 text-white hover:bg-blue-600 rounded-sm py-1 px-[6px]">
         <icon fa="book" />Laporan Jadwal Kerja
       </button>
-      <RouterLink v-if="currentMenu?.can_create||true||store.user.data.username==='developer'" :to="$route.path+'/create?'+(Date.parse(new Date()))" class="bg-green-500 text-white hover:bg-green-600 rounded-sm py-1 px-[6px]">
+      <RouterLink v-if="(currentMenu?.can_create||true||store.user.data.username==='developer') && !respoScope.isLockedMissing" :to="$route.path+'/create?'+(Date.parse(new Date()))" class="bg-green-500 text-white hover:bg-green-600 rounded-sm py-1 px-[6px]">
         <icon fa="plus" />
         Tambah Data
       </RouterLink>
@@ -40,7 +40,7 @@
         <div>
           <label class="font-semibold">Company<span class="text-red-500 space-x-0 pl-0"></span></label>
           <FieldSelect
-            :bind="{ disabled: !actionText || !isSuperadmin, clearable: Boolean(actionText && isSuperadmin) }"
+            :bind="{ disabled: !actionText || !respoScope.isUnrestricted, clearable: Boolean(actionText && respoScope.isUnrestricted) }"
             class="col-span-12 !mt-0 w-full"
             :value="values.m_dir_id"
             @input="v=>values.m_dir_id=v"
@@ -58,7 +58,7 @@
               params: {
                 simplest:true,
                 transform:false,
-                where: `this.is_active='true'`,
+                where: respoScope.isLockedMissing ? '1=0' : ((!respoScope.isUnrestricted && respoScope.dirId) ? `this.id=${respoScope.dirId} AND this.is_active='true'` : `this.is_active='true'`),
                 selectfield: 'this.id, this.nama, this.is_active'
               }
             }"
@@ -73,6 +73,7 @@
               :value="values.tipe_jam_kerja_id" 
               @input="v=>values.tipe_jam_kerja_id=v"
               @update:valueFull="(v)=>{
+                if (!v) return
                 values.tipe_jam_kerja = v.value
                 generate()
               }"
@@ -180,6 +181,7 @@
                     trx_dtl.items[i].m_jam_kerja_id=v
                   }"
                   @update:valueFull="(v)=>{
+                    if (!v) return
                     log(v)
                     trx_dtl.items[i].waktu_mulai=v.waktu_mulai
                     trx_dtl.items[i].waktu_akhir=v.waktu_akhir
@@ -227,7 +229,7 @@
         </table>
         <!-- ACTION BUTTON START -->
         <div class="flex flex-row justify-end space-x-[20px] mt-[5em]">
-          <button @click="onSave" class="bg-[#10B981] hover:bg-[#0ea774] text-white px-[12px] py-[8px] rounded-md ">
+          <button v-show="actionText" @click="onSave" class="bg-[#10B981] hover:bg-[#0ea774] text-white px-[12px] py-[8px] rounded-md ">
             <Icon fa="save"/> Simpan
           </button>
         </div>

@@ -46,16 +46,39 @@ class t_potongan extends \App\Models\BasicModels\t_potongan
         $newArrayData  = array_merge( $arrayData,[
             'nomor' => $this->helper->generateNomor('KODE POTONGAN')
         ]);
+        if (!empty($newArrayData['is_all_kary'])) {
+            $newArrayData['m_kary_id'] = null;
+        }
+        $targetKary = !empty($newArrayData['m_kary_id']) ? \DB::table('m_kary')->where('id', $newArrayData['m_kary_id'])->first() : null;
+        if (!empty($newArrayData['m_kary_id']) && !$targetKary) {
+            return [
+                "model" => $model,
+                "data"  => $arrayData,
+                "errors" => ["Data karyawan tidak ditemukan."],
+            ];
+        }
+        if ($targetKary && empty($newArrayData['is_all_kary'])) {
+            if (!empty($newArrayData['m_dir_id']) && !empty($targetKary->m_dir_id) && (int) $newArrayData['m_dir_id'] !== (int) $targetKary->m_dir_id) {
+                return [
+                    "model" => $model,
+                    "data"  => $arrayData,
+                    "errors" => ["Company transaksi potongan harus sesuai dengan Company karyawan terpilih."],
+                ];
+            }
+            if (empty($newArrayData['m_dir_id']) && !empty($targetKary->m_dir_id)) {
+                $newArrayData['m_dir_id'] = (int) $targetKary->m_dir_id;
+            }
+            if (empty($newArrayData['m_comp_id']) && !empty($targetKary->m_comp_id)) {
+                $newArrayData['m_comp_id'] = (int) $targetKary->m_comp_id;
+            }
+        }
         if (empty($newArrayData['m_comp_id'])) {
             $newArrayData['m_comp_id'] = 1;
         }
-        if (empty($newArrayData['m_dir_id']) && !empty($newArrayData['m_kary_id'])) {
-            $newArrayData['m_dir_id'] = \DB::table('m_kary')->where('id', $newArrayData['m_kary_id'])->value('m_dir_id');
-        }
 
-        // Validasi Scope Respo Aktif saat Create Potongan
+        // Validasi Role & Scope Respo Aktif saat Create Potongan
         $respoCore = getCore('Respo');
-        $authUser = app()->bound('auth') ? app('auth')->user() : null;
+        $authUser = app()->bound('auth') ? app('auth')->user() : (auth()->check() ? auth()->user() : null);
         if ($authUser && $respoCore && !$respoCore->isUserSuperadmin($authUser)) {
             $scope = $respoCore->getActiveCompanyScope($authUser);
             if (!$scope || ($scope['m_dir_id'] ?? null) === -1) {
@@ -66,7 +89,18 @@ class t_potongan extends \App\Models\BasicModels\t_potongan
                 ];
             }
 
-            $targetKary = !empty($newArrayData['m_kary_id']) ? \DB::table('m_kary')->where('id', $newArrayData['m_kary_id'])->first() : null;
+            if (!$respoCore->isUserHrdOrAdmin($authUser)) {
+                return [
+                    "model" => $model,
+                    "data"  => $arrayData,
+                    "errors" => ["Hanya HRD/Admin atau Superadmin yang berhak membuat transaksi potongan."],
+                ];
+            }
+
+            if (!empty($newArrayData['is_all_kary']) && empty($newArrayData['m_dir_id']) && empty($scope['is_unrestricted']) && !empty($scope['m_dir_id'])) {
+                $newArrayData['m_dir_id'] = (int) $scope['m_dir_id'];
+            }
+
             $effDirId = $newArrayData['m_dir_id'] ?? ($targetKary ? $targetKary->m_dir_id : null);
             $targetDivId = $targetKary ? $targetKary->m_divisi_id : null;
             $targetDeptId = $targetKary ? $targetKary->m_dept_id : null;
@@ -89,18 +123,49 @@ class t_potongan extends \App\Models\BasicModels\t_potongan
     public function updateBefore( $model, $arrayData, $metaData, $id=null )
     {
         $existing = \DB::table('t_potongan')->where('id', $id)->first();
+        if (!$existing) {
+            return [
+                "model" => $model,
+                "data"  => $arrayData,
+                "errors" => ["Data transaksi potongan tidak ditemukan."],
+            ];
+        }
         $newArrayData = $arrayData;
-
+        $isAllKary = array_key_exists('is_all_kary', $newArrayData) ? !empty($newArrayData['is_all_kary']) : !empty($existing->is_all_kary);
+        if ($isAllKary) {
+            $newArrayData['m_kary_id'] = null;
+        }
+        $targetKaryId = array_key_exists('m_kary_id', $newArrayData) ? $newArrayData['m_kary_id'] : $existing->m_kary_id;
+        $targetKary = !empty($targetKaryId) ? \DB::table('m_kary')->where('id', $targetKaryId)->first() : null;
+        if (!empty($targetKaryId) && !$targetKary) {
+            return [
+                "model" => $model,
+                "data"  => $arrayData,
+                "errors" => ["Data karyawan tidak ditemukan."],
+            ];
+        }
+        if ($targetKary && !$isAllKary) {
+            if (!empty($newArrayData['m_dir_id']) && !empty($targetKary->m_dir_id) && (int) $newArrayData['m_dir_id'] !== (int) $targetKary->m_dir_id) {
+                return [
+                    "model" => $model,
+                    "data"  => $arrayData,
+                    "errors" => ["Company transaksi potongan harus sesuai dengan Company karyawan terpilih."],
+                ];
+            }
+            if (empty($newArrayData['m_dir_id']) && !empty($targetKary->m_dir_id)) {
+                $newArrayData['m_dir_id'] = (int) $targetKary->m_dir_id;
+            }
+            if (empty($newArrayData['m_comp_id']) && !empty($targetKary->m_comp_id)) {
+                $newArrayData['m_comp_id'] = (int) $targetKary->m_comp_id;
+            }
+        }
         if (empty($newArrayData['m_comp_id'])) {
             $newArrayData['m_comp_id'] = $existing->m_comp_id ?? 1;
         }
-        if (empty($newArrayData['m_dir_id']) && !empty($newArrayData['m_kary_id'])) {
-            $newArrayData['m_dir_id'] = \DB::table('m_kary')->where('id', $newArrayData['m_kary_id'])->value('m_dir_id');
-        }
 
-        // Validasi Scope Respo Aktif saat Update Potongan
+        // Validasi Role & Scope Respo Aktif saat Update Potongan
         $respoCore = getCore('Respo');
-        $authUser = app()->bound('auth') ? app('auth')->user() : null;
+        $authUser = app()->bound('auth') ? app('auth')->user() : (auth()->check() ? auth()->user() : null);
         if ($authUser && $respoCore && !$respoCore->isUserSuperadmin($authUser)) {
             $scope = $respoCore->getActiveCompanyScope($authUser);
             if (!$scope || ($scope['m_dir_id'] ?? null) === -1) {
@@ -111,23 +176,30 @@ class t_potongan extends \App\Models\BasicModels\t_potongan
                 ];
             }
 
-            if ($existing) {
-                $existKary = !empty($existing->m_kary_id) ? \DB::table('m_kary')->where('id', $existing->m_kary_id)->first() : null;
-                $existDirId = $existing->m_dir_id ?? ($existKary ? $existKary->m_dir_id : null);
-                $existDivId = $existKary ? $existKary->m_divisi_id : null;
-                $existDeptId = $existKary ? $existKary->m_dept_id : null;
-
-                if (!$respoCore->matchesActiveCompanyScope($existDirId, $existDivId, $existDeptId, $authUser)) {
-                    return [
-                        "model" => $model,
-                        "data"  => $arrayData,
-                        "errors" => ["Tidak diizinkan mengubah transaksi potongan di luar scope responsibility aktif."],
-                    ];
-                }
+            if (!$respoCore->isUserHrdOrAdmin($authUser)) {
+                return [
+                    "model" => $model,
+                    "data"  => $arrayData,
+                    "errors" => ["Hanya HRD/Admin atau Superadmin yang berhak mengubah transaksi potongan."],
+                ];
             }
 
-            $targetKary = !empty($newArrayData['m_kary_id']) ? \DB::table('m_kary')->where('id', $newArrayData['m_kary_id'])->first() : null;
-            $effDirId = $newArrayData['m_dir_id'] ?? ($targetKary ? $targetKary->m_dir_id : null);
+            $existKary = !empty($existing->m_kary_id) ? \DB::table('m_kary')->where('id', $existing->m_kary_id)->first() : null;
+            $existDirId = $existing->m_dir_id ?? ($existKary ? $existKary->m_dir_id : null);
+            $existDivId = $existKary ? $existKary->m_divisi_id : null;
+            $existDeptId = $existKary ? $existKary->m_dept_id : null;
+
+            if (!$respoCore->matchesActiveCompanyScope($existDirId, $existDivId, $existDeptId, $authUser)) {
+                return [
+                    "model" => $model,
+                    "data"  => $arrayData,
+                    "errors" => ["Tidak diizinkan mengubah transaksi potongan di luar scope responsibility aktif."],
+                ];
+            }
+
+            $effDirId = array_key_exists('m_dir_id', $newArrayData)
+                ? ($newArrayData['m_dir_id'] ?? ($targetKary ? $targetKary->m_dir_id : null))
+                : ($existing->m_dir_id ?? ($targetKary ? $targetKary->m_dir_id : null));
             $targetDivId = $targetKary ? $targetKary->m_divisi_id : null;
             $targetDeptId = $targetKary ? $targetKary->m_dept_id : null;
 
@@ -157,12 +229,70 @@ class t_potongan extends \App\Models\BasicModels\t_potongan
         $sisa = $isLunas ? 0 : max(0, $nilaiTotal - (float) $totalBayar);
         $statusBayar = $row['status_bayar'] ?? ($isLunas ? 'LUNAS' : ($totalBayar > 0 ? 'SEBAGIAN' : 'BELUM BAYAR'));
 
+        $compNama = $row['m_dir.nama'] ?? null;
+        if (empty($compNama) && !empty($row['m_dir_id'])) {
+            $compNama = \DB::table('m_dir')->where('id', $row['m_dir_id'])->value('nama');
+        }
+        if (empty($compNama) && !empty($row['m_kary_id'])) {
+            $compNama = \DB::table('m_kary as k')->join('m_dir as d', 'd.id', '=', 'k.m_dir_id')->where('k.id', $row['m_kary_id'])->value('d.nama');
+        }
+        if (empty($compNama) && !empty($row['is_all_kary']) && empty($row['m_dir_id'])) {
+            $compNama = 'Semua Company';
+        }
+
         return array_merge( $row, [
+            'm_dir.nama'    => $compNama ?? ($row['m_dir.nama'] ?? '-'),
             'total_bayar'   => (float) $totalBayar,
             'sisa_angsuran' => (float) $sisa,
             'is_lunas'      => (bool) $isLunas,
             'status_bayar'  => $statusBayar,
         ]);
+    }
+
+    private function canAccessPotongan($potongan, bool $requireHrdManage = false)
+    {
+        $respoCore = getCore('Respo');
+        if (!$respoCore) {
+            return null;
+        }
+        $authUser = app()->bound('auth') ? app('auth')->user() : (auth()->check() ? auth()->user() : null);
+        if (!$authUser) {
+            return response()->json(['error' => 'Unauthorized.'], 401);
+        }
+        if ($respoCore->isUserSuperadmin($authUser)) {
+            return null;
+        }
+
+        $scope = $respoCore->getActiveCompanyScope($authUser);
+        if (!$scope || ($scope['m_dir_id'] ?? null) === -1) {
+            return response()->json(['error' => 'Responsibility aktif tidak ditemukan atau sedang nonaktif.'], 403);
+        }
+
+        $kary = !empty($potongan->m_kary_id) ? \DB::table('m_kary')->where('id', $potongan->m_kary_id)->first() : null;
+        $effDirId = !empty($potongan->m_dir_id) ? (int) $potongan->m_dir_id : ($kary ? (int) ($kary->m_dir_id ?? 0) : null);
+        $effDivId = $kary ? ($kary->m_divisi_id ?? null) : null;
+        $effDeptId = $kary ? ($kary->m_dept_id ?? null) : null;
+        $isHrdOrAdmin = $respoCore->isUserHrdOrAdmin($authUser);
+        $inScope = $respoCore->matchesActiveCompanyScope($effDirId, $effDivId, $effDeptId, $authUser);
+
+        if ($requireHrdManage) {
+            if (!$isHrdOrAdmin || !$inScope) {
+                return response()->json(['error' => 'Anda tidak berwenang mengelola transaksi potongan di luar scope responsibility aktif.'], 403);
+            }
+            return null;
+        }
+
+        $userKaryId = (int) ($authUser->m_kary_id ?? 0);
+        $uid = (int) ($authUser->id ?? 0);
+        $isOwner = ($userKaryId > 0 && (int) ($potongan->m_kary_id ?? 0) === $userKaryId)
+            || ($uid > 0 && (int) ($potongan->creator_id ?? 0) === $uid);
+        $isAtasan = ($kary && $userKaryId > 0 && !empty($kary->atasan_id) && (int) $kary->atasan_id === $userKaryId);
+
+        if ($isOwner || $isAtasan || ($isHrdOrAdmin && $inScope)) {
+            return null;
+        }
+
+        return response()->json(['error' => 'Anda tidak berwenang mengakses transaksi potongan ini.'], 403);
     }
 
     public function custom_pelunasanManual($request)
@@ -172,6 +302,11 @@ class t_potongan extends \App\Models\BasicModels\t_potongan
 
         if (!$potongan) {
             return response()->json(['error' => 'Data piutang tidak ditemukan.'], 404);
+        }
+
+        $accessErr = $this->canAccessPotongan($potongan, true);
+        if ($accessErr) {
+            return $accessErr;
         }
 
         if (strtoupper($potongan->status ?? '') !== 'POSTED') {
@@ -243,6 +378,11 @@ class t_potongan extends \App\Models\BasicModels\t_potongan
 
             if (!$potongan) {
                 return response()->json(['error' => 'Data piutang tidak ditemukan.'], 404);
+            }
+
+            $accessErr = $this->canAccessPotongan($potongan, false);
+            if ($accessErr) {
+                return $accessErr;
             }
 
             $history = \DB::table('t_potongan_det_bayar as pdb')
@@ -318,10 +458,16 @@ class t_potongan extends \App\Models\BasicModels\t_potongan
 
     public function custom_postData($request)
     {
-        $data = t_potongan::find($request->id);
+        $id = $request->id ?? $request->input('id');
+        $data = t_potongan::find($id);
 
         if (!$data) {
             return response()->json(['error' => 'Data tidak ditemukan.'], 404);
+        }
+
+        $accessErr = $this->canAccessPotongan($data, true);
+        if ($accessErr) {
+            return $accessErr;
         }
 
         try {

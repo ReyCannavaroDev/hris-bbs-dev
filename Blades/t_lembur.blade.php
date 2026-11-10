@@ -3,6 +3,7 @@
   <TableApi ref='apiTable' :api="landing.api" :columns="landing.columns" :actions="landing.actions">
     <template #header>
       <RouterLink 
+        v-if="!respoScope.isLockedMissing"
         :to="$route.path+'/create?'+(Date.parse(new Date()))"
         class="bg-green-500 text-white hover:bg-green-600  font-semibold rounded-[4px] py-1 px-[10px]">
         Tambah
@@ -53,7 +54,7 @@
         <div>
           <label class="font-semibold">Company</label>
           <FieldSelect
-            :bind="{ disabled: !actionText || !isSuperadmin, clearable: Boolean(actionText && isSuperadmin) }"
+            :bind="{ disabled: isReadOnly || !(respoScope.isUnrestricted && respoScope.isHrdOrAdmin), clearable: Boolean(!isReadOnly && respoScope.isUnrestricted && respoScope.isHrdOrAdmin) }"
             class="w-full py-2 !mt-0"
             :value="values.m_dir_id"
             @input="v=>values.m_dir_id=v"
@@ -71,7 +72,7 @@
                 },
                 params: {
                   simplest:true,
-                  where: `this.is_active='true'`,
+                  where: respoScope.isLockedMissing ? '1=0' : ((!respoScope.isUnrestricted && respoScope.dirId) ? `this.id=${respoScope.dirId} AND this.is_active='true'` : `this.is_active='true'`),
                   transform:false,
                   selectfield: 'this.id, this.nama, this.is_active'
                 }
@@ -86,18 +87,20 @@
         </div>
         <div>
           <label class="font-semibold">Karyawan<span class="text-red-500 space-x-0 pl-0">*</span></label>
-          <FieldPopup :bind="{ readonly: isReadOnly || !store.user.data?.is_superadmin }" class="w-full py-2 !mt-0" :value="values.m_kary_id"
+          <FieldPopup :bind="{ readonly: isReadOnly || !respoScope.isHrdOrAdmin }" class="w-full py-2 !mt-0" :value="values.m_kary_id"
             @input="(v)=>values.m_kary_id=v" :errorText="formErrors.m_kary_id?'failed':''" :hints="formErrors.m_kary_id"
             @update:valueFull="(objVal) => {
-              if (objVal['m_comp.id']) values.m_comp_id = objVal['m_comp.id']
-              if (objVal['m_dir.id']) values.m_dir_id = objVal['m_dir.id']
+              if (objVal) {
+                values.m_comp_id = objVal['m_comp.id'] || objVal.m_comp_id || store.user.data?.m_comp_id || 1
+                values.m_dir_id = objVal['m_dir.id'] || objVal.m_dir_id || (objVal.m_dir ? objVal.m_dir.id : values.m_dir_id)
+              }
             }"
             valueField="id" displayField="nama_depan" :api="{
                   url: `${store.server.url_backend}/operation/m_kary`,
                   headers: { 'Content-Type': 'Application/json', Authorization: `${store.user.token_type} ${store.user.token}`},
                   params: {
                     simplest:true,
-                    where: (values.m_dir_id ? `this.m_dir_id=${values.m_dir_id} AND ` : '') + `this.is_active='true'`,
+                    where: respoScope.isLockedMissing ? '1=0' : ((values.m_dir_id ? `this.m_dir_id=${values.m_dir_id} AND ` : '') + (!respoScope.isUnrestricted && respoScope.divId ? `this.m_divisi_id=${respoScope.divId} AND ` : '') + (!respoScope.isUnrestricted && respoScope.deptId ? `this.m_dept_id=${respoScope.deptId} AND ` : '') + `this.is_active='true'`),
                     searchfield:'id, nama_depan, nik, kode, m_divisi.nama, m_zona.nama, m_dir.nama',
                   }
                 }" placeholder="Pilih Karyawan" label="" :check="false" :columns="[

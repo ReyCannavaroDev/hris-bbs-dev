@@ -3,6 +3,7 @@
 namespace App\Models\CustomModels;
 
 use Carbon\Carbon;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 class t_perhitungan_lembur extends \App\Models\BasicModels\t_perhitungan_lembur
@@ -10,6 +11,27 @@ class t_perhitungan_lembur extends \App\Models\BasicModels\t_perhitungan_lembur
     private $helper;
 
     public $fileColumns = [ /*file_column*/ ];
+
+    protected static function boot()
+    {
+        parent::boot();
+
+        // Isolasi Perhitungan Gaji Lembur sesuai active Respo:
+        // Superadmin = semua PT, HRD/Admin/Payroll = PT/Divisi/Dept active Respo
+        static::addGlobalScope('respo_scope', function (Builder $builder) {
+            $respoCore = getCore('Respo');
+            if (!$respoCore || !$respoCore->isOperationCrudRequest('t_perhitungan_lembur', ['GET', 'PUT', 'PATCH', 'DELETE'])) {
+                return;
+            }
+
+            $respoCore->applyActiveOrgScopeToQuery($builder, 't_perhitungan_lembur', [
+                'dir_col'     => 't_perhitungan_lembur.m_kary_dir_id',
+                'divisi_col'  => 't_perhitungan_lembur.m_kary_divisi_id',
+                'dept_col'    => 't_perhitungan_lembur.m_kary_dept_id',
+                'kary_fk_col' => 't_perhitungan_lembur.m_kary_id',
+            ]);
+        });
+    }
 
     public function __construct()
     {
@@ -86,6 +108,96 @@ class t_perhitungan_lembur extends \App\Models\BasicModels\t_perhitungan_lembur
         "last_editor_id" => "auth:id"
     ];
 
+    public function createBefore($model, $arrayData, $metaData, $id = null)
+    {
+        $targetKary = !empty($arrayData['m_kary_id']) ? \DB::table('m_kary')->where('id', $arrayData['m_kary_id'])->first() : null;
+        if (empty($arrayData['m_dir_id'])) {
+            $arrayData['m_dir_id'] = $arrayData['m_kary_dir_id'] ?? ($targetKary ? $targetKary->m_dir_id : null);
+        }
+        if (empty($arrayData['m_kary_dir_id']) && $targetKary) {
+            $arrayData['m_kary_dir_id'] = $targetKary->m_dir_id;
+        }
+
+        $respoCore = getCore('Respo');
+        $authUser = app()->bound('auth') ? app('auth')->user() : null;
+        if ($authUser && $respoCore && !$respoCore->isUserSuperadmin($authUser)) {
+            $scope = $respoCore->getActiveCompanyScope($authUser);
+            if (!$scope || ($scope['m_dir_id'] ?? null) === -1) {
+                return [
+                    "model" => $model,
+                    "data" => $arrayData,
+                    "errors" => ["Responsibility aktif tidak ditemukan atau sedang nonaktif."],
+                ];
+            }
+
+            $effDirId = $arrayData['m_kary_dir_id'] ?? ($arrayData['m_dir_id'] ?? ($targetKary ? $targetKary->m_dir_id : null));
+            $targetDivId = $arrayData['m_kary_divisi_id'] ?? ($targetKary ? $targetKary->m_divisi_id : null);
+            $targetDeptId = $arrayData['m_kary_dept_id'] ?? ($targetKary ? $targetKary->m_dept_id : null);
+
+            if (!$respoCore->matchesActiveCompanyScope($effDirId, $targetDivId, $targetDeptId, $authUser)) {
+                return [
+                    "model" => $model,
+                    "data" => $arrayData,
+                    "errors" => ["Karyawan atau Perusahaan/Cabang berada di luar scope responsibility aktif."],
+                ];
+            }
+        }
+
+        return [
+            "model" => $model,
+            "data"  => $arrayData,
+        ];
+    }
+
+    public function updateBefore($model, $arrayData, $metaData, $id = null)
+    {
+        $targetKary = !empty($arrayData['m_kary_id']) ? \DB::table('m_kary')->where('id', $arrayData['m_kary_id'])->first() : null;
+        if (empty($arrayData['m_dir_id'])) {
+            $arrayData['m_dir_id'] = $arrayData['m_kary_dir_id'] ?? ($targetKary ? $targetKary->m_dir_id : null);
+        }
+
+        $respoCore = getCore('Respo');
+        $authUser = app()->bound('auth') ? app('auth')->user() : null;
+        if ($authUser && $respoCore && !$respoCore->isUserSuperadmin($authUser)) {
+            $scope = $respoCore->getActiveCompanyScope($authUser);
+            if (!$scope || ($scope['m_dir_id'] ?? null) === -1) {
+                return [
+                    "model" => $model,
+                    "data" => $arrayData,
+                    "errors" => ["Responsibility aktif tidak ditemukan atau sedang nonaktif."],
+                ];
+            }
+
+            if ($id) {
+                $existing = \DB::table('t_perhitungan_lembur')->where('id', $id)->first();
+                if ($existing && !$respoCore->matchesActiveCompanyScope($existing->m_kary_dir_id ?? $existing->m_dir_id, $existing->m_kary_divisi_id, $existing->m_kary_dept_id, $authUser)) {
+                    return [
+                        "model" => $model,
+                        "data" => $arrayData,
+                        "errors" => ["Tidak diizinkan mengubah data perhitungan lembur di luar scope responsibility aktif."],
+                    ];
+                }
+            }
+
+            $effDirId = $arrayData['m_kary_dir_id'] ?? ($arrayData['m_dir_id'] ?? ($targetKary ? $targetKary->m_dir_id : null));
+            $targetDivId = $arrayData['m_kary_divisi_id'] ?? ($targetKary ? $targetKary->m_divisi_id : null);
+            $targetDeptId = $arrayData['m_kary_dept_id'] ?? ($targetKary ? $targetKary->m_dept_id : null);
+
+            if (!$respoCore->matchesActiveCompanyScope($effDirId, $targetDivId, $targetDeptId, $authUser)) {
+                return [
+                    "model" => $model,
+                    "data" => $arrayData,
+                    "errors" => ["Target karyawan atau Perusahaan/Cabang berada di luar scope responsibility aktif."],
+                ];
+            }
+        }
+
+        return [
+            "model" => $model,
+            "data"  => $arrayData,
+        ];
+    }
+
     /**
      * Hitung durasi dalam menit
      */
@@ -104,20 +216,45 @@ class t_perhitungan_lembur extends \App\Models\BasicModels\t_perhitungan_lembur
 
     /**
      * Cari tarif lembur dari m_lembur dengan multi-layer fallback
-     * (Grading ID -> Grading Nama -> Divisi/Dept -> Default Rate)
+     * (Company + Grading ID -> Grading Nama -> Divisi/Dept -> Default Rate)
      */
-    private function getTarifLembur($gradingId = null, $karyId = null, $deptId = null, $divisiId = null, $gradingNama = null)
+    private function getTarifLembur($gradingId = null, $karyId = null, $deptId = null, $divisiId = null, $gradingNama = null, $dirId = null)
     {
+        $activeExpr = "(is_active is true or is_active = true or is_active::text in ('1', 'true', 't'))";
+        $applyDirFilter = function ($q) use ($dirId) {
+            if ($dirId) {
+                $q->where('m_dir_id', $dirId)->orWhereNull('m_dir_id');
+            } else {
+                $q->whereNull('m_dir_id');
+            }
+        };
+        $orderDirExpr = $dirId
+            ? ("case when m_dir_id = " . intval($dirId) . " then 0 else 1 end")
+            : "case when m_dir_id is null then 0 else 1 end";
+
         // 1. Coba cari dengan kecocokan spesifik: grading_id + dept_id / divisi_id
         if ($gradingId) {
             $rate = \DB::table('m_lembur')
-                ->whereRaw("(is_active is true or is_active = true or is_active::text in ('1', 'true', 't'))")
+                ->whereRaw($activeExpr)
+                ->where($applyDirFilter)
                 ->where('grading_id', $gradingId)
-                ->where(function ($q) use ($deptId, $divisiId) {
-                    if ($deptId) $q->where('m_dept_id', $deptId)->orWhereNull('m_dept_id');
-                    if ($divisiId) $q->where('m_divisi_id', $divisiId)->orWhereNull('m_divisi_id');
+                ->where(function ($q) use ($deptId) {
+                    if ($deptId) {
+                        $q->where('m_dept_id', $deptId)->orWhereNull('m_dept_id');
+                    } else {
+                        $q->whereNull('m_dept_id');
+                    }
                 })
+                ->where(function ($q) use ($divisiId) {
+                    if ($divisiId) {
+                        $q->where('m_divisi_id', $divisiId)->orWhereNull('m_divisi_id');
+                    } else {
+                        $q->whereNull('m_divisi_id');
+                    }
+                })
+                ->orderByRaw($orderDirExpr)
                 ->orderByRaw("case when m_dept_id = " . intval($deptId ?? 0) . " then 0 else 1 end")
+                ->orderByRaw("case when m_divisi_id = " . intval($divisiId ?? 0) . " then 0 else 1 end")
                 ->orderBy('id', 'desc')
                 ->first();
 
@@ -125,10 +262,12 @@ class t_perhitungan_lembur extends \App\Models\BasicModels\t_perhitungan_lembur
                 return floatval($rate->besaran);
             }
 
-            // Cari grading_id saja
+            // Cari grading_id saja dalam company / global
             $rate = \DB::table('m_lembur')
-                ->whereRaw("(is_active is true or is_active = true or is_active::text in ('1', 'true', 't'))")
+                ->whereRaw($activeExpr)
+                ->where($applyDirFilter)
                 ->where('grading_id', $gradingId)
+                ->orderByRaw($orderDirExpr)
                 ->orderBy('id', 'desc')
                 ->first();
 
@@ -140,8 +279,10 @@ class t_perhitungan_lembur extends \App\Models\BasicModels\t_perhitungan_lembur
         // 2. Coba cari berdasarkan nama grading string
         if ($gradingNama) {
             $rate = \DB::table('m_lembur')
-                ->whereRaw("(is_active is true or is_active = true or is_active::text in ('1', 'true', 't'))")
+                ->whereRaw($activeExpr)
+                ->where($applyDirFilter)
                 ->where('grading', $gradingNama)
+                ->orderByRaw($orderDirExpr)
                 ->orderBy('id', 'desc')
                 ->first();
 
@@ -153,11 +294,13 @@ class t_perhitungan_lembur extends \App\Models\BasicModels\t_perhitungan_lembur
         // 3. Coba cari berdasarkan departemen / divisi
         if ($deptId || $divisiId) {
             $rate = \DB::table('m_lembur')
-                ->whereRaw("(is_active is true or is_active = true or is_active::text in ('1', 'true', 't'))")
+                ->whereRaw($activeExpr)
+                ->where($applyDirFilter)
                 ->where(function ($q) use ($deptId, $divisiId) {
                     if ($deptId) $q->where('m_dept_id', $deptId);
                     if ($divisiId) $q->orWhere('m_divisi_id', $divisiId);
                 })
+                ->orderByRaw($orderDirExpr)
                 ->orderBy('id', 'desc')
                 ->first();
 
@@ -166,9 +309,11 @@ class t_perhitungan_lembur extends \App\Models\BasicModels\t_perhitungan_lembur
             }
         }
 
-        // 4. Fallback ke tarif aktif general manapun di m_lembur (misal record grading_id null)
+        // 4. Fallback ke tarif aktif general manapun di m_lembur (dalam company atau Semua Company)
         $rate = \DB::table('m_lembur')
-            ->whereRaw("(is_active is true or is_active = true or is_active::text in ('1', 'true', 't'))")
+            ->whereRaw($activeExpr)
+            ->where($applyDirFilter)
+            ->orderByRaw($orderDirExpr)
             ->orderByRaw("case when grading_id is null then 0 else 1 end")
             ->orderBy('id', 'desc')
             ->first();
@@ -177,8 +322,10 @@ class t_perhitungan_lembur extends \App\Models\BasicModels\t_perhitungan_lembur
             return floatval($rate->besaran);
         }
 
-        // 5. Coba cari tanpa filter is_active (jika status is_active belum di-set)
+        // 5. Fallback terakhir dalam company atau Semua Company (tanpa filter is_active)
         $rate = \DB::table('m_lembur')
+            ->where($applyDirFilter)
+            ->orderByRaw($orderDirExpr)
             ->orderBy('id', 'desc')
             ->first();
 
@@ -192,6 +339,15 @@ class t_perhitungan_lembur extends \App\Models\BasicModels\t_perhitungan_lembur
     public function custom_generate()
     {
         try {
+            $respoCore = getCore('Respo');
+            $authUser = app()->bound('auth') ? app('auth')->user() : null;
+            if ($authUser && $respoCore && !$respoCore->isUserSuperadmin($authUser)) {
+                $scope = $respoCore->getActiveCompanyScope($authUser);
+                if (!$scope || ($scope['m_dir_id'] ?? null) === -1) {
+                    return $this->helper->customResponse('Responsibility aktif tidak ditemukan atau sedang nonaktif.', 403);
+                }
+            }
+
             $req = app()->request;
             $rawAwal = $req->periode_awal;
             $rawAkhir = $req->periode_akhir;
@@ -237,6 +393,14 @@ class t_perhitungan_lembur extends \App\Models\BasicModels\t_perhitungan_lembur
             if ($req->m_dept_id) $karyQuery->where('m_kary.m_dept_id', $req->m_dept_id);
             if ($req->m_kary_id) $karyQuery->where('m_kary.id', $req->m_kary_id);
 
+            if ($respoCore) {
+                $respoCore->applyActiveOrgScopeToQuery($karyQuery, 'm_kary', [
+                    'dir_col'    => 'm_kary.m_dir_id',
+                    'divisi_col' => 'm_kary.m_divisi_id',
+                    'dept_col'   => 'm_kary.m_dept_id',
+                ], $authUser);
+            }
+
             $karyList = $karyQuery->get();
 
             $data = [];
@@ -266,7 +430,7 @@ class t_perhitungan_lembur extends \App\Models\BasicModels\t_perhitungan_lembur
                 $totalDiakuiMin = 0;
                 $totalNominal = 0;
                 $detailArr = [];
-                $empTarif = $this->getTarifLembur($emp->grading_id, $emp->id, $emp->m_dept_id, $emp->m_divisi_id, $emp->grading_nama);
+                $empTarif = $this->getTarifLembur($emp->grading_id, $emp->id, $emp->m_dept_id, $emp->m_divisi_id, $emp->grading_nama, $emp->m_dir_id);
 
                 foreach ($lemburRows as $l) {
                     $spkMin = $l->interval_min ?? $this->hitungMenit($l->jam_mulai, $l->jam_selesai);
@@ -366,7 +530,37 @@ class t_perhitungan_lembur extends \App\Models\BasicModels\t_perhitungan_lembur
      */
     public function custom_save($req)
     {
-        $counter = count($req->detail ?? []);
+        $respoCore = getCore('Respo');
+        $authUser = app()->bound('auth') ? app('auth')->user() : null;
+        if ($authUser && $respoCore && !$respoCore->isUserSuperadmin($authUser)) {
+            $scope = $respoCore->getActiveCompanyScope($authUser);
+            if (!$scope || ($scope['m_dir_id'] ?? null) === -1) {
+                return $this->helper->customResponse('Responsibility aktif tidak ditemukan atau sedang nonaktif.', 403);
+            }
+        }
+
+        $details = $req->detail ?? [];
+        $counter = count($details);
+        $preparedItems = [];
+
+        foreach ($details as $item) {
+            $kary = !empty($item['m_kary_id']) ? \DB::table('m_kary')->where('id', $item['m_kary_id'])->first() : null;
+            $effDirId = $kary ? $kary->m_dir_id : (@$item['m_kary_dir_id'] ?? (@$item['m_dir_id'] ?? null));
+            $effDivId = $kary ? $kary->m_divisi_id : (@$item['m_kary_divisi_id'] ?? null);
+            $effDeptId = $kary ? $kary->m_dept_id : (@$item['m_kary_dept_id'] ?? null);
+
+            if ($authUser && $respoCore && !$respoCore->isUserSuperadmin($authUser)) {
+                if (!$respoCore->matchesActiveCompanyScope($effDirId, $effDivId, $effDeptId, $authUser)) {
+                    return $this->helper->customResponse('Karyawan atau Perusahaan/Cabang pada detail perhitungan berada di luar scope responsibility aktif.', 403);
+                }
+            }
+
+            $item['_eff_dir_id'] = $effDirId;
+            $item['_eff_div_id'] = $effDivId;
+            $item['_eff_dept_id'] = $effDeptId;
+            $preparedItems[] = $item;
+        }
+
         if ($counter) {
             try {
                 $nomor = $this->helper->generateNomor('KODE PERHITUNGAN LEMBUR');
@@ -374,7 +568,7 @@ class t_perhitungan_lembur extends \App\Models\BasicModels\t_perhitungan_lembur
                 $nomor = 'PRH-LMB/' . date('Ymd') . '/' . str_pad(($this->max('id') ?? 0) + 1, 4, '0', STR_PAD_LEFT);
             }
 
-            foreach ($req->detail as $item) {
+            foreach ($preparedItems as $item) {
                 // Hapus data lama dengan karyawan & periode yang sama jika sudah ada
                 $this->where('m_kary_id', @$item['m_kary_id'])
                     ->where('periode', @$item['periode'])
@@ -383,11 +577,11 @@ class t_perhitungan_lembur extends \App\Models\BasicModels\t_perhitungan_lembur
                 $saveData = [
                     'nomor'               => $nomor,
                     'm_comp_id'           => auth()->user()->m_comp_id ?? 1,
-                    'm_dir_id'            => $item['m_kary_dir_id'] ?? null,
+                    'm_dir_id'            => $item['_eff_dir_id'] ?? null,
                     'm_kary_id'           => $item['m_kary_id'],
-                    'm_kary_dir_id'       => $item['m_kary_dir_id'] ?? null,
-                    'm_kary_divisi_id'    => $item['m_kary_divisi_id'] ?? null,
-                    'm_kary_dept_id'      => $item['m_kary_dept_id'] ?? null,
+                    'm_kary_dir_id'       => $item['_eff_dir_id'] ?? null,
+                    'm_kary_divisi_id'    => $item['_eff_div_id'] ?? null,
+                    'm_kary_dept_id'      => $item['_eff_dept_id'] ?? null,
                     'periode'             => $item['periode'],
                     'periode_awal'        => $item['periode_awal'],
                     'periode_akhir'       => $item['periode_akhir'],
@@ -414,6 +608,16 @@ class t_perhitungan_lembur extends \App\Models\BasicModels\t_perhitungan_lembur
      */
     public function scopeGenerateForFinal($model)
     {
+        $respoCore = getCore('Respo');
+        if ($respoCore) {
+            $respoCore->applyActiveOrgScopeToQuery($model, 't_perhitungan_lembur', [
+                'dir_col'     => 't_perhitungan_lembur.m_kary_dir_id',
+                'divisi_col'  => 't_perhitungan_lembur.m_kary_divisi_id',
+                'dept_col'    => 't_perhitungan_lembur.m_kary_dept_id',
+                'kary_fk_col' => 't_perhitungan_lembur.m_kary_id',
+            ]);
+        }
+
         $req = app()->request;
         $rawAwal = $req->periode_awal;
         $rawAkhir = $req->periode_akhir;

@@ -124,6 +124,68 @@ class t_lembur extends \App\Models\BasicModels\t_lembur
         return $minutesDifference;
     }
 
+    private function resolveTarifLemburByKary($kary)
+    {
+        if (!$kary) {
+            return 0;
+        }
+
+        $dirId = !empty($kary->m_dir_id) ? intval($kary->m_dir_id) : 0;
+        $divId = !empty($kary->m_divisi_id) ? intval($kary->m_divisi_id) : 0;
+        $deptId = !empty($kary->m_dept_id) ? intval($kary->m_dept_id) : 0;
+        $gradingId = !empty($kary->grading_id) ? intval($kary->grading_id) : 0;
+
+        $query = \DB::table('m_lembur')
+            ->whereRaw("(is_active is true or is_active = true or is_active::text in ('1', 'true', 't'))");
+
+        $query->where(function ($q) use ($dirId) {
+            if ($dirId > 0) {
+                $q->where('m_dir_id', $dirId)->orWhereNull('m_dir_id');
+            } else {
+                $q->whereNull('m_dir_id');
+            }
+        });
+
+        $query->where(function ($q) use ($divId) {
+            if ($divId > 0) {
+                $q->where('m_divisi_id', $divId)->orWhereNull('m_divisi_id');
+            } else {
+                $q->whereNull('m_divisi_id');
+            }
+        });
+
+        $query->where(function ($q) use ($deptId) {
+            if ($deptId > 0) {
+                $q->where('m_dept_id', $deptId)->orWhereNull('m_dept_id');
+            } else {
+                $q->whereNull('m_dept_id');
+            }
+        });
+
+        $query->where(function ($q) use ($gradingId) {
+            if ($gradingId > 0) {
+                $q->where('grading_id', $gradingId)->orWhereNull('grading_id');
+            } else {
+                $q->whereNull('grading_id');
+            }
+        });
+
+        $orderDir = $dirId > 0 ? "case when m_dir_id = {$dirId} then 0 else 1 end" : "case when m_dir_id is null then 0 else 1 end";
+        $orderGrade = $gradingId > 0 ? "case when grading_id = {$gradingId} then 0 else 1 end" : "case when grading_id is null then 0 else 1 end";
+        $orderDept = $deptId > 0 ? "case when m_dept_id = {$deptId} then 0 else 1 end" : "case when m_dept_id is null then 0 else 1 end";
+        $orderDiv = $divId > 0 ? "case when m_divisi_id = {$divId} then 0 else 1 end" : "case when m_divisi_id is null then 0 else 1 end";
+
+        $rate = $query
+            ->orderByRaw($orderDir)
+            ->orderByRaw($orderGrade)
+            ->orderByRaw($orderDept)
+            ->orderByRaw($orderDiv)
+            ->orderBy('id', 'desc')
+            ->first();
+
+        return ($rate && floatval($rate->besaran) > 0) ? floatval($rate->besaran) : 0;
+    }
+
     /**
      * Hitung durasi SPK, durasi realisasi, dan durasi diakui sesuai MoM BBS 7 Okt 2026 Poin 3.K:
      * "Perhitungan lembur mengikuti jam realisasi lembur apabila durasi SPK lebih besar dari durasi realisasi.
@@ -152,23 +214,12 @@ class t_lembur extends \App\Models\BasicModels\t_lembur
             $diakuiMin = $durasiSpk;
         }
 
-        // 4. Cari Tarif Lembur dari m_lembur berdasarkan grading karyawan (MoM 3.J)
+        // 4. Cari Tarif Lembur dari m_lembur berdasarkan company & grading karyawan (MoM 3.J)
         $tarifLembur = 0;
         if ($mKaryId) {
             $kary = \DB::table('m_kary')->where('id', $mKaryId)->first();
             if ($kary) {
-                $rate = \DB::table('m_lembur')
-                    ->where('is_active', 1)
-                    ->where(function($q) use ($kary) {
-                        $q->where('grading_id', $kary->grading_id)
-                          ->orWhereNull('grading_id');
-                    })
-                    ->orderByRaw("case when grading_id = " . intval($kary->grading_id ?? 0) . " then 0 else 1 end")
-                    ->orderBy('id', 'desc')
-                    ->first();
-                if ($rate) {
-                    $tarifLembur = floatval($rate->besaran);
-                }
+                $tarifLembur = $this->resolveTarifLemburByKary($kary);
             }
         }
 
@@ -319,18 +370,7 @@ class t_lembur extends \App\Models\BasicModels\t_lembur
             // Cari tarif lembur
             $tarif = floatval($tarifLembur ?? 0);
             if ($tarif <= 0 && $kary) {
-                $rate = \DB::table('m_lembur')
-                    ->where('is_active', 1)
-                    ->where(function($q) use ($kary) {
-                        $q->where('grading_id', $kary->grading_id)
-                          ->orWhereNull('grading_id');
-                    })
-                    ->orderByRaw("case when grading_id = " . intval($kary->grading_id ?? 0) . " then 0 else 1 end")
-                    ->orderBy('id', 'desc')
-                    ->first();
-                if ($rate) {
-                    $tarif = floatval($rate->besaran);
-                }
+                $tarif = $this->resolveTarifLemburByKary($kary);
             }
 
             $totalLembur = round(($diakuiMin / 60) * $tarif, 2);
@@ -390,8 +430,17 @@ class t_lembur extends \App\Models\BasicModels\t_lembur
         if (empty($newArrayData['m_comp_id'])) {
             $newArrayData['m_comp_id'] = 1;
         }
-        if (empty($newArrayData['m_dir_id']) && !empty($newArrayData['m_kary_id'])) {
-            $newArrayData['m_dir_id'] = \DB::table('m_kary')->where('id', $newArrayData['m_kary_id'])->value('m_dir_id');
+
+        $targetKary = !empty($newArrayData['m_kary_id']) ? \DB::table('m_kary')->where('id', $newArrayData['m_kary_id'])->first() : null;
+        if (!empty($newArrayData['m_dir_id']) && $targetKary && !empty($targetKary->m_dir_id) && (int) $newArrayData['m_dir_id'] !== (int) $targetKary->m_dir_id) {
+            return [
+                "model" => $model,
+                "data"  => $arrayData,
+                "errors" => ["Company pengajuan lembur harus sesuai dengan Company karyawan terpilih."],
+            ];
+        }
+        if (empty($newArrayData['m_dir_id']) && $targetKary && !empty($targetKary->m_dir_id)) {
+            $newArrayData['m_dir_id'] = (int) $targetKary->m_dir_id;
         }
 
         // Validasi Scope Respo Aktif saat Create Lembur
@@ -407,27 +456,33 @@ class t_lembur extends \App\Models\BasicModels\t_lembur
                 ];
             }
 
-            if ($existing) {
-                $existKary = !empty($existing->m_kary_id) ? \DB::table('m_kary')->where('id', $existing->m_kary_id)->first() : null;
-                $existDirId = $existing->m_dir_id ?? ($existKary ? $existKary->m_dir_id : null);
-                $existDivId = $existKary ? $existKary->m_divisi_id : null;
-                $existDeptId = $existKary ? $existKary->m_dept_id : null;
+            $authKaryId = (int) ($authUser->m_kary_id ?? 0);
+            $isHrdOrAdmin = $respoCore->isUserHrdOrAdmin($authUser);
+            $isDirectSubordinate = $authKaryId > 0 && $targetKary && (int) ($targetKary->atasan_id ?? 0) === $authKaryId;
 
-                if (!$respoCore->matchesActiveCompanyScope($existDirId, $existDivId, $existDeptId, $authUser)) {
+            if (!$isHrdOrAdmin) {
+                if (!$targetKary) {
                     return [
                         "model" => $model,
                         "data"  => $arrayData,
-                        "errors" => ["Tidak diizinkan mengubah transaksi lembur di luar scope responsibility aktif."],
+                        "errors" => ["Data karyawan tidak valid."],
+                    ];
+                }
+                $isSelf = $authKaryId > 0 && (int) $targetKary->id === $authKaryId;
+                if (!$isSelf && !$isDirectSubordinate) {
+                    return [
+                        "model" => $model,
+                        "data"  => $arrayData,
+                        "errors" => ["Anda hanya dapat mengajukan lembur untuk diri sendiri atau bawahan langsung."],
                     ];
                 }
             }
 
-            $targetKary = !empty($newArrayData['m_kary_id']) ? \DB::table('m_kary')->where('id', $newArrayData['m_kary_id'])->first() : null;
             $effDirId = $newArrayData['m_dir_id'] ?? ($targetKary ? $targetKary->m_dir_id : null);
             $targetDivId = $targetKary ? $targetKary->m_divisi_id : null;
             $targetDeptId = $targetKary ? $targetKary->m_dept_id : null;
 
-            if (!$respoCore->matchesActiveCompanyScope($effDirId, $targetDivId, $targetDeptId, $authUser)) {
+            if (!$isDirectSubordinate && !$respoCore->matchesActiveCompanyScope($effDirId, $targetDivId, $targetDeptId, $authUser)) {
                 return [
                     "model" => $model,
                     "data"  => $arrayData,
@@ -475,11 +530,20 @@ class t_lembur extends \App\Models\BasicModels\t_lembur
         if (empty($newArrayData['m_comp_id'])) {
             $newArrayData['m_comp_id'] = $existing->m_comp_id ?? 1;
         }
-        if (empty($newArrayData['m_dir_id']) && !empty($newArrayData['m_kary_id'])) {
-            $newArrayData['m_dir_id'] = \DB::table('m_kary')->where('id', $newArrayData['m_kary_id'])->value('m_dir_id');
+
+        $targetKary = !empty($newArrayData['m_kary_id']) ? \DB::table('m_kary')->where('id', $newArrayData['m_kary_id'])->first() : null;
+        if (!empty($newArrayData['m_dir_id']) && $targetKary && !empty($targetKary->m_dir_id) && (int) $newArrayData['m_dir_id'] !== (int) $targetKary->m_dir_id) {
+            return [
+                "model" => $model,
+                "data"  => $arrayData,
+                "errors" => ["Company pengajuan lembur harus sesuai dengan Company karyawan terpilih."],
+            ];
+        }
+        if (empty($newArrayData['m_dir_id']) && $targetKary && !empty($targetKary->m_dir_id)) {
+            $newArrayData['m_dir_id'] = (int) $targetKary->m_dir_id;
         }
 
-        // Validasi Scope Respo Aktif saat Create Lembur
+        // Validasi Scope Respo Aktif saat Update Lembur
         $respoCore = getCore('Respo');
         $authUser = app()->bound('auth') ? app('auth')->user() : null;
         if ($authUser && $respoCore && !$respoCore->isUserSuperadmin($authUser)) {
@@ -492,13 +556,30 @@ class t_lembur extends \App\Models\BasicModels\t_lembur
                 ];
             }
 
+            $authKaryId = (int) ($authUser->m_kary_id ?? 0);
+            $authUserId = (int) ($authUser->id ?? 0);
+            $isHrdOrAdmin = $respoCore->isUserHrdOrAdmin($authUser);
+
             if ($existing) {
                 $existKary = !empty($existing->m_kary_id) ? \DB::table('m_kary')->where('id', $existing->m_kary_id)->first() : null;
                 $existDirId = $existing->m_dir_id ?? ($existKary ? $existKary->m_dir_id : null);
                 $existDivId = $existKary ? $existKary->m_divisi_id : null;
                 $existDeptId = $existKary ? $existKary->m_dept_id : null;
+                $isExistDirectSub = $authKaryId > 0 && $existKary && (int) ($existKary->atasan_id ?? 0) === $authKaryId;
 
-                if (!$respoCore->matchesActiveCompanyScope($existDirId, $existDivId, $existDeptId, $authUser)) {
+                if (!$isHrdOrAdmin) {
+                    $isExistOwner = ($authKaryId > 0 && (int) ($existing->m_kary_id ?? 0) === $authKaryId)
+                        || ($authUserId > 0 && (int) ($existing->creator_id ?? 0) === $authUserId);
+                    if (!$isExistOwner && !$isExistDirectSub) {
+                        return [
+                            "model" => $model,
+                            "data"  => $arrayData,
+                            "errors" => ["Anda tidak diizinkan mengubah transaksi lembur milik karyawan lain."],
+                        ];
+                    }
+                }
+
+                if (!$isExistDirectSub && !$respoCore->matchesActiveCompanyScope($existDirId, $existDivId, $existDeptId, $authUser)) {
                     return [
                         "model" => $model,
                         "data"  => $arrayData,
@@ -507,12 +588,23 @@ class t_lembur extends \App\Models\BasicModels\t_lembur
                 }
             }
 
-            $targetKary = !empty($newArrayData['m_kary_id']) ? \DB::table('m_kary')->where('id', $newArrayData['m_kary_id'])->first() : null;
             $effDirId = $newArrayData['m_dir_id'] ?? ($targetKary ? $targetKary->m_dir_id : null);
             $targetDivId = $targetKary ? $targetKary->m_divisi_id : null;
             $targetDeptId = $targetKary ? $targetKary->m_dept_id : null;
+            $isTargetDirectSub = $authKaryId > 0 && $targetKary && (int) ($targetKary->atasan_id ?? 0) === $authKaryId;
 
-            if (!$respoCore->matchesActiveCompanyScope($effDirId, $targetDivId, $targetDeptId, $authUser)) {
+            if (!$isHrdOrAdmin && $targetKary) {
+                $isTargetSelf = $authKaryId > 0 && (int) $targetKary->id === $authKaryId;
+                if (!$isTargetSelf && !$isTargetDirectSub) {
+                    return [
+                        "model" => $model,
+                        "data"  => $arrayData,
+                        "errors" => ["Anda hanya dapat mengubah lembur untuk diri sendiri atau bawahan langsung."],
+                    ];
+                }
+            }
+
+            if (!$isTargetDirectSub && !$respoCore->matchesActiveCompanyScope($effDirId, $targetDivId, $targetDeptId, $authUser)) {
                 return [
                     "model" => $model,
                     "data"  => $arrayData,
@@ -567,7 +659,42 @@ class t_lembur extends \App\Models\BasicModels\t_lembur
 
     public function custom_send_approval()
     {
-        $app = $this->createAppTicket(req("id"));
+        $id = req("id");
+        $trx = $this->find($id);
+        if (!$trx) {
+            return $this->helper->customResponse("Data transaksi lembur tidak ditemukan", 404);
+        }
+
+        $respoCore = getCore('Respo');
+        $authUser = app()->bound('auth') ? app('auth')->user() : null;
+        if ($authUser && $respoCore && !$respoCore->isUserSuperadmin($authUser)) {
+            $scope = $respoCore->getActiveCompanyScope($authUser);
+            if (!$scope || ($scope['m_dir_id'] ?? null) === -1) {
+                return $this->helper->customResponse("Responsibility aktif tidak ditemukan atau sedang nonaktif.", 403);
+            }
+
+            $uid = (int) ($authUser->id ?? 0);
+            $userKaryId = (int) ($authUser->m_kary_id ?? 0);
+            $kary = !empty($trx->m_kary_id) ? \DB::table('m_kary')->where('id', $trx->m_kary_id)->first() : null;
+
+            $isOwnerOrCreator = ($userKaryId > 0 && (int) ($trx->m_kary_id ?? 0) === $userKaryId)
+                || ($uid > 0 && (int) ($trx->creator_id ?? 0) === $uid)
+                || ($uid > 0 && (int) ($trx->pic_id ?? 0) === $uid);
+            $isDirectAtasan = ($userKaryId > 0 && $kary && (int) ($kary->atasan_id ?? 0) === $userKaryId);
+            $isHrdOrAdmin = $respoCore->isUserHrdOrAdmin($authUser);
+            $inScope = $respoCore->matchesActiveCompanyScope(
+                $trx->m_dir_id ?? ($kary->m_dir_id ?? null),
+                $kary->m_divisi_id ?? null,
+                $kary->m_dept_id ?? null,
+                $authUser
+            );
+
+            if (!$isOwnerOrCreator && !$isDirectAtasan && !($isHrdOrAdmin && $inScope)) {
+                return $this->helper->customResponse("Anda tidak memiliki akses untuk mengirim approval transaksi lembur ini.", 403);
+            }
+        }
+
+        $app = $this->createAppTicket($id);
         if (!$app) {
             return $this->helper->customResponse(
                 "Terjadi kesalahan, coba kembali nanti",
@@ -576,7 +703,7 @@ class t_lembur extends \App\Models\BasicModels\t_lembur
         }
 
         if (app()->request->header("Source") != "mobile") {
-            $spd = t_lembur::find(req("id"));
+            $spd = t_lembur::find($id);
             if ($spd) {
                 $spd->update([
                     "status" => "IN APPROVAL",
@@ -659,10 +786,33 @@ class t_lembur extends \App\Models\BasicModels\t_lembur
 
     public function custom_post($request)
     {
-        $data = $this->find($request->$id);
+        $id = is_object($request) ? ($request->id ?? (method_exists($request, 'input') ? $request->input('id') : null)) : ($request['id'] ?? null);
+        $data = $this->find($id);
         if (!$data) {
             return response()->json(["message" => "Data not found"], 404);
         }
+
+        $respoCore = getCore('Respo');
+        $authUser = app()->bound('auth') ? app('auth')->user() : null;
+        if ($authUser && $respoCore && !$respoCore->isUserSuperadmin($authUser)) {
+            $scope = $respoCore->getActiveCompanyScope($authUser);
+            if (!$scope || ($scope['m_dir_id'] ?? null) === -1) {
+                return response()->json(["message" => "Responsibility aktif tidak ditemukan atau sedang nonaktif."], 403);
+            }
+
+            $kary = !empty($data->m_kary_id) ? \DB::table('m_kary')->where('id', $data->m_kary_id)->first() : null;
+            $isHrdOrAdmin = $respoCore->isUserHrdOrAdmin($authUser);
+            $inScope = $respoCore->matchesActiveCompanyScope(
+                $data->m_dir_id ?? ($kary->m_dir_id ?? null),
+                $kary->m_divisi_id ?? null,
+                $kary->m_dept_id ?? null,
+                $authUser
+            );
+            if (!$isHrdOrAdmin || !$inScope) {
+                return response()->json(["message" => "Anda tidak memiliki akses untuk memposting transaksi lembur ini."], 403);
+            }
+        }
+
         if ($data->status === "DRAFT") {
             // Change the status to post
             $data->update([
@@ -1349,6 +1499,37 @@ class t_lembur extends \App\Models\BasicModels\t_lembur
         $trx = $this->find($id);
         if (!$trx) {
             return $this->helper->customResponse("Data transaksi lembur tidak ditemukan", 404);
+        }
+
+        $respoCore = getCore('Respo');
+        $authUser = app()->bound('auth') ? app('auth')->user() : null;
+        if ($authUser && $respoCore && !$respoCore->isUserSuperadmin($authUser)) {
+            $scope = $respoCore->getActiveCompanyScope($authUser);
+            if (!$scope || ($scope['m_dir_id'] ?? null) === -1) {
+                return $this->helper->customResponse("Responsibility aktif tidak ditemukan atau sedang nonaktif.", 403);
+            }
+
+            $uid = (int) ($authUser->id ?? 0);
+            $userKaryId = (int) ($authUser->m_kary_id ?? 0);
+            $isApplicant = ($userKaryId > 0 && (int) ($trx->m_kary_id ?? 0) === $userKaryId)
+                || ($uid > 0 && (int) ($trx->creator_id ?? 0) === $uid);
+            if ($isApplicant) {
+                return $this->helper->customResponse("Pemohon tidak diperkenankan mengakses atau menyinkronkan data realisasi lembur.", 403);
+            }
+
+            $kary = !empty($trx->m_kary_id) ? \DB::table('m_kary')->where('id', $trx->m_kary_id)->first() : null;
+            $isDirectAtasan = ($userKaryId > 0 && $kary && (int) ($kary->atasan_id ?? 0) === $userKaryId);
+            $isHrdOrAdmin = $respoCore->isUserHrdOrAdmin($authUser);
+            $inScope = $respoCore->matchesActiveCompanyScope(
+                $trx->m_dir_id ?? ($kary->m_dir_id ?? null),
+                $kary->m_divisi_id ?? null,
+                $kary->m_dept_id ?? null,
+                $authUser
+            );
+
+            if (!$isDirectAtasan && !($isHrdOrAdmin && $inScope)) {
+                return $this->helper->customResponse("Anda tidak memiliki akses untuk menyinkronkan realisasi lembur ini.", 403);
+            }
         }
 
         $synced = $this->sinkronkanRealisasiDariAbsen($trx);

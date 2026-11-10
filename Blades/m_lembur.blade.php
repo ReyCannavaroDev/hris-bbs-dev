@@ -10,7 +10,7 @@
           <button @click="filterShowData(false,2)" :class="activeBtn === 2?'bg-red-600 text-white hover:bg-red-400':'border border-red-600 text-red-600 bg-white hover:bg-red-600 hover:text-white'" class="duration-300 transform hover:-translate-y-0.5 rounded-md py-1 px-2 text-sm">Inactive</button>
         </div>
       </div>
-      <RouterLink v-if="currentMenu?.can_create||true||store.user.data.username==='developer'" :to="$route.path+'/create?'+(Date.parse(new Date()))" class="bg-green-500 text-white hover:bg-green-600 rounded-[6px] py-2 px-[12.5px]">
+      <RouterLink v-if="(currentMenu?.can_create||true||store.user.data.username==='developer') && !respoScope.isLockedMissing" :to="$route.path+'/create?'+(Date.parse(new Date()))" class="bg-green-500 text-white hover:bg-green-600 rounded-[6px] py-2 px-[12.5px]">
         <icon fa="plus" />
         Tambah Data
       </RouterLink>
@@ -34,7 +34,7 @@
         <div>
           <label class="font-semibold">Company<span class="text-red-500 space-x-0 pl-0"></span></label>
           <FieldSelect
-            :bind="{ disabled: !actionText || !isSuperadmin, clearable: Boolean(actionText && isSuperadmin) }"
+            :bind="{ disabled: !actionText || !respoScope.isUnrestricted, clearable: Boolean(actionText && respoScope.isUnrestricted) }"
             class="w-full py-2 !mt-0"
             :value="values.m_dir_id"
             @input="(v)=>{
@@ -56,7 +56,7 @@
                 },
                 params: {
                   simplest:true,
-                  where: `this.is_active='true'`,
+                  where: respoScope.isLockedMissing ? '1=0' : ((!respoScope.isUnrestricted && respoScope.dirId) ? `this.id=${respoScope.dirId} AND this.is_active='true'` : `this.is_active='true'`),
                   transform:false,
                   selectfield: 'this.id, this.nama, this.is_active'
                 }
@@ -96,7 +96,7 @@
                 params: {
                   simplest:true,
                   single:true,
-                  where: values.m_dir_id ? `this.m_dir_id=${values.m_dir_id} and this.is_active='true'` : `this.is_active='true'`,
+                  where: respoScope.isLockedMissing ? '1=0' : (values.m_dir_id ? `this.m_dir_id=${values.m_dir_id} and this.is_active='true'` : `this.is_active='true'`),
                   transform:false,
                 }
             }"
@@ -124,7 +124,7 @@
                 params: {
                   simplest:true,
                   single:true,
-                  where: values.m_divisi_id ? `m_divisi_id=${values.m_divisi_id} and this.is_active='true'` : `this.is_active='true'`,
+                  where: respoScope.isLockedMissing ? '1=0' : (values.m_divisi_id ? `m_divisi_id=${values.m_divisi_id} and this.is_active='true'` : `this.is_active='true'`),
                   transform:false,
                 }
             }"

@@ -1306,8 +1306,16 @@ class t_perhitungan_gaji extends \App\Models\BasicModels\t_perhitungan_gaji
 
     public function generateSalary()
     {
-        if (!getCore('Respo')->canViewSalary()) {
+        $respoCore = getCore('Respo');
+        $authUser = app()->bound('auth') ? app('auth')->user() : null;
+        if ($respoCore && !$respoCore->canViewSalary($authUser)) {
             return $this->denySalaryAccessResponse();
+        }
+        if ($authUser && $respoCore && !$respoCore->isUserSuperadmin($authUser)) {
+            $scope = $respoCore->getActiveCompanyScope($authUser);
+            if (!$scope || ($scope['m_dir_id'] ?? null) === -1) {
+                return $this->helper->customResponse('Responsibility aktif tidak ditemukan atau sedang nonaktif.', 403);
+            }
         }
         try{
             $req =  app()->request;
@@ -1330,6 +1338,14 @@ class t_perhitungan_gaji extends \App\Models\BasicModels\t_perhitungan_gaji
             if($req->m_dept_id) $karyQuery = $karyQuery->where('m_kary.m_dept_id', $req->m_dept_id);
             if($req->periode_gaji_id) $karyQuery = $karyQuery->where('m_kary.periode_gaji_id', $req->periode_gaji_id);
             if($req->m_kary_id) $karyQuery = $karyQuery->where('m_kary.id', $req->m_kary_id);
+
+            if ($respoCore) {
+                $respoCore->applyActiveOrgScopeToQuery($karyQuery, 'm_kary', [
+                    'dir_col'    => 'm_kary.m_dir_id',
+                    'divisi_col' => 'm_kary.m_divisi_id',
+                    'dept_col'   => 'm_kary.m_dept_id',
+                ], $authUser);
+            }
 
             $kary = $karyQuery->get();
 
@@ -1454,23 +1470,56 @@ class t_perhitungan_gaji extends \App\Models\BasicModels\t_perhitungan_gaji
 
     public function custom_generatePPH($req)
     {
-        if (!getCore('Respo')->canViewSalary()) {
+        $respoCore = getCore('Respo');
+        $authUser = app()->bound('auth') ? app('auth')->user() : null;
+        if ($respoCore && !$respoCore->canViewSalary($authUser)) {
             return $this->denySalaryAccessResponse();
         }
-        $netto = $req->netto;
         $kary = m_kary::find($req->m_kary_id);
+        if (!$kary) {
+            return $this->helper->customResponse('Data karyawan tidak ditemukan.', 404);
+        }
+        if ($authUser && $respoCore && !$respoCore->isUserSuperadmin($authUser)) {
+            if (!$respoCore->matchesActiveCompanyScope($kary->m_dir_id, $kary->m_divisi_id, $kary->m_dept_id, $authUser)) {
+                return $this->helper->customResponse('Karyawan berada di luar scope responsibility aktif.', 403);
+            }
+        }
+        $netto = $req->netto;
         return $this->countPPH21($kary, $netto);
     }
 
     public function custom_save($req)
     {
-        if (!getCore('Respo')->canViewSalary()) {
+        $respoCore = getCore('Respo');
+        $authUser = app()->bound('auth') ? app('auth')->user() : null;
+        if ($respoCore && !$respoCore->canViewSalary($authUser)) {
             return $this->denySalaryAccessResponse();
         }
-        $counter = count($req->detail);
+        if ($authUser && $respoCore && !$respoCore->isUserSuperadmin($authUser)) {
+            $scope = $respoCore->getActiveCompanyScope($authUser);
+            if (!$scope || ($scope['m_dir_id'] ?? null) === -1) {
+                return $this->helper->customResponse('Responsibility aktif tidak ditemukan atau sedang nonaktif.', 403);
+            }
+        }
+
+        $details = $req->detail ?? [];
+        $counter = count($details);
+        foreach ($details as $key) {
+            $kary = !empty($key['m_kary_id']) ? \DB::table('m_kary')->where('id', $key['m_kary_id'])->first() : null;
+            $effDirId = $kary ? $kary->m_dir_id : (@$key['m_kary_dir_id'] ?? null);
+            $effDivId = $kary ? $kary->m_divisi_id : (@$key['m_kary_divisi_id'] ?? null);
+            $effDeptId = $kary ? $kary->m_dept_id : (@$key['m_kary_dept_id'] ?? null);
+
+            if ($authUser && $respoCore && !$respoCore->isUserSuperadmin($authUser)) {
+                if (!$respoCore->matchesActiveCompanyScope($effDirId, $effDivId, $effDeptId, $authUser)) {
+                    return $this->helper->customResponse('Karyawan atau Perusahaan/Cabang pada detail gaji berada di luar scope responsibility aktif.', 403);
+                }
+            }
+        }
+
         if($counter){
             $nomor = $this->helper->generateNomor('KODE PERHITUNGAN GAJI');
-            foreach($req->detail as $key){
+            foreach($details as $key){
                 $checkAndDelete = $this->where('m_kary_id', @$key['m_kary_id'])->where('periode', @$key['periode'])->delete();
                 $key['nomor'] =  $nomor;
                 $key['detail_gaji'] = json_encode($key['detail_gaji']);
@@ -1483,6 +1532,16 @@ class t_perhitungan_gaji extends \App\Models\BasicModels\t_perhitungan_gaji
        
     public function scopeGenerateForFinal($model)
     {
+        $respoCore = getCore('Respo');
+        if ($respoCore) {
+            $respoCore->applyActiveOrgScopeToQuery($model, 't_perhitungan_gaji', [
+                'dir_col'     => 't_perhitungan_gaji.m_kary_dir_id',
+                'divisi_col'  => 't_perhitungan_gaji.m_kary_divisi_id',
+                'dept_col'    => 't_perhitungan_gaji.m_kary_dept_id',
+                'kary_fk_col' => 't_perhitungan_gaji.m_kary_id',
+            ]);
+        }
+
         $req = app()->request;
         $rawAwal = $req->periode_awal;
         $rawAkhir = $req->periode_akhir;

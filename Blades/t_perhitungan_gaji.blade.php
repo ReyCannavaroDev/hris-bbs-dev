@@ -2,7 +2,7 @@
 <div class="bg-white p-6 rounded-xl h-[570px]">
   <TableApi ref='apiTable' :api="landing.api" :columns="landing.columns" :actions="landing.actions">
     <template #header>
-      <RouterLink v-if="(currentMenu?.can_create||true||store.user.data.username==='developer') && canViewSalary" :to="$route.path+'/create?'+(Date.parse(new Date()))" class="bg-blue-500 text-white hover:bg-blue-600 rounded-[6px] py-2 px-[12.5px]">
+      <RouterLink v-if="(currentMenu?.can_create||true||store.user.data.username==='developer') && canViewSalary && !respoScope.isLockedMissing" :to="$route.path+'/create?'+(Date.parse(new Date()))" class="bg-blue-500 text-white hover:bg-blue-600 rounded-[6px] py-2 px-[12.5px]">
         <icon fa="bolt" />Generate Gaji
       </RouterLink>
     </template>
@@ -95,7 +95,7 @@
           <label class="font-semibold">Company</label>
           <FieldSelect
             class="w-full py-2 !mt-0"
-            :bind="{ disabled: !actionText || !isSuperadmin, clearable: Boolean(actionText && isSuperadmin) }"
+            :bind="{ disabled: !actionText || !(respoScope.isUnrestricted && respoScope.isHrdOrAdmin), clearable: Boolean(actionText && respoScope.isUnrestricted && respoScope.isHrdOrAdmin) }"
             :value="values.m_dir_id" 
             :check="false"
             @input="(v)=>{
@@ -120,7 +120,7 @@
                 params: {
                   simplest:true,
                   single:true,
-                  where:`this.is_active='true'`,
+                  where: respoScope.isLockedMissing ? '1=0' : ((!respoScope.isUnrestricted && respoScope.dirId) ? `this.id=${respoScope.dirId} and this.is_active='true'` : `this.is_active='true'`),
                   transform:false,
                 }
             }"
@@ -130,7 +130,7 @@
           <label class="font-semibold">Divisi</label>
           <FieldSelect
             class="w-full py-2 !mt-0"
-            :bind="{ disabled: !actionText, clearable:true }"
+            :bind="{ disabled: !actionText || (!respoScope.isUnrestricted && Boolean(respoScope.divId)), clearable: !(!respoScope.isUnrestricted && Boolean(respoScope.divId)) }"
             :value="values.divisi" 
             :check="false"
             @input="(v)=>{
@@ -154,7 +154,7 @@
                 params: {
                   simplest:true,
                   single:true,
-                  where: values.m_dir_id ? `this.m_dir_id=${values.m_dir_id} and this.is_active='true'` : `this.is_active='true'`,
+                  where: respoScope.isLockedMissing ? '1=0' : ((!respoScope.isUnrestricted && respoScope.divId ? `this.id=${respoScope.divId} and ` : '') + (values.m_dir_id ? `this.m_dir_id=${values.m_dir_id} and ` : '') + `this.is_active='true'`),
                   transform:false,
                 }
             }"
@@ -164,7 +164,7 @@
           <label class="font-semibold">Departemen</label>
           <FieldSelect
             class="w-full py-2 !mt-0"
-            :bind="{ disabled: !actionText, clearable:true }"
+            :bind="{ disabled: !actionText || (!respoScope.isUnrestricted && Boolean(respoScope.deptId)), clearable: !(!respoScope.isUnrestricted && Boolean(respoScope.deptId)) }"
             :value="values.m_dept_id" 
             :check="false"
             @input="(v)=>{
@@ -186,7 +186,7 @@
                 params: {
                   simplest:true,
                   single:true,
-                  where: values.m_divisi_id ? `this.m_divisi_id=${values.m_divisi_id} and this.is_active='true'` : (values.m_dir_id ? `this.m_dir_id=${values.m_dir_id} and this.is_active='true'` : `this.is_active='true'`),
+                  where: respoScope.isLockedMissing ? '1=0' : ((!respoScope.isUnrestricted && respoScope.deptId ? `this.id=${respoScope.deptId} and ` : '') + (values.m_divisi_id ? `this.m_divisi_id=${values.m_divisi_id} and ` : (values.m_dir_id ? `this.m_dir_id=${values.m_dir_id} and ` : '')) + `this.is_active='true'`),
                   transform:false,
                 }
             }"
@@ -228,7 +228,7 @@
                 params: {
                   simplest:true,
                   single:true,
-                  where: (values.m_dir_id ? `this.m_dir_id=${values.m_dir_id} and ` : '') + (values.m_divisi_id ? `this.m_divisi_id=${values.m_divisi_id} and ` : '') + (values.m_dept_id ? `this.m_dept_id=${values.m_dept_id} and ` : '') + (values.periode_gaji_id ? `this.periode_gaji_id=${values.periode_gaji_id} and ` : '') + `this.is_active='true'`,
+                  where: respoScope.isLockedMissing ? '1=0' : ((values.m_dir_id ? `this.m_dir_id=${values.m_dir_id} and ` : '') + (values.m_divisi_id ? `this.m_divisi_id=${values.m_divisi_id} and ` : '') + (values.m_dept_id ? `this.m_dept_id=${values.m_dept_id} and ` : '') + (values.periode_gaji_id ? `this.periode_gaji_id=${values.periode_gaji_id} and ` : '') + `this.is_active='true'`),
                   transform:false,
                   searchfield: 'this.nik, this.nama_lengkap, this.nama_depan, this.nama_belakang'
                 }

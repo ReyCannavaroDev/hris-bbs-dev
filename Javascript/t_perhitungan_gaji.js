@@ -36,15 +36,47 @@ const getUserSnapshot = () => {
   return { ...localData, ...storeData }
 }
 
-const isSuperadmin = computed(() => {
+const isHrdOrAdminRoleName = (name) => /(?:^|[^a-z])(hr[a-z]*|personalia|sdm|admin[a-z]*|human[\s_]*capital|human[\s_]*resources?)(?:[^a-z]|$)/i.test(String(name || ''))
+
+const getActiveRespoScope = () => {
   const u = getUserSnapshot()
   const ar = u.active_respo || null
-  if (u.username === 'developer') return true
-  if (ar && typeof ar.is_superadmin !== 'undefined') {
-    return isTruthyFlag(ar.is_superadmin)
+  const isSuper = u.username === 'developer' || isTruthyFlag(u.is_superadmin)
+  const hasRespo = isTruthyFlag(u.has_respo) || Boolean(ar)
+  const dirId = ar ? (ar.m_dir_id ?? null) : (u.m_dir_id ?? null)
+  const divId = ar ? (ar.m_divisi_id ?? null) : null
+  const deptId = ar ? (ar.m_dept_id ?? null) : null
+  const isHolding = hasRespo ? (ar ? !dirId : false) : !dirId
+  const rawRoles = Array.isArray(u.roles) && u.roles.length
+    ? u.roles.map(r => (typeof r === 'string' ? r : (r?.name || '')))
+    : (typeof u.role_names === 'string' && u.role_names.trim()
+        ? u.role_names.split(',').map(s => s.trim())
+        : (Array.isArray(u.role_names) ? u.role_names : []))
+  const isHrdOrAdmin = isSuper || (!(hasRespo && !ar) && rawRoles.some(rn => isHrdOrAdminRoleName(rn)))
+  return {
+    isSuper,
+    hasRespo,
+    isHrdOrAdmin,
+    isHolding,
+    isUnrestricted: isSuper || isHolding,
+    dirId: dirId ? Number(dirId) : null,
+    divId: divId ? Number(divId) : null,
+    deptId: deptId ? Number(deptId) : null,
+    isLockedMissing: hasRespo && !ar
   }
-  return isTruthyFlag(u.is_superadmin)
-})
+}
+
+const respoScope = ref(getActiveRespoScope())
+
+const isSuperadmin = computed(() => respoScope.value.isSuper)
+
+const getLandingWhereClause = () => {
+  const scope = getActiveRespoScope()
+  if (scope.isLockedMissing) {
+    return '1=0'
+  }
+  return ''
+}
 
 const detectSyncCanViewSalary = () => {
   const userData = getUserSnapshot()
@@ -487,7 +519,7 @@ function openDetail(i) {
     })
     return
   }
-  titleOpen.value = detailArr.value[i]?.nama_lengkap ?? '-' +' - ' +detailArr.value[i]?.nama_lengkap ?? ''
+  titleOpen.value = (detailArr.value[i]?.nama_lengkap ?? '-') + ' - ' + (detailArr.value[i]?.nik || detailArr.value[i]?.['m_kary.nik'] || detailArr.value[i]?.kode || '')
   openedRincian.value = []
   let dataFormat =  detailArr.value[i]?.detail_gaji ?? []
   if (typeof dataFormat === 'string') {
@@ -505,16 +537,23 @@ function openDetail(i) {
   modalOpen.value = true
 }
 onBeforeMount(async () => {
+  const scope = getActiveRespoScope()
+  respoScope.value = scope
+  const u = getUserSnapshot()
+
   console.log(values.periode_awal)
   // tampilkan default direktorat dengan store user comp.nama
-  values.direktorat = store.user.data?.direktorat
+  values.direktorat = u.direktorat
   await checkCanViewSalary()
 
   if (!isRead) {
-    const activeRespo = store.user?.data?.active_respo
-    const respoDirId = activeRespo ? (activeRespo.m_dir_id ?? null) : (store.user?.data?.m_dir_id ?? null)
-    if (respoDirId) {
-      values.m_dir_id = Number(respoDirId)
+    if (!scope.isUnrestricted) {
+      values.m_dir_id = scope.dirId ?? null
+      values.divisi = scope.divId ?? null
+      values.m_divisi_id = scope.divId ?? null
+      values.m_dept_id = scope.deptId ?? null
+    } else {
+      values.m_dir_id = null
     }
   }
 
@@ -824,6 +863,7 @@ const landing = reactive({
     params: {
       simplest: true,
       searchfield: canViewSalary.value ? `${baseSearchField}, this.netto` : baseSearchField,
+      where: getLandingWhereClause(),
     },
     onsuccess(response) {
       if (!canViewSalary.value && response && Array.isArray(response.data)) {

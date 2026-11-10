@@ -3,7 +3,7 @@
   <TableApi ref='apiTable' :api="landing.api" :columns="landing.columns" :actions="landing.actions">
     <template #header>
     <div>
-      <RouterLink :to="$route.path+'/create?'+(Date.parse(new Date()))"
+      <RouterLink v-if="respoScope.isHrdOrAdmin && !respoScope.isLockedMissing" :to="$route.path+'/create?'+(Date.parse(new Date()))"
         class="border border-blue-600 text-blue-600 bg-white  hover:bg-blue-600 hover:text-white duration-300 transform hover:-translate-y-0.5 rounded-md py-1 px-2">
         Create New
       </RouterLink>
@@ -67,16 +67,17 @@
         </div>
         <div>
           <label class="font-semibold">Karyawan<span class="text-red-500 space-x-0 pl-0">*</span></label>
-          <FieldPopup :bind="{ readonly: isRead, clearable:false }" class="w-full py-2 !mt-0" :value="values.m_kary_id"
+          <FieldPopup :bind="{ readonly: isRead || !respoScope.isHrdOrAdmin, clearable:false }" class="w-full py-2 !mt-0" :value="values.m_kary_id"
             @input="(v)=>{
               values.m_kary_id=v
-              if(v === null){
+              if(!v){
                 adjKary = false
+                values.m_dir_id = null
               }else{              
                 infoCuti(v)
               }}" 
               @update:valueFull="(v)=>{
-                if(v === null){
+                if(!v){
                   adjKary = false
                   values.m_dir_id = null
                 }else{              
@@ -92,6 +93,7 @@
                   headers: { 'Content-Type': 'Application/json', Authorization: `${store.user.token_type} ${store.user.token}`},
                   params: {
                     simplest:true,
+                    where: respoScope.isLockedMissing ? '1=0' : ((!respoScope.isUnrestricted && respoScope.dirId ? `this.m_dir_id=${respoScope.dirId} AND ` : '') + (!respoScope.isUnrestricted && respoScope.divId ? `this.m_divisi_id=${respoScope.divId} AND ` : '') + (!respoScope.isUnrestricted && respoScope.deptId ? `this.m_dept_id=${respoScope.deptId} AND ` : '') + `this.is_active='true'`),
                     searchfield:'this.id, this.nama_depan, this.nama_belakang, this.nama_lengkap, this.nik, m_divisi.nama, m_zona.nama, m_dir.nama',
                   }
                 }" placeholder="Pilih Karyawan" label="" :check="false" :columns="[
@@ -163,7 +165,7 @@
 
         <div>
           <label class="font-semibold">Tipe Cuti<span class="text-red-500 space-x-0 pl-0">*</span></label>
-          <FieldSelect :bind="{ disabled: isRead, clearable:false }" class="col-span-12 py-2 !mt-0 w-full"
+          <FieldSelect :bind="{ disabled: isRead || !respoScope.isHrdOrAdmin, clearable:false }" class="col-span-12 py-2 !mt-0 w-full"
             :value="values.tipe_cuti_id" @input="v=>{
               values.tipe_cuti_id=v
               if(v !== null){
@@ -177,6 +179,7 @@
               }
               }" 
               @update:valueFull="(v)=>{
+                if (!v) return
                 setNullInfoCuti(v.key)
                 values.tipe_key = v.key
             }"
@@ -198,7 +201,7 @@
         </div>
         <div>
           <label class="col-span-12">Value<label class="text-red-500 space-x-0 pl-0">*</label></label>
-          <FieldX :bind="{ readonly: readValue}" type='number' class="w-full py-2 !mt-0" :value="values.value"
+          <FieldX :bind="{ readonly: readValue || !respoScope.isHrdOrAdmin }" type='number' class="w-full py-2 !mt-0" :value="values.value"
             :errorText="formErrors.value?'failed':''" @input="v=>{
               values.value=v
               changeSisaCuti(values.tipe_key,parseInt(v))}"
@@ -206,7 +209,7 @@
         </div>
         <div>
           <label class="col-span-12">Keterangan Cuti<label class="text-red-500 space-x-0 pl-0">*</label></label>
-          <FieldX :bind="{ readonly: !actionText }" type='textarea' class="w-full py-2 !mt-0" :value="values.keterangan"
+          <FieldX :bind="{ readonly: !actionText || !respoScope.isHrdOrAdmin }" type='textarea' class="w-full py-2 !mt-0" :value="values.keterangan"
             :errorText="formErrors.keterangan?'failed':''" @input="v=>values.keterangan=v"
             :hints="formErrors.keterangan" :check="false" label="" placeholder="Tuliskan keterangan" />
         </div>
@@ -216,7 +219,7 @@
         <button @click="onBack" class="bg-[#EF4444] hover:bg-[#ed3232] text-white px-[36.5px] py-[12px] rounded-[6px] w-32">
             Batal
         </button>
-        <button v-show="actionText" @click="onSave" class="bg-[#10B981] hover:bg-[#0ea774] text-white px-[36.5px] py-[12px] rounded-[6px] w-32">
+        <button v-show="actionText && respoScope.isHrdOrAdmin" @click="onSave" class="bg-[#10B981] hover:bg-[#0ea774] text-white px-[36.5px] py-[12px] rounded-[6px] w-32">
             Simpan
         </button>
       </div>

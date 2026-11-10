@@ -9,15 +9,63 @@ const store = inject('store')
 const swal = inject('swal')
 
 const isTruthyFlag = (val) => val === true || val === 1 || val === '1' || String(val || '').toLowerCase() === 'true' || String(val || '').toLowerCase() === 't'
-const isSuperadmin = computed(() => {
-  const u = store?.user?.data || {}
-  const ar = u.active_respo || null
-  if (u.username === 'developer') return true
-  if (ar && typeof ar.is_superadmin !== 'undefined') {
-    return isTruthyFlag(ar.is_superadmin)
+
+const getUserSnapshot = () => {
+  const storeData = store.user?.data || {}
+  let localData = {}
+  if (typeof window !== 'undefined' && window.localStorage?.user) {
+    try {
+      localData = JSON.parse(window.localStorage.user)?.data || {}
+    } catch (e) {}
   }
-  return isTruthyFlag(u.is_superadmin)
-})
+  return { ...localData, ...storeData }
+}
+
+const isHrdOrAdminRoleName = (name) => /(?:^|[^a-z])(hr[a-z]*|personalia|sdm|admin[a-z]*|human[\s_]*capital|human[\s_]*resources?)(?:[^a-z]|$)/i.test(String(name || ''))
+
+const getActiveRespoScope = () => {
+  const u = getUserSnapshot()
+  const ar = u.active_respo || null
+  const isSuper = u.username === 'developer' || isTruthyFlag(u.is_superadmin)
+  const hasRespo = isTruthyFlag(u.has_respo) || Boolean(ar)
+  const dirId = ar ? (ar.m_dir_id ?? null) : (u.m_dir_id ?? null)
+  const divId = ar ? (ar.m_divisi_id ?? null) : null
+  const deptId = ar ? (ar.m_dept_id ?? null) : null
+  const isHolding = hasRespo ? (ar ? !dirId : false) : !dirId
+  const rawRoles = Array.isArray(u.roles) && u.roles.length
+    ? u.roles.map(r => (typeof r === 'string' ? r : (r?.name || '')))
+    : (typeof u.role_names === 'string' && u.role_names.trim()
+        ? u.role_names.split(',').map(s => s.trim())
+        : (Array.isArray(u.role_names) ? u.role_names : []))
+  const isHrdOrAdmin = isSuper || (!(hasRespo && !ar) && rawRoles.some(rn => isHrdOrAdminRoleName(rn)))
+  return {
+    isSuper,
+    hasRespo,
+    isHrdOrAdmin,
+    isHolding,
+    isUnrestricted: isSuper || isHolding,
+    dirId: dirId ? Number(dirId) : null,
+    divId: divId ? Number(divId) : null,
+    deptId: deptId ? Number(deptId) : null,
+    isLockedMissing: hasRespo && !ar
+  }
+}
+
+const respoScope = ref(getActiveRespoScope())
+
+const isSuperadmin = computed(() => respoScope.value.isSuper)
+
+const getLandingWhereClause = () => {
+  const scope = getActiveRespoScope()
+  const u = getUserSnapshot()
+  if (scope.isLockedMissing) {
+    return '1=0'
+  }
+  if (!scope.isHrdOrAdmin) {
+    return `this.m_kary_id=${u.m_kary_id || 0}`
+  }
+  return ''
+}
 
 const isRead = route.params.id && route.params.id !== 'create'
 const actionText = ref(route.params.id === 'create' ? 'Tambah' : (route.query.action?.toLowerCase() === 'verifikasi' ? null : route.query.action))
@@ -247,14 +295,21 @@ const values = reactive({
 
 
 onBeforeMount(async () => {
+  const scope = getActiveRespoScope()
+  respoScope.value = scope
+  const u = getUserSnapshot()
+
   // tampilkan default direktorat dengan store user comp.nama
-  values.direktorat = store.user.data?.direktorat
+  values.direktorat = u.direktorat
 
   if (!isRead) {
-    values.m_comp_id = store.user.data?.m_comp_id ?? 1
-    const activeRespo = store.user?.data?.active_respo
-    const respoDirId = activeRespo ? (activeRespo.m_dir_id ?? null) : (store.user?.data?.m_dir_id ?? null)
-    values.m_dir_id = respoDirId ? Number(respoDirId) : null
+    values.m_comp_id = u.m_comp_id ?? 1
+    values.m_dir_id = (!scope.isUnrestricted && scope.dirId)
+      ? Number(scope.dirId)
+      : (!scope.isHrdOrAdmin ? (u.m_dir_id ? Number(u.m_dir_id) : null) : null)
+    if (!scope.isHrdOrAdmin && u.m_kary_id) {
+      values.m_kary_id = u.m_kary_id
+    }
   }
 
   if (isRead) {
@@ -293,8 +348,27 @@ onBeforeMount(async () => {
     values[key] = initialValues[key]
   }
 
+  if (isRead && initialValues) {
+    if (typeof initialValues.is_all_kary !== 'undefined') {
+      values.is_all_kary = isTruthyFlag(initialValues.is_all_kary)
+    }
+    if (typeof initialValues.is_lunas !== 'undefined') {
+      values.is_lunas = isTruthyFlag(initialValues.is_lunas)
+    }
+    if (actionText.value === 'Copy' || route.query.action === 'Copy') {
+      delete values.id
+      values.nomor = null
+      values.status = 'DRAFT'
+      values.is_lunas = false
+      values.status_bayar = null
+      if (!scope.isUnrestricted && scope.dirId) {
+        values.m_dir_id = Number(scope.dirId)
+      }
+    }
+  }
+
   if (!values.m_comp_id) {
-    values.m_comp_id = store.user.data?.m_comp_id ?? 1
+    values.m_comp_id = u.m_comp_id ?? 1
   }
 })
 
@@ -374,7 +448,7 @@ async function onSave() {
     const isCreating = ['Create','Copy','Tambah'].includes(actionText.value)
     const dataURL = `${store.server.url_backend}/operation${endpointApi}${isCreating ? '' : ('/' + route.params.id)}`
     isRequesting.value = true
-    values.status = values.status === 'DRAFT' ? 'DRAFT' : 'POSTED'
+    values.status = values.status?.trim()?.toUpperCase() === 'POSTED' ? 'POSTED' : 'DRAFT'
     values.is_all_kary = values.is_all_kary === true ? 1 : 0
     values.is_lunas = values.is_lunas === true ? 1 : 0 
     const res = await fetch(dataURL, {
@@ -387,11 +461,16 @@ async function onSave() {
     })
     if (!res.ok) {
       if ([400, 422].includes(res.status)) {
-        const responseJson = await res.json()
+        const responseJson = await res.json().catch(() => ({}))
         formErrors.value = responseJson.errors || {}
-        throw new Error(responseJson.message || "Failed when trying to post data")
+        const errs = responseJson.errors
+        const errMsg = Array.isArray(errs)
+          ? (errs[0] || responseJson.message)
+          : (errs && typeof errs === 'object' ? Object.values(errs).flat()[0] : null)
+        throw new Error(errMsg || responseJson.message || "Failed when trying to post data")
       } else {
-        throw new Error("Failed when trying to post data")
+        const responseJson = await res.json().catch(() => ({}))
+        throw new Error(responseJson.error || responseJson.message || "Failed when trying to post data")
       }
     }
     router.replace('/' + modulPath + '?reload='+(Date.parse(new Date())))
@@ -436,7 +515,7 @@ const landing = reactive({
       icon: 'trash',
       class: 'bg-red-600 text-light-100',
       title: "Hapus",
-                  show: (row) =>row.status?.toUpperCase() === 'DRAFT ',
+      show: (row) => respoScope.value.isHrdOrAdmin && row.status?.trim()?.toUpperCase() === 'DRAFT',
       // show: () => store.user.data.username==='developer',
       click(row) {
         swal.fire({
@@ -485,7 +564,7 @@ const landing = reactive({
       icon: 'edit',
       title: "Edit",
       class: 'bg-blue-600 text-light-100',
-      show: (row) =>row.status?.toUpperCase() === 'DRAFT',
+      show: (row) => respoScope.value.isHrdOrAdmin && row.status?.trim()?.toUpperCase() === 'DRAFT',
       // show: (row) => (currentMenu?.can_update)||store.user.data.username==='developer',
       click(row) {
         router.push(`${route.path}/${row.id}?action=Edit&`+tsId)
@@ -495,7 +574,7 @@ const landing = reactive({
       icon: 'copy',
       title: "Copy",
       class: 'bg-gray-600 text-light-100',
-      show: (row) =>row.status?.toUpperCase() === 'DRAFT ',
+      show: (row) => respoScope.value.isHrdOrAdmin && row.status?.trim()?.toUpperCase() === 'DRAFT',
       click(row) {
         router.push(`${route.path}/${row.id}?action=Copy&`+tsId)
       }
@@ -504,7 +583,7 @@ const landing = reactive({
       icon: 'paper-plane',
       title: "Posted Data",
       class: 'bg-rose-700 rounded-lg text-white',
-      show: (row) =>row.status?.toUpperCase() === 'DRAFT',
+      show: (row) => respoScope.value.isHrdOrAdmin && row.status?.trim()?.toUpperCase() === 'DRAFT',
       click(row) {
         router.push(`${route.path}/${row.id}?action=Verifikasi&`+tsId)
       }
@@ -515,7 +594,7 @@ const landing = reactive({
       class: 'bg-emerald-600 rounded-lg text-white',
       show: (row) => {
         const r = Array.isArray(row) ? row[0] : row
-        return r?.status?.toUpperCase() === 'POSTED' && !r?.is_lunas
+        return respoScope.value.isHrdOrAdmin && r?.status?.trim()?.toUpperCase() === 'POSTED' && !isTruthyFlag(r?.is_lunas)
       },
       click(row) {
         pelunasanManual(row)
@@ -527,7 +606,7 @@ const landing = reactive({
       class: 'bg-blue-600 rounded-lg text-white',
       show: (row) => {
         const r = Array.isArray(row) ? row[0] : row
-        return r?.status?.toUpperCase() === 'POSTED'
+        return r?.status?.trim()?.toUpperCase() === 'POSTED'
       },
       click(row) {
         showHistoryBayar(row)
@@ -542,6 +621,7 @@ const landing = reactive({
     },
     params: {
       simplest: true,
+      where: getLandingWhereClause(),
       searchfield:'this.id, this.nomor, m_comp.nama, m_dir.nama, m_kary.nama_depan, m_general.value, this.keterangan, this.status',
     },
     onsuccess(response) {
@@ -577,7 +657,7 @@ const landing = reactive({
     flex: 1,
     filter: 'ColFilter',
     resizable: true,
-    valueGetter: (p) => p.data['m_dir.nama'] || '-',
+    valueGetter: (p) => p.data['m_dir.nama'] || (p.data.is_all_kary ? 'Semua Company' : '-'),
     cellClass: [ 'border-r', '!border-gray-200', 'justify-start']
   },
   {

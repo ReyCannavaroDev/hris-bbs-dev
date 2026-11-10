@@ -43,12 +43,7 @@ const getUserSnapshot = () => {
 
 const isSuperadmin = computed(() => {
   const u = getUserSnapshot()
-  const ar = u.active_respo || null
-  if (u.username === 'developer') return true
-  if (ar && typeof ar.is_superadmin !== 'undefined') {
-    return isTruthyFlag(ar.is_superadmin)
-  }
-  return isTruthyFlag(u.is_superadmin)
+  return u.username === 'developer' || isTruthyFlag(u.is_superadmin)
 })
 
 const isHrdOrAdminRoleName = (name) => /(?:^|[^a-z])(hr[a-z]*|personalia|sdm|admin[a-z]*|human[\s_]*capital|human[\s_]*resources?)(?:[^a-z]|$)/i.test(String(name || ''))
@@ -56,7 +51,7 @@ const isHrdOrAdminRoleName = (name) => /(?:^|[^a-z])(hr[a-z]*|personalia|sdm|adm
 const getActiveRespoScope = () => {
   const u = getUserSnapshot()
   const ar = u.active_respo || null
-  const isSuper = isSuperadmin.value
+  const isSuper = u.username === 'developer' || isTruthyFlag(u.is_superadmin)
   const hasRespo = isTruthyFlag(u.has_respo) || Boolean(ar)
   const dirId = ar ? (ar.m_dir_id ?? null) : (u.m_dir_id ?? null)
   const divId = ar ? (ar.m_divisi_id ?? null) : null
@@ -67,8 +62,7 @@ const getActiveRespoScope = () => {
     : (typeof u.role_names === 'string' && u.role_names.trim()
         ? u.role_names.split(',').map(s => s.trim())
         : (Array.isArray(u.role_names) ? u.role_names : []))
-  const respoName = ar ? (ar.nama || ar.name || '') : ''
-  const isHrdOrAdmin = isSuper || (!(hasRespo && !ar) && (rawRoles.some(rn => isHrdOrAdminRoleName(rn)) || isHrdOrAdminRoleName(respoName)))
+  const isHrdOrAdmin = isSuper || (!(hasRespo && !ar) && rawRoles.some(rn => isHrdOrAdminRoleName(rn)))
   return {
     isSuper,
     hasRespo,
@@ -104,10 +98,11 @@ const isReadOnly = computed(() => {
 
 const isApproverOrAdmin = computed(() => {
   const scope = getActiveRespoScope()
-  if (scope.isSuper || scope.isHrdOrAdmin) return true
+  if (scope.isSuper) return true
   // Jika user yang sedang login adalah karyawan pemohon itu sendiri -> selalu HIDE realisasi
-  const myKaryId = store.user.data?.m_kary_id
-  const myUserId = store.user.data?.id
+  const u = getUserSnapshot()
+  const myKaryId = u.m_kary_id
+  const myUserId = u.id
   if (myKaryId && values.m_kary_id && myKaryId == values.m_kary_id) {
     return false
   }
@@ -117,7 +112,7 @@ const isApproverOrAdmin = computed(() => {
   if (values.is_approver_or_admin !== undefined) {
     return Boolean(values.is_approver_or_admin)
   }
-  if (values.is_hrd || values.is_atasan) return true
+  if (scope.isHrdOrAdmin || values.is_hrd || values.is_atasan) return true
   if (is_approval) return true
   return false
 })
@@ -125,7 +120,7 @@ const isApproverOrAdmin = computed(() => {
 const canApprove = computed(() => {
   if (!['IN APPROVAL', 'HALF APPROVED'].includes(values.status) && !is_approval) return false
   if (values.can_approve !== undefined) return Boolean(values.can_approve)
-  if (store.user.data?.is_superadmin) return true
+  if (getActiveRespoScope().isSuper) return true
   if (values.status === 'IN APPROVAL') {
     return Boolean(values.is_atasan)
   }
@@ -168,14 +163,18 @@ const values = reactive({
 
 
 onBeforeMount(async () => {
+  const scope = getActiveRespoScope()
+  respoScope.value = scope
+  const u = getUserSnapshot()
+
   // tampilkan default direktorat dengan store user comp.nama
-  values.direktorat = store.user.data?.direktorat
+  values.direktorat = u.direktorat
 
   if (!isRead) {
-    values.m_comp_id = store.user.data?.m_comp_id ?? 1
-    const activeRespo = store.user?.data?.active_respo
-    const respoDirId = activeRespo ? (activeRespo.m_dir_id ?? null) : (store.user?.data?.m_dir_id ?? null)
-    values.m_dir_id = respoDirId ? Number(respoDirId) : null
+    values.m_comp_id = u.m_comp_id ?? 1
+    values.m_dir_id = (!scope.isUnrestricted && scope.dirId)
+      ? scope.dirId
+      : (!scope.isHrdOrAdmin ? (u.m_dir_id ?? null) : null)
     if (!values.tanggal) {
       values.tanggal = getTodayDate()
     }
@@ -304,6 +303,26 @@ onBeforeMount(async () => {
     values[key] = initialValues[key]
   }
 
+  if (actionText.value === 'Copy' || route.query.action === 'Copy') {
+    delete values.id
+    values.nomor = null
+    values.status = 'DRAFT'
+    values.approval = null
+    values.trx = null
+    values.datalog = []
+    values.jam_mulai_realisasi = null
+    values.jam_selesai_realisasi = null
+    values.realisasi_min = null
+    values.diakui_min = null
+    values.total_lembur = null
+    if (!scope.isUnrestricted && scope.dirId) {
+      values.m_dir_id = scope.dirId
+    }
+    if (!scope.isHrdOrAdmin && u.m_kary_id) {
+      values.m_kary_id = u.m_kary_id
+    }
+  }
+
   // Jika status belum HALF APPROVED / APPROVED, pastikan realisasi null (menunggu approval atasan)
   if (!['HALF APPROVED', 'APPROVED'].includes(values.status)) {
     values.jam_mulai_realisasi = null
@@ -312,9 +331,9 @@ onBeforeMount(async () => {
   }
 
   // Jika user yang sedang login adalah pemohon itu sendiri, sembunyikan realisasi di form
-  const myKaryId = store.user.data?.m_kary_id
-  const myUserId = store.user.data?.id
-  if (!store.user.data?.is_superadmin && (
+  const myKaryId = u.m_kary_id
+  const myUserId = u.id
+  if (!scope.isSuper && (
       (myKaryId && values.m_kary_id && myKaryId == values.m_kary_id) ||
       (myUserId && values.creator_id && myUserId == values.creator_id)
   )) {
@@ -327,14 +346,19 @@ onBeforeMount(async () => {
   }
 
   if (!values.m_comp_id) {
-    values.m_comp_id = store.user.data?.m_comp_id ?? 1
+    values.m_comp_id = u.m_comp_id ?? 1
   }
 
   hitungDurasi()
 })
 onMounted(() => {
-  if (!isRead && !is_approval && !is_superadmin.value) {
-    values.m_kary_id = store.user.data?.m_kary_id
+  const scope = getActiveRespoScope()
+  const u = getUserSnapshot()
+  if (!isRead && !is_approval && !scope.isHrdOrAdmin) {
+    values.m_kary_id = u.m_kary_id ?? null
+    if (!values.m_dir_id) {
+      values.m_dir_id = (!scope.isUnrestricted && scope.dirId) ? scope.dirId : (u.m_dir_id ?? null)
+    }
   }
   hitungDurasi()
 })
@@ -655,7 +679,7 @@ const landing = reactive({
     {
       icon: 'trash',
       class: 'bg-red-600 text-light-100',
-      show: (row) => row.status?.toUpperCase() === 'DRAFT',
+      show: (row) => row.status?.trim()?.toUpperCase() === 'DRAFT',
       title: "Hapus",
       // show: () => store.user.data.username==='developer',
       click(row) {
@@ -705,7 +729,10 @@ const landing = reactive({
       icon: 'edit',
       title: "Edit",
       class: 'bg-blue-600 text-light-100',
-      show: (row) => row.status?.toUpperCase() === 'DRAFT' || row.status?.toUpperCase() === 'REVISED',
+      show: (row) => {
+        const status = row.status?.trim()?.toUpperCase()
+        return status === 'DRAFT' || status === 'REVISED'
+      },
       // show: (row) => (currentMenu?.can_update)||store.user.data.username==='developer',
       click(row) {
         router.push(`${route.path}/${row.id}?action=Edit&` + tsId)
@@ -715,7 +742,7 @@ const landing = reactive({
       icon: 'copy',
       title: "Copy",
       class: 'bg-gray-600 text-light-100',
-      show: (row) => row.status?.toUpperCase() === 'DRAFT',
+      show: (row) => row.status?.trim()?.toUpperCase() === 'DRAFT',
       click(row) {
         router.push(`${route.path}/${row.id}?action=Copy&` + tsId)
       }
@@ -725,7 +752,7 @@ const landing = reactive({
       title: "Send Approval",
       class: 'bg-rose-700 rounded-lg text-white',
       show: (row) => {
-        const status = row.status?.toUpperCase()
+        const status = row.status?.trim()?.toUpperCase()
         return ['DRAFT', 'POSTED', 'REVISED'].includes(status)
       },
       async click(row) {

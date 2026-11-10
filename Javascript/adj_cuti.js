@@ -1,10 +1,69 @@
 import { useRouter, useRoute, RouterLink } from 'vue-router'
-import { ref, readonly, reactive, inject, onMounted, onBeforeMount, watchEffect, onActivated } from 'vue'
+import { ref, readonly, reactive, inject, onMounted, onBeforeMount, watchEffect, onActivated, computed } from 'vue'
 
 const router = useRouter()
 const route = useRoute()
 const store = inject('store')
 const swal = inject('swal')
+
+const isTruthyFlag = (val) => val === true || val === 1 || val === '1' || String(val || '').toLowerCase() === 'true' || String(val || '').toLowerCase() === 't'
+
+const getUserSnapshot = () => {
+  const storeData = store.user?.data || {}
+  let localData = {}
+  if (typeof window !== 'undefined' && window.localStorage?.user) {
+    try {
+      localData = JSON.parse(window.localStorage.user)?.data || {}
+    } catch (e) {}
+  }
+  return { ...localData, ...storeData }
+}
+
+const isHrdOrAdminRoleName = (name) => /(?:^|[^a-z])(hr[a-z]*|personalia|sdm|admin[a-z]*|human[\s_]*capital|human[\s_]*resources?)(?:[^a-z]|$)/i.test(String(name || ''))
+
+const getActiveRespoScope = () => {
+  const u = getUserSnapshot()
+  const ar = u.active_respo || null
+  const isSuper = u.username === 'developer' || isTruthyFlag(u.is_superadmin)
+  const hasRespo = isTruthyFlag(u.has_respo) || Boolean(ar)
+  const dirId = ar ? (ar.m_dir_id ?? null) : (u.m_dir_id ?? null)
+  const divId = ar ? (ar.m_divisi_id ?? null) : null
+  const deptId = ar ? (ar.m_dept_id ?? null) : null
+  const isHolding = hasRespo ? (ar ? !dirId : false) : !dirId
+  const rawRoles = Array.isArray(u.roles) && u.roles.length
+    ? u.roles.map(r => (typeof r === 'string' ? r : (r?.name || '')))
+    : (typeof u.role_names === 'string' && u.role_names.trim()
+        ? u.role_names.split(',').map(s => s.trim())
+        : (Array.isArray(u.role_names) ? u.role_names : []))
+  const isHrdOrAdmin = isSuper || (!(hasRespo && !ar) && rawRoles.some(rn => isHrdOrAdminRoleName(rn)))
+  return {
+    isSuper,
+    hasRespo,
+    isHrdOrAdmin,
+    isHolding,
+    isUnrestricted: isSuper || isHolding,
+    dirId: dirId ? Number(dirId) : null,
+    divId: divId ? Number(divId) : null,
+    deptId: deptId ? Number(deptId) : null,
+    isLockedMissing: hasRespo && !ar
+  }
+}
+
+const respoScope = ref(getActiveRespoScope())
+
+const isSuperadmin = computed(() => respoScope.value.isSuper)
+
+const getLandingWhereClause = () => {
+  const scope = getActiveRespoScope()
+  const u = getUserSnapshot()
+  if (scope.isLockedMissing) {
+    return '1=0'
+  }
+  if (!scope.isHrdOrAdmin) {
+    return `this.m_kary_id=${u.m_kary_id || 0}`
+  }
+  return ''
+}
 
 const isRead = route.params.id && route.params.id !== 'create'
 const actionText = ref(route.params.id === 'create' ? 'Tambah' : route.query.action)
@@ -51,10 +110,10 @@ const infoCuti = async (id) => {
   const resultJson = await res.json()
   let tempValues = resultJson.data
   if (tempValues) {
-    if (!values.m_dir_id && tempValues.m_dir_id) {
+    if (tempValues.m_dir_id) {
       values.m_dir_id = tempValues.m_dir_id
     }
-    if (!values.m_comp_id && tempValues.m_comp_id) {
+    if (tempValues.m_comp_id) {
       values.m_comp_id = tempValues.m_comp_id
     }
   }
@@ -106,6 +165,8 @@ const setNullInfoCuti = (v)=> {
   }
 }
 onBeforeMount(async () => {
+  const scope = getActiveRespoScope()
+  respoScope.value = scope
   console.log(adjKary.value)
     //  READ DATA
     
@@ -138,6 +199,11 @@ onBeforeMount(async () => {
         initialValues = {...initialValues, ...initialValues.info_cuti}
         if(adjKary.value === true){        
           initialValues.m_kary_id = initialValues.id
+        }
+        if (actionText.value === 'Copy' || route.query.action === 'Copy') {
+          initialValues.nomor = null
+          initialValues.status = 'DRAFT'
+          delete initialValues.id
         }
         initialValues.tipe_key = initialValues['tipe_cuti.key']
         infoCuti(initialValues.m_kary_id)
@@ -204,11 +270,16 @@ async function onSave() {
         })
         if (!res.ok) {
           if ([400, 422].includes(res.status)) {
-            const responseJson = await res.json()
+            const responseJson = await res.json().catch(() => ({}))
             formErrors.value = responseJson.errors || {}
-            throw (responseJson.errors.length ? responseJson.errors[0] : responseJson.message || "Failed when trying to post data")
+            const errs = responseJson.errors
+            const errMsg = Array.isArray(errs)
+              ? (errs[0] || responseJson.message)
+              : (errs && typeof errs === 'object' ? Object.values(errs).flat()[0] : null)
+            throw (errMsg || responseJson.message || "Failed when trying to post data")
           } else {
-            throw ("Failed when trying to post data")
+            const responseJson = await res.json().catch(() => ({}))
+            throw (responseJson.error || responseJson.message || "Failed when trying to post data")
           }
         }
         router.replace('/' + modulPath + '?reload='+(Date.parse(new Date())))
@@ -229,7 +300,7 @@ const landing = reactive({
     {
       icon: 'trash',
       class: 'bg-red-600 text-light-100',
-      // show: (row) =>row.status?.toUpperCase() === 'DRAFT',
+      show: (row) => respoScope.value.isHrdOrAdmin,
       title: "Hapus",
       // show: () => store.user.data.username==='developer',
       click(row) {
@@ -278,7 +349,7 @@ const landing = reactive({
     icon: 'edit',
     title: "Edit",
     class: 'bg-blue-600 text-light-100',
-    // show: (row) => row.status?.toUpperCase() === 'DRAFT' || row.status?.toUpperCase() === 'REVISED',
+    show: (row) => respoScope.value.isHrdOrAdmin,
     click(row) {
       router.push(`${route.path}/${row.id}?action=Edit&` + tsId);
     }
@@ -286,7 +357,7 @@ const landing = reactive({
     {
       icon: 'copy',
       title: "Copy",
-            show: (row) => row.status?.toUpperCase() === 'DRAFT',
+      show: (row) => respoScope.value.isHrdOrAdmin && row.status?.trim()?.toUpperCase() === 'DRAFT',
       class: 'bg-gray-600 text-light-100',
       click(row) {
         router.push(`${route.path}/${row.id}?action=Copy&`+tsId)
@@ -302,6 +373,7 @@ const landing = reactive({
     params: {
       simplest: true,
       join: true,
+      where: getLandingWhereClause(),
       searchfield: 'nomor, m_kary.nama_depan, m_kary.nama_lengkap, m_dir.nama, tipe_cuti.value, value, keterangan, status',
     },
     onsuccess(response) {

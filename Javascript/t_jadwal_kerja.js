@@ -9,15 +9,59 @@ const store = inject('store')
 const swal = inject('swal')
 
 const isTruthyFlag = (val) => val === true || val === 1 || val === '1' || String(val || '').toLowerCase() === 'true' || String(val || '').toLowerCase() === 't'
-const isSuperadmin = computed(() => {
-  const u = store?.user?.data || {}
-  const ar = u.active_respo || null
-  if (u.username === 'developer') return true
-  if (ar && typeof ar.is_superadmin !== 'undefined') {
-    return isTruthyFlag(ar.is_superadmin)
+
+const getUserSnapshot = () => {
+  const storeData = store.user?.data || {}
+  let localData = {}
+  if (typeof window !== 'undefined' && window.localStorage?.user) {
+    try {
+      localData = JSON.parse(window.localStorage.user)?.data || {}
+    } catch (e) {}
   }
-  return isTruthyFlag(u.is_superadmin)
-})
+  return { ...localData, ...storeData }
+}
+
+const isHrdOrAdminRoleName = (name) => /(?:^|[^a-z])(hr[a-z]*|personalia|sdm|admin[a-z]*|human[\s_]*capital|human[\s_]*resources?)(?:[^a-z]|$)/i.test(String(name || ''))
+
+const getActiveRespoScope = () => {
+  const u = getUserSnapshot()
+  const ar = u.active_respo || null
+  const isSuper = u.username === 'developer' || isTruthyFlag(u.is_superadmin)
+  const hasRespo = isTruthyFlag(u.has_respo) || Boolean(ar)
+  const dirId = ar ? (ar.m_dir_id ?? null) : (u.m_dir_id ?? null)
+  const divId = ar ? (ar.m_divisi_id ?? null) : null
+  const deptId = ar ? (ar.m_dept_id ?? null) : null
+  const isHolding = hasRespo ? (ar ? !dirId : false) : !dirId
+  const rawRoles = Array.isArray(u.roles) && u.roles.length
+    ? u.roles.map(r => (typeof r === 'string' ? r : (r?.name || '')))
+    : (typeof u.role_names === 'string' && u.role_names.trim()
+        ? u.role_names.split(',').map(s => s.trim())
+        : (Array.isArray(u.role_names) ? u.role_names : []))
+  const isHrdOrAdmin = isSuper || (!(hasRespo && !ar) && rawRoles.some(rn => isHrdOrAdminRoleName(rn)))
+  return {
+    isSuper,
+    hasRespo,
+    isHrdOrAdmin,
+    isHolding,
+    isUnrestricted: isSuper || isHolding,
+    dirId: dirId ? Number(dirId) : null,
+    divId: divId ? Number(divId) : null,
+    deptId: deptId ? Number(deptId) : null,
+    isLockedMissing: hasRespo && !ar
+  }
+}
+
+const respoScope = ref(getActiveRespoScope())
+
+const isSuperadmin = computed(() => respoScope.value.isSuper)
+
+const getLandingWhereClause = () => {
+  const scope = getActiveRespoScope()
+  if (scope.isLockedMissing) {
+    return '1=0'
+  }
+  return ''
+}
 
 const isRead = route.params.id && route.params.id !== 'create'
 const actionText = ref(route.params.id === 'create' ? 'Tambah' : route.query.action)
@@ -52,6 +96,9 @@ const values = reactive({
 })
 
 onBeforeMount(async () => {
+  const scope = getActiveRespoScope()
+  respoScope.value = scope
+
   if (isRead) {
     //  READ DATA
     try {
@@ -95,13 +142,9 @@ onBeforeMount(async () => {
     }
     isRequesting.value = false
   } else {
-    values.m_comp_id = store.user.data?.m_comp_id || 1
-    const activeRespo = store.user?.data?.active_respo
-    if (activeRespo && activeRespo.m_dir_id) {
-      values.m_dir_id = activeRespo.m_dir_id
-    } else if (store.user?.data?.m_dir_id) {
-      values.m_dir_id = store.user.data.m_dir_id
-    }
+    const u = getUserSnapshot()
+    values.m_comp_id = u.m_comp_id || 1
+    values.m_dir_id = (!scope.isUnrestricted && scope.dirId) ? Number(scope.dirId) : null
   }
 
   for (const key in initialValues) {
@@ -112,10 +155,8 @@ onBeforeMount(async () => {
     values.status = 'DRAFT'
     values.nomor = null
     delete values.id
-    const activeRespo = store.user?.data?.active_respo
-    const respoDirId = activeRespo ? (activeRespo.m_dir_id ?? null) : (store.user?.data?.m_dir_id ?? null)
-    if (respoDirId) {
-      values.m_dir_id = Number(respoDirId)
+    if (!scope.isUnrestricted && scope.dirId) {
+      values.m_dir_id = Number(scope.dirId)
     }
   }
 
@@ -349,11 +390,16 @@ async function onSave() {
         })
         if (!res.ok) {
           if ([400, 422].includes(res.status)) {
-            const responseJson = await res.json()
+            const responseJson = await res.json().catch(() => ({}))
             formErrors.value = responseJson.errors || {}
-            throw (responseJson.errors.length ? responseJson.errors[0] : responseJson.message || "Failed when trying to post data")
+            const errs = responseJson.errors
+            const errMsg = Array.isArray(errs)
+              ? (errs[0] || responseJson.message)
+              : (errs && typeof errs === 'object' ? Object.values(errs).flat()[0] : null)
+            throw (errMsg || responseJson.message || "Failed when trying to post data")
           } else {
-            throw ("Failed when trying to post data")
+            const responseJson = await res.json().catch(() => ({}))
+            throw (responseJson.error || responseJson.message || "Failed when trying to post data")
           }
         }
         router.replace('/' + modulPath + '?reload='+(Date.parse(new Date())))
@@ -377,7 +423,7 @@ const landing = reactive({
       icon: 'trash',
       class: 'bg-red-600 text-light-100',
       title: "Hapus",
-      show: (row) => row.status?.toUpperCase() == 'DRAFT',
+      show: (row) => row.status?.trim()?.toUpperCase() == 'DRAFT',
       click(row) {
         swal.fire({
           icon: 'warning',
@@ -398,11 +444,12 @@ const landing = reactive({
               })
               if (!res.ok) {
                 if ([400, 422].includes(res.status)) {
-                  const responseJson = await res.json()
+                  const responseJson = await res.json().catch(() => ({}))
                   formErrors.value = responseJson.errors || {}
                   throw new Error(responseJson.message || "Failed when trying to post data")
                 } else {
-                  throw new Error("Failed when trying to post data")
+                  const responseJson = await res.json().catch(() => ({}))
+                  throw new Error(responseJson.error || responseJson.message || "Failed when trying to post data")
                 }
               }
               apiTable.value.reload()
@@ -432,7 +479,7 @@ const landing = reactive({
       icon: 'edit',
       title: "Edit",
       class: 'bg-blue-600 text-light-100',
-      show: (row) => row.status?.toUpperCase() == 'DRAFT',
+      show: (row) => row.status?.trim()?.toUpperCase() == 'DRAFT',
       click(row) {
         router.push(`${route.path}/${row.id}?action=Edit&`+tsId)
       }
@@ -447,7 +494,7 @@ const landing = reactive({
     },
     {
       icon: 'tools',
-      show: (row) => row.status?.toUpperCase() != 'EXPIRED' && row['tipe_jam_kerja.code'] != 'OFFICE',
+      show: (row) => row.status?.trim()?.toUpperCase() != 'EXPIRED' && row['tipe_jam_kerja.code'] != 'OFFICE',
       title: "Sesuaikan Jadwal",
       class: 'bg-blue-400 text-light-100',
       click(row) {
@@ -458,7 +505,7 @@ const landing = reactive({
       icon: 'times',
       title: "Nonaktifkan Jadwal",
       class: 'bg-rose-700 rounded-lg text-white',
-      show: (row) => row.status?.toUpperCase() === 'POSTED' ,
+      show: (row) => row.status?.trim()?.toUpperCase() === 'POSTED' ,
       async click(row) {
         swal.fire({
           icon: 'warning',
@@ -482,11 +529,12 @@ const landing = reactive({
               })
               if (!res.ok) {
                 if ([400, 422].includes(res.status)) {
-                  const responseJson = await res.json()
+                  const responseJson = await res.json().catch(() => ({}))
                   formErrors.value = responseJson.errors || {}
                   throw new Error(responseJson.message || "Failed when trying to post data")
                 } else {
-                  throw new Error("Failed when trying to post data")
+                  const responseJson = await res.json().catch(() => ({}))
+                  throw new Error(responseJson.error || responseJson.message || "Failed when trying to post data")
                 }
               }
               apiTable.value.reload()
@@ -507,7 +555,7 @@ const landing = reactive({
       icon: 'location-arrow',
       title: "Post Data",
       class: 'bg-rose-700 rounded-lg text-white',
-      show: (row) => row.status?.toUpperCase() === 'DRAFT' ,
+      show: (row) => row.status?.trim()?.toUpperCase() === 'DRAFT' ,
       async click(row) {
         swal.fire({
           icon: 'warning',
@@ -531,11 +579,12 @@ const landing = reactive({
               })
               if (!res.ok) {
                 if ([400, 422].includes(res.status)) {
-                  const responseJson = await res.json()
+                  const responseJson = await res.json().catch(() => ({}))
                   formErrors.value = responseJson.errors || {}
                   throw new Error(responseJson.message || "Failed when trying to post data")
                 } else {
-                  throw new Error("Failed when trying to post data")
+                  const responseJson = await res.json().catch(() => ({}))
+                  throw new Error(responseJson.error || responseJson.message || "Failed when trying to post data")
                 }
               }
               apiTable.value.reload()
@@ -562,6 +611,7 @@ const landing = reactive({
     params: {
       simplest: true,
       join: true,
+      where: getLandingWhereClause(),
       searchfield:'this.id, this.nomor, m_comp.nama, m_dir.nama, tipe_jam_kerja.value, this.keterangan, this.status',
     },
     onsuccess(response) {
@@ -598,7 +648,7 @@ const landing = reactive({
     filter: 'ColFilter',
     resizable: true,
     cellClass: ['border-r', '!border-gray-200', 'justify-start'],
-    valueGetter: (params) => params.data['m_dir.nama'] || params.data.m_dir?.nama || '-'
+    valueGetter: (params) => params.data['m_dir.nama'] || params.data.m_dir?.nama || 'Semua Company'
   },
   {
     headerName: 'Tipe Jam Kerja',

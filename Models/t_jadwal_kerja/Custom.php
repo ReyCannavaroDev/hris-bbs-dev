@@ -61,9 +61,9 @@ class t_jadwal_kerja extends \App\Models\BasicModels\t_jadwal_kerja
     public function createBefore( $model, $arrayData, $metaData, $id=null )
     {
         // validasi
-        $tipe_jam_kerja = m_general::where('id', $arrayData['tipe_jam_kerja_id'])->pluck('code')->first();
+        $tipe_jam_kerja = m_general::where('id', $arrayData['tipe_jam_kerja_id'] ?? null)->pluck('code')->first();
 
-        if(strtolower($tipe_jam_kerja) == 'shift'){
+        if(strtolower($tipe_jam_kerja ?? '') == 'shift'){
             foreach(@app()->request->t_jadwal_kerja_det_hari ?? [] as $idx => $d){
                 if ((@$d['tipe_hari'] ?? '') === 'LIBUR') {
                     continue;
@@ -124,13 +124,42 @@ class t_jadwal_kerja extends \App\Models\BasicModels\t_jadwal_kerja
         ];
     }
 
+    private function checkJadwalCompanyScope($dirId = null, $divId = null, $deptId = null)
+    {
+        $respoCore = getCore('Respo');
+        if (!$respoCore) {
+            return null;
+        }
+        $authUser = app()->bound('auth') ? app('auth')->user() : (auth()->check() ? auth()->user() : null);
+        if (!$authUser) {
+            return response()->json(['error' => 'Unauthorized.', 'message' => 'Unauthorized.'], 401);
+        }
+        if ($respoCore->isUserSuperadmin($authUser)) {
+            return null;
+        }
+        $scope = $respoCore->getActiveCompanyScope($authUser);
+        if (!$scope || ($scope['m_dir_id'] ?? null) === -1) {
+            return response()->json([
+                'error'   => 'Responsibility aktif tidak ditemukan atau sedang nonaktif.',
+                'message' => 'Responsibility aktif tidak ditemukan atau sedang nonaktif.',
+            ], 403);
+        }
+        if (!$respoCore->matchesActiveCompanyScope($dirId, $divId, $deptId, $authUser)) {
+            return response()->json([
+                'error'   => 'Data jadwal kerja berada di luar scope responsibility aktif.',
+                'message' => 'Data jadwal kerja berada di luar scope responsibility aktif.',
+            ], 403);
+        }
+        return null;
+    }
+
     public function updateBefore( $model, $arrayData, $metaData, $id=null )
     {
          // validasi
-        $tipe_jam_kerja = m_general::where('id', $arrayData['tipe_jam_kerja_id'])->pluck('code')->first();
+        $tipe_jam_kerja = m_general::where('id', $arrayData['tipe_jam_kerja_id'] ?? null)->pluck('code')->first();
 
         // khusus edit tambahkan pengecualian untuk setting jadwal detail karyawan
-        if(strtolower($tipe_jam_kerja) == 'shift' && app()->request->from != 'setting_jadwal'){
+        if(strtolower($tipe_jam_kerja ?? '') == 'shift' && app()->request->from != 'setting_jadwal'){
             foreach(@app()->request->t_jadwal_kerja_det_hari ?? [] as $idx => $d){
                 if ((@$d['tipe_hari'] ?? '') === 'LIBUR') {
                     continue;
@@ -154,8 +183,17 @@ class t_jadwal_kerja extends \App\Models\BasicModels\t_jadwal_kerja
 
         // Validasi Scope Respo Aktif saat Update Jadwal Kerja
         $respoCore = getCore('Respo');
-        $authUser = app()->bound('auth') ? app('auth')->user() : null;
+        $authUser = app()->bound('auth') ? app('auth')->user() : (auth()->check() ? auth()->user() : null);
         if ($authUser && $respoCore && !$respoCore->isUserSuperadmin($authUser)) {
+            $scope = $respoCore->getActiveCompanyScope($authUser);
+            if (!$scope || ($scope['m_dir_id'] ?? null) === -1) {
+                return [
+                    "model" => $model,
+                    "data"  => $arrayData,
+                    "errors" => ["Responsibility aktif tidak ditemukan atau sedang nonaktif."],
+                ];
+            }
+
             $existing = \DB::table('t_jadwal_kerja')->where('id', $id)->first();
             if (!$existing) {
                 return [
@@ -204,6 +242,11 @@ class t_jadwal_kerja extends \App\Models\BasicModels\t_jadwal_kerja
         $grup_kerja = t_grup_kerja::find(req('grup_kerja_id') ?? 0);
 
         if(!$grup_kerja) return $this->helper->customResponse("Grup kerja id tersbut tidak ditemukan", 422);
+
+        $scopeErr = $this->checkJadwalCompanyScope($grup_kerja->m_dir_id ?? null, $grup_kerja->m_divisi_id ?? null, $grup_kerja->m_dept_id ?? null);
+        if ($scopeErr) {
+            return $this->helper->customResponse("Grup kerja berada di luar scope responsibility aktif.", 403);
+        }
 
         $date_from = $grup_kerja->date_from;
         $date_to = $grup_kerja->date_to;
@@ -280,28 +323,36 @@ class t_jadwal_kerja extends \App\Models\BasicModels\t_jadwal_kerja
 
      public function custom_post($request)
     {
+        $id = $request->id ?? $request->input('id');
+        $data = $this->find($id);
+        if (!$data) {
+            return response()->json(
+                ["error" => "Data tidak ditemukan.", "message" => "Data tidak ditemukan."],
+                404
+            );
+        }
+
+        $scopeErr = $this->checkJadwalCompanyScope($data->m_dir_id ?? null);
+        if ($scopeErr) {
+            return $scopeErr;
+        }
+
         try {
             // Begin a database transaction
             \DB::beginTransaction();
 
-            $data = $this->find($request->id);
-            if (!$data) {
-                return response()->json(
-                    ["error" => "Data tidak ditemukan."],
-                    404
-                );
-            }
-
-            $tipe_jam_kerja = m_general::where('id',$data->tipe_jam_kerja_id)->pluck('value')->first();
+            $tipe_jam_kerja = m_general::where('id', $data->tipe_jam_kerja_id)->pluck('value')->first();
 
             $update = $data->update([
                 "status" => "POSTED",
             ]);
 
-            if(strtolower($tipe_jam_kerja) == 'office'){
-                $updateQ = $this->where('id', '!=' ,$request->id)->where('tipe_jam_kerja_id',$data->tipe_jam_kerja_id);
+            if(strtolower($tipe_jam_kerja ?? '') == 'office'){
+                $updateQ = $this->where('id', '!=', $data->id)->where('tipe_jam_kerja_id', $data->tipe_jam_kerja_id);
                 if (!empty($data->m_dir_id)) {
                     $updateQ->where('m_dir_id', $data->m_dir_id);
+                } else {
+                    $updateQ->whereNull('m_dir_id');
                 }
                 $update = $updateQ->update([
                     "status" => "EXPIRED",
@@ -309,6 +360,7 @@ class t_jadwal_kerja extends \App\Models\BasicModels\t_jadwal_kerja
             }
 
             \DB::commit();
+            return response()->json(["message" => "Data berhasil diposting."]);
         } catch (\Exception $e) {
             // Handle exception, log error messages, etc.
 
@@ -316,7 +368,7 @@ class t_jadwal_kerja extends \App\Models\BasicModels\t_jadwal_kerja
             \DB::rollBack();
 
             return response()->json(
-                ["error" => "Terjadi kesalahan: " . $e->getMessage()],
+                ["error" => "Terjadi kesalahan: " . $e->getMessage(), "message" => "Terjadi kesalahan: " . $e->getMessage()],
                 500
             );
         }
@@ -324,23 +376,30 @@ class t_jadwal_kerja extends \App\Models\BasicModels\t_jadwal_kerja
 
     public function custom_expired($request)
     {
+        $id = $request->id ?? $request->input('id');
+        $data = $this->find($id);
+        if (!$data) {
+            return response()->json(
+                ["error" => "Data tidak ditemukan.", "message" => "Data tidak ditemukan."],
+                404
+            );
+        }
+
+        $scopeErr = $this->checkJadwalCompanyScope($data->m_dir_id ?? null);
+        if ($scopeErr) {
+            return $scopeErr;
+        }
+
         try {
             // Begin a database transaction
             \DB::beginTransaction();
-
-            $data = $this->find($request->id);
-            if (!$data) {
-                return response()->json(
-                    ["error" => "Data tidak ditemukan."],
-                    404
-                );
-            }
 
             $update = $data->update([
                 "status" => "EXPIRED",
             ]);
 
             \DB::commit();
+            return response()->json(["message" => "Jadwal kerja berhasil dinonaktifkan."]);
         } catch (\Exception $e) {
             // Handle exception, log error messages, etc.
 
@@ -348,7 +407,7 @@ class t_jadwal_kerja extends \App\Models\BasicModels\t_jadwal_kerja
             \DB::rollBack();
 
             return response()->json(
-                ["error" => "Terjadi kesalahan: " . $e->getMessage()],
+                ["error" => "Terjadi kesalahan: " . $e->getMessage(), "message" => "Terjadi kesalahan: " . $e->getMessage()],
                 500
             );
         }
@@ -401,17 +460,43 @@ class t_jadwal_kerja extends \App\Models\BasicModels\t_jadwal_kerja
 
     public function custom_save_jadwal($req){
         $data = collect($req);
-            foreach($data as $single){
-                $check = t_jadwal_kerja_det::firstOrCreate([
-                    't_jadwal_kerja_det_hari_id' => $single['t_jadwal_kerja_det_hari_id'],
-                    't_jadwal_kerja_id' => $single['t_jadwal_kerja_id'],
-                    'm_kary_id' => $single['m_kary_id']
-                ],[
-                    'm_dir_id' => $single['m_dir_id'],
-                    'm_divisi_id' => $single['m_divisi_id'],
-                    'm_dept_id' => $single['m_dept_id'],
-                ]);
+        $validatedRows = [];
+        foreach($data as $single){
+            $head = !empty($single['t_jadwal_kerja_id']) ? \DB::table('t_jadwal_kerja')->where('id', $single['t_jadwal_kerja_id'])->first() : null;
+            if (!$head) {
+                return $this->helper->customResponse('Header jadwal kerja tidak ditemukan.', 404);
             }
+            $headErr = $this->checkJadwalCompanyScope($head->m_dir_id ?? null);
+            if ($headErr) {
+                return $headErr;
+            }
+            $kary = !empty($single['m_kary_id']) ? \DB::table('m_kary')->where('id', $single['m_kary_id'])->first() : null;
+            if (!$kary) {
+                return $this->helper->customResponse('Data karyawan tidak ditemukan.', 404);
+            }
+            $karyErr = $this->checkJadwalCompanyScope($kary->m_dir_id ?? null, $kary->m_divisi_id ?? null, $kary->m_dept_id ?? null);
+            if ($karyErr) {
+                return $karyErr;
+            }
+            $validatedRows[] = [
+                'single' => $single,
+                'kary'   => $kary,
+            ];
+        }
+
+        foreach($validatedRows as $row){
+            $single = $row['single'];
+            $kary = $row['kary'];
+            t_jadwal_kerja_det::firstOrCreate([
+                't_jadwal_kerja_det_hari_id' => $single['t_jadwal_kerja_det_hari_id'],
+                't_jadwal_kerja_id' => $single['t_jadwal_kerja_id'],
+                'm_kary_id' => $single['m_kary_id']
+            ],[
+                'm_dir_id' => $single['m_dir_id'] ?? $kary->m_dir_id,
+                'm_divisi_id' => $single['m_divisi_id'] ?? $kary->m_divisi_id,
+                'm_dept_id' => $single['m_dept_id'] ?? $kary->m_dept_id,
+            ]);
+        }
         return $this->helper->customResponse('Success', 201);        
     }
 
@@ -421,6 +506,22 @@ class t_jadwal_kerja extends \App\Models\BasicModels\t_jadwal_kerja
         ->where('t_jadwal_kerja_id',$t_jadwal_det_head['t_jadwal_kerja_id'])
         ->where('m_kary_id',$t_jadwal_det_head['m_kary_id'])->first();
         if($getData){
+            $head = !empty($getData->t_jadwal_kerja_id) ? \DB::table('t_jadwal_kerja')->where('id', $getData->t_jadwal_kerja_id)->first() : null;
+            if ($head) {
+                $headErr = $this->checkJadwalCompanyScope($head->m_dir_id ?? null);
+                if ($headErr) {
+                    return $headErr;
+                }
+            }
+            $kary = !empty($getData->m_kary_id) ? \DB::table('m_kary')->where('id', $getData->m_kary_id)->first() : null;
+            $scopeErr = $this->checkJadwalCompanyScope(
+                $getData->m_dir_id ?? ($kary->m_dir_id ?? null),
+                $getData->m_divisi_id ?? ($kary->m_divisi_id ?? null),
+                $getData->m_dept_id ?? ($kary->m_dept_id ?? null)
+            );
+            if ($scopeErr) {
+                return $scopeErr;
+            }
             $getData->delete();
             return $this->helper->customResponse('Success', 200);
         }else{
@@ -429,7 +530,31 @@ class t_jadwal_kerja extends \App\Models\BasicModels\t_jadwal_kerja
     }
 
     public function custom_delete_jadwal_bulk($req){
-        $data = collect($req['items'])->pluck('id')->toArray();
+        $data = collect($req['items'] ?? [])->pluck('id')->filter()->values()->toArray();
+        if (empty($data)) {
+            return $this->helper->customResponse('Success', 200);
+        }
+
+        $targets = t_jadwal_kerja_det::whereIn('id', $data)->get();
+        foreach ($targets as $det) {
+            $head = !empty($det->t_jadwal_kerja_id) ? \DB::table('t_jadwal_kerja')->where('id', $det->t_jadwal_kerja_id)->first() : null;
+            if ($head) {
+                $headErr = $this->checkJadwalCompanyScope($head->m_dir_id ?? null);
+                if ($headErr) {
+                    return $headErr;
+                }
+            }
+            $kary = !empty($det->m_kary_id) ? \DB::table('m_kary')->where('id', $det->m_kary_id)->first() : null;
+            $scopeErr = $this->checkJadwalCompanyScope(
+                $det->m_dir_id ?? ($kary->m_dir_id ?? null),
+                $det->m_divisi_id ?? ($kary->m_divisi_id ?? null),
+                $det->m_dept_id ?? ($kary->m_dept_id ?? null)
+            );
+            if ($scopeErr) {
+                return $scopeErr;
+            }
+        }
+
         try{
             $check = t_jadwal_kerja_det::whereIn('id',$data)->delete();
             return $this->helper->customResponse('Success', 200);

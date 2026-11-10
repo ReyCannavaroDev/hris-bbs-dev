@@ -9,15 +9,59 @@ const store = inject('store')
 const swal = inject('swal')
 
 const isTruthyFlag = (val) => val === true || val === 1 || val === '1' || String(val || '').toLowerCase() === 'true' || String(val || '').toLowerCase() === 't'
-const isSuperadmin = computed(() => {
-  const u = store?.user?.data || {}
-  const ar = u.active_respo || null
-  if (u.username === 'developer') return true
-  if (ar && typeof ar.is_superadmin !== 'undefined') {
-    return isTruthyFlag(ar.is_superadmin)
+
+const getUserSnapshot = () => {
+  const storeData = store.user?.data || {}
+  let localData = {}
+  if (typeof window !== 'undefined' && window.localStorage?.user) {
+    try {
+      localData = JSON.parse(window.localStorage.user)?.data || {}
+    } catch (e) {}
   }
-  return isTruthyFlag(u.is_superadmin)
-})
+  return { ...localData, ...storeData }
+}
+
+const isHrdOrAdminRoleName = (name) => /(?:^|[^a-z])(hr[a-z]*|personalia|sdm|admin[a-z]*|human[\s_]*capital|human[\s_]*resources?)(?:[^a-z]|$)/i.test(String(name || ''))
+
+const getActiveRespoScope = () => {
+  const u = getUserSnapshot()
+  const ar = u.active_respo || null
+  const isSuper = u.username === 'developer' || isTruthyFlag(u.is_superadmin)
+  const hasRespo = isTruthyFlag(u.has_respo) || Boolean(ar)
+  const dirId = ar ? (ar.m_dir_id ?? null) : (u.m_dir_id ?? null)
+  const divId = ar ? (ar.m_divisi_id ?? null) : null
+  const deptId = ar ? (ar.m_dept_id ?? null) : null
+  const isHolding = hasRespo ? (ar ? !dirId : false) : !dirId
+  const rawRoles = Array.isArray(u.roles) && u.roles.length
+    ? u.roles.map(r => (typeof r === 'string' ? r : (r?.name || '')))
+    : (typeof u.role_names === 'string' && u.role_names.trim()
+        ? u.role_names.split(',').map(s => s.trim())
+        : (Array.isArray(u.role_names) ? u.role_names : []))
+  const isHrdOrAdmin = isSuper || (!(hasRespo && !ar) && rawRoles.some(rn => isHrdOrAdminRoleName(rn)))
+  return {
+    isSuper,
+    hasRespo,
+    isHrdOrAdmin,
+    isHolding,
+    isUnrestricted: isSuper || isHolding,
+    dirId: dirId ? Number(dirId) : null,
+    divId: divId ? Number(divId) : null,
+    deptId: deptId ? Number(deptId) : null,
+    isLockedMissing: hasRespo && !ar
+  }
+}
+
+const respoScope = ref(getActiveRespoScope())
+
+const isSuperadmin = computed(() => respoScope.value.isSuper)
+
+const getLandingWhereClause = () => {
+  const scope = getActiveRespoScope()
+  if (scope.isLockedMissing) {
+    return '1=0'
+  }
+  return ''
+}
 
 const isRead = route.params.id && route.params.id !== 'create'
 const actionText = ref(route.params.id === 'create' ? 'Tambah' : route.query.action)
@@ -174,13 +218,19 @@ const values = reactive({
 })
 
 onBeforeMount(async () => {
-  values.direktorat = store.user.data?.direktorat
+  const scope = getActiveRespoScope()
+  respoScope.value = scope
+  const u = getUserSnapshot()
+  values.direktorat = u.direktorat
 
   if (!isRead) {
-    const activeRespo = store.user?.data?.active_respo
-    const respoDirId = activeRespo ? (activeRespo.m_dir_id ?? null) : (store.user?.data?.m_dir_id ?? null)
-    if (respoDirId) {
-      values.m_dir_id = Number(respoDirId)
+    if (!scope.isUnrestricted) {
+      values.m_dir_id = scope.dirId ?? null
+      values.divisi = scope.divId ?? null
+      values.m_divisi_id = scope.divId ?? null
+      values.m_dept_id = scope.deptId ?? null
+    } else {
+      values.m_dir_id = null
     }
   }
 
@@ -385,6 +435,7 @@ const landing = reactive({
     params: {
       simplest: true,
       searchfield: 'this.id, this.nomor, m_kary.nik, m_kary.nama_lengkap, m_kary_divisi.nama, m_kary_dept.nama, this.periode, this.total_lembur',
+      where: getLandingWhereClause(),
     },
     onsuccess(response) {
       if (response) {

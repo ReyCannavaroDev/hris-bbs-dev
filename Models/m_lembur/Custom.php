@@ -46,7 +46,7 @@ class m_lembur extends \App\Models\BasicModels\m_lembur
     {
       // Validasi Scope Respo Aktif saat Create Tarif Lembur
       $respoCore = getCore('Respo');
-      $authUser = app()->bound('auth') ? app('auth')->user() : null;
+      $authUser = app()->bound('auth') ? app('auth')->user() : (auth()->check() ? auth()->user() : null);
       if ($authUser && $respoCore && !$respoCore->isUserSuperadmin($authUser)) {
           $scope = $respoCore->getActiveCompanyScope($authUser);
           if (!$scope || ($scope['m_dir_id'] ?? null) === -1) {
@@ -57,11 +57,11 @@ class m_lembur extends \App\Models\BasicModels\m_lembur
               ];
           }
 
-          if (empty($arrayData['m_dir_id']) && !empty($scope['m_dir_id'])) {
+          if (empty($arrayData['m_dir_id']) && empty($scope['is_unrestricted']) && !empty($scope['m_dir_id'])) {
               $arrayData['m_dir_id'] = $scope['m_dir_id'];
           }
 
-          $effDirId = $arrayData['m_dir_id'] ?? null;
+          $effDirId = !empty($arrayData['m_dir_id']) ? (int) $arrayData['m_dir_id'] : null;
           if (!$respoCore->matchesActiveCompanyScope($effDirId, null, null, $authUser)) {
               return [
                   "model" => $model,
@@ -71,10 +71,10 @@ class m_lembur extends \App\Models\BasicModels\m_lembur
           }
       }
 
-      $dirId = $arrayData['m_dir_id'] ?? (auth()->user()->m_dir_id ?? null);
-      $divisiId = !empty($arrayData['m_divisi_id']) ? $arrayData['m_divisi_id'] : null;
-      $deptId = !empty($arrayData['m_dept_id']) ? $arrayData['m_dept_id'] : null;
-      $gradingId = !empty($arrayData['grading_id']) ? $arrayData['grading_id'] : null;
+      $dirId = !empty($arrayData['m_dir_id']) ? (int) $arrayData['m_dir_id'] : null;
+      $divisiId = !empty($arrayData['m_divisi_id']) ? (int) $arrayData['m_divisi_id'] : null;
+      $deptId = !empty($arrayData['m_dept_id']) ? (int) $arrayData['m_dept_id'] : null;
+      $gradingId = !empty($arrayData['grading_id']) ? (int) $arrayData['grading_id'] : null;
 
       // Generate auto sequential kode LMB-xxxx
       $maxId = (int) ($model->max('id') ?? 0);
@@ -137,8 +137,10 @@ class m_lembur extends \App\Models\BasicModels\m_lembur
 
     public function transformRowData( array $row )
     {
-        if (empty($row['m_dir.nama']) && !empty($row['m_dir_id'])) {
-            $row['m_dir.nama'] = \DB::table('m_dir')->where('id', $row['m_dir_id'])->value('nama') ?? '-';
+        if (empty($row['m_dir.nama'])) {
+            $row['m_dir.nama'] = !empty($row['m_dir_id'])
+                ? (\DB::table('m_dir')->where('id', $row['m_dir_id'])->value('nama') ?? '-')
+                : 'Semua Company';
         }
         if (empty($row['m_divisi.nama']) && !empty($row['m_divisi_id'])) {
             $row['m_divisi.nama'] = \DB::table('m_divisi')->where('id', $row['m_divisi_id'])->value('nama') ?? 'Semua Divisi';
@@ -153,10 +155,27 @@ class m_lembur extends \App\Models\BasicModels\m_lembur
     {
       // Validasi Scope Respo Aktif saat Update Tarif Lembur
       $respoCore = getCore('Respo');
-      $authUser = app()->bound('auth') ? app('auth')->user() : null;
+      $authUser = app()->bound('auth') ? app('auth')->user() : (auth()->check() ? auth()->user() : null);
+      $existing = $id ? \DB::table('m_lembur')->where('id', $id)->first() : null;
       if ($authUser && $respoCore && !$respoCore->isUserSuperadmin($authUser)) {
-          $existing = \DB::table('m_lembur')->where('id', $id)->first();
-          if ($existing && !$respoCore->matchesActiveCompanyScope($existing->m_dir_id, null, null, $authUser)) {
+          $scope = $respoCore->getActiveCompanyScope($authUser);
+          if (!$scope || ($scope['m_dir_id'] ?? null) === -1) {
+              return [
+                  "model" => $model,
+                  "data"  => $arrayData,
+                  "errors" => ["Responsibility aktif tidak ditemukan atau sedang nonaktif."],
+              ];
+          }
+
+          if (!$existing) {
+              return [
+                  "model" => $model,
+                  "data"  => $arrayData,
+                  "errors" => ["Data tarif lembur tidak ditemukan."],
+              ];
+          }
+
+          if (!$respoCore->matchesActiveCompanyScope($existing->m_dir_id, null, null, $authUser)) {
               return [
                   "model" => $model,
                   "data"  => $arrayData,
@@ -164,7 +183,9 @@ class m_lembur extends \App\Models\BasicModels\m_lembur
               ];
           }
 
-          $targetDirId = array_key_exists('m_dir_id', $arrayData) ? $arrayData['m_dir_id'] : ($existing->m_dir_id ?? null);
+          $targetDirId = array_key_exists('m_dir_id', $arrayData)
+              ? (!empty($arrayData['m_dir_id']) ? (int) $arrayData['m_dir_id'] : null)
+              : ($existing->m_dir_id ?? null);
           if (!$respoCore->matchesActiveCompanyScope($targetDirId, null, null, $authUser)) {
               return [
                   "model" => $model,
@@ -175,6 +196,11 @@ class m_lembur extends \App\Models\BasicModels\m_lembur
       }
 
       $newArrayData = $arrayData;
+      foreach (['m_dir_id', 'm_divisi_id', 'm_dept_id', 'grading_id'] as $nullableKey) {
+          if (array_key_exists($nullableKey, $newArrayData)) {
+              $newArrayData[$nullableKey] = !empty($newArrayData[$nullableKey]) ? (int) $newArrayData[$nullableKey] : null;
+          }
+      }
 
       if (array_key_exists('grading_id', $arrayData)) {
         $newArrayData['grading'] = !empty($arrayData['grading_id'])
