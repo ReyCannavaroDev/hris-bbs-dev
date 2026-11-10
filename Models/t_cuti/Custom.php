@@ -3,6 +3,7 @@
 namespace App\Models\CustomModels;
 use Carbon\Carbon;
 use Carbon\CarbonPeriod;
+use Illuminate\Database\Eloquent\Builder;
 
 class t_cuti extends \App\Models\BasicModels\t_cuti
 {
@@ -11,6 +12,29 @@ class t_cuti extends \App\Models\BasicModels\t_cuti
     {
         parent::__construct();
         $this->helper = getCore("Helper");
+    }
+
+    protected static function boot()
+    {
+        parent::boot();
+
+        // Isolasi Transaksi Cuti sesuai active Respo:
+        // Superadmin = semua PT, HRD/Admin = PT/Divisi/Dept active Respo, User biasa = milik sendiri (+ atasan/approver saat GET single detail)
+        static::addGlobalScope('respo_scope', function (Builder $builder) {
+            $respoCore = getCore('Respo');
+            if (!$respoCore || !$respoCore->isOperationCrudRequest('t_cuti', ['GET', 'PUT', 'PATCH', 'DELETE'])) {
+                return;
+            }
+
+            $respoCore->applyActiveEmployeeTransactionScopeToQuery($builder, 't_cuti', [
+                'trx_table'                => 't_cuti',
+                'dir_col'                  => 't_cuti.m_dir_id',
+                'divisi_col'               => null,
+                'dept_col'                 => null,
+                'kary_fk_col'              => 't_cuti.m_kary_id',
+                'allow_approver_on_single' => true,
+            ]);
+        });
     }
 
     public $fileColumns = [
@@ -302,13 +326,142 @@ class t_cuti extends \App\Models\BasicModels\t_cuti
         return null;
     }
 
+    private function canAccessCutiApprovalOrTrx($trx, $genApp = null, $authUser = null, $respoCore = null): bool
+    {
+        if (!$trx) {
+            return false;
+        }
+        $respo = $respoCore ?: getCore('Respo');
+        $user = $authUser ?: (auth()->check() ? auth()->user() : null);
+        if (!$user || !$respo) {
+            return true;
+        }
+        if ($respo->isUserSuperadmin($user)) {
+            return true;
+        }
+
+        $scope = $respo->getActiveCompanyScope($user);
+        if (($scope['m_dir_id'] ?? null) === -1) {
+            return false;
+        }
+
+        $uid = (int) ($user->id ?? 0);
+        $userKaryId = (int) ($user->m_kary_id ?? 0);
+
+        if (($userKaryId > 0 && (int) ($trx->m_kary_id ?? 0) === $userKaryId)
+            || ($uid > 0 && (int) ($trx->creator_id ?? 0) === $uid)) {
+            return true;
+        }
+
+        $kary = !empty($trx->m_kary_id) ? \DB::table('m_kary')->where('id', $trx->m_kary_id)->first() : null;
+        if ($kary && $userKaryId > 0 && !empty($kary->atasan_id) && (int) $kary->atasan_id === $userKaryId) {
+            return true;
+        }
+
+        $effDirId = !empty($trx->m_dir_id) ? (int) $trx->m_dir_id : (!empty($kary->m_dir_id) ? (int) $kary->m_dir_id : null);
+        $inCompanyScope = $respo->matchesActiveCompanyScope($effDirId, $kary->m_divisi_id ?? null, $kary->m_dept_id ?? null, $user);
+
+        if ($inCompanyScope && $respo->isUserHrdOrAdmin($user)) {
+            return true;
+        }
+
+        if ($genApp) {
+            if ($uid > 0 && !empty($genApp->last_approve_id) && (int) $genApp->last_approve_id === $uid) {
+                return true;
+            }
+            if ($uid > 0) {
+                $isDirectDet = \DB::table('generate_approval_det')
+                    ->where('generate_approval_id', $genApp->id)
+                    ->where(function ($q) use ($uid) {
+                        $q->where('default_user_id', $uid)->orWhere('action_user_id', $uid);
+                    })
+                    ->exists();
+                if ($isDirectDet) {
+                    return true;
+                }
+            }
+            if ($inCompanyScope) {
+                $roleIds = $respo->getEffectiveRoleIds($user);
+                if (!empty($roleIds)) {
+                    $hasRoleDet = \DB::table('generate_approval_det')
+                        ->where('generate_approval_id', $genApp->id)
+                        ->whereNull('default_user_id')
+                        ->whereIn('m_role_id', $roleIds)
+                        ->exists();
+                    if ($hasRoleDet) {
+                        return true;
+                    }
+                }
+            }
+        }
+
+        return false;
+    }
+
     public function createBefore($model, $arrayData, $metaData, $id = null)
-    {   
-        if(!isset($arrayData['m_kary_id'])){
-            return $this->helper->customResponse(
-                "Akun ini tidak Tersambung dengan data karyawan manapun !",
-                422
-            );
+    {
+        $respoCore = getCore('Respo');
+        $authUser = auth()->check() ? auth()->user() : null;
+        $scope = ($authUser && $respoCore) ? $respoCore->getActiveCompanyScope($authUser) : null;
+        if ($scope && ($scope['m_dir_id'] ?? null) === -1) {
+            return response([
+                "status"  => "error",
+                "message" => "Responsibility aktif tidak ditemukan atau sedang nonaktif.",
+                "errors"  => ["m_dir_id" => ["Responsibility aktif tidak ditemukan atau sedang nonaktif."]],
+            ], 422);
+        }
+
+        if (empty($arrayData['m_kary_id'])) {
+            return response([
+                "status"  => "error",
+                "message" => "Akun ini tidak Tersambung dengan data karyawan manapun !",
+                "errors"  => ["m_kary_id" => ["Akun ini tidak Tersambung dengan data karyawan manapun !"]],
+            ], 422);
+        }
+
+        $targetKary = \DB::table('m_kary')->where('id', $arrayData['m_kary_id'])->first();
+        if (!$targetKary) {
+            return response([
+                "status"  => "error",
+                "message" => "Data karyawan tidak ditemukan.",
+                "errors"  => ["m_kary_id" => ["Data karyawan tidak ditemukan."]],
+            ], 422);
+        }
+
+        if ($authUser && $respoCore) {
+            $isHrdOrAdmin = $respoCore->isUserHrdOrAdmin($authUser);
+            $authKaryId = !empty($authUser->m_kary_id) ? (int) $authUser->m_kary_id : null;
+
+            if (!$isHrdOrAdmin && (!$authKaryId || (int) $arrayData['m_kary_id'] !== $authKaryId)) {
+                return response([
+                    "status"  => "error",
+                    "message" => $authKaryId
+                        ? "Tidak diizinkan mengajukan cuti untuk karyawan lain."
+                        : "Akun ini tidak Tersambung dengan data karyawan manapun !",
+                    "errors"  => ["m_kary_id" => [$authKaryId ? "Tidak diizinkan mengajukan cuti untuk karyawan lain." : "Akun ini tidak Tersambung dengan data karyawan manapun !"]],
+                ], 422);
+            }
+
+            if (!$isHrdOrAdmin && !empty($targetKary->m_dir_id)) {
+                $arrayData['m_dir_id'] = (int) $targetKary->m_dir_id;
+            } elseif (!empty($arrayData['m_dir_id']) && !empty($targetKary->m_dir_id) && (int) $arrayData['m_dir_id'] !== (int) $targetKary->m_dir_id) {
+                return response([
+                    "status"  => "error",
+                    "message" => "Company pengajuan cuti harus sesuai dengan Company karyawan terpilih.",
+                    "errors"  => ["m_dir_id" => ["Company pengajuan cuti harus sesuai dengan Company karyawan terpilih."]],
+                ], 422);
+            }
+
+            if ($scope && empty($scope['is_unrestricted'])) {
+                $effDirId = !empty($arrayData['m_dir_id']) ? (int) $arrayData['m_dir_id'] : (!empty($targetKary->m_dir_id) ? (int) $targetKary->m_dir_id : null);
+                if (!$respoCore->matchesActiveCompanyScope($effDirId, $targetKary->m_divisi_id ?? null, $targetKary->m_dept_id ?? null, $authUser)) {
+                    return response([
+                        "status"  => "error",
+                        "message" => "Tidak diizinkan membuat pengajuan cuti di luar scope Company/Divisi/Departemen aktif.",
+                        "errors"  => ["m_kary_id" => ["Karyawan atau Company berada di luar scope responsibility aktif."]],
+                    ], 422);
+                }
+            }
         }
 
         $interval = null;
@@ -340,11 +493,14 @@ class t_cuti extends \App\Models\BasicModels\t_cuti
                 "interval_min" => @$interval_min
             ]);
         }
-        if (empty($newArrayData['m_comp_id'])) {
-            $newArrayData['m_comp_id'] = 1;
+        if (empty($newArrayData['m_dir_id']) && !empty($targetKary->m_dir_id)) {
+            $newArrayData['m_dir_id'] = (int) $targetKary->m_dir_id;
         }
-        if (empty($newArrayData['m_dir_id']) && !empty($newArrayData['m_kary_id'])) {
-            $newArrayData['m_dir_id'] = \DB::table('m_kary')->where('id', $newArrayData['m_kary_id'])->value('m_dir_id');
+        if (empty($newArrayData['m_comp_id']) && !empty($targetKary->m_comp_id)) {
+            $newArrayData['m_comp_id'] = (int) $targetKary->m_comp_id;
+        }
+        if (empty($newArrayData['m_comp_id'])) {
+            $newArrayData['m_comp_id'] = ($authUser && !empty($authUser->m_comp_id)) ? (int) $authUser->m_comp_id : 1;
         }
 
         foreach (['date_from', 'date_to'] as $dCol) {
@@ -365,6 +521,86 @@ class t_cuti extends \App\Models\BasicModels\t_cuti
 
     public function updateBefore( $model, $arrayData, $metaData, $id=null )
     {
+        $respoCore = getCore('Respo');
+        $authUser = auth()->check() ? auth()->user() : null;
+        $existing = $id ? \DB::table('t_cuti')->where('id', $id)->first() : null;
+        $scope = ($authUser && $respoCore) ? $respoCore->getActiveCompanyScope($authUser) : null;
+        if ($scope && ($scope['m_dir_id'] ?? null) === -1) {
+            return response([
+                "status"  => "error",
+                "message" => "Responsibility aktif tidak ditemukan atau sedang nonaktif.",
+                "errors"  => ["m_dir_id" => ["Responsibility aktif tidak ditemukan atau sedang nonaktif."]],
+            ], 422);
+        }
+
+        $effKaryId = $arrayData['m_kary_id'] ?? ($existing->m_kary_id ?? null);
+        $arrayData['m_kary_id'] = $effKaryId;
+        $existingKary = ($existing && !empty($existing->m_kary_id)) ? \DB::table('m_kary')->where('id', $existing->m_kary_id)->first() : null;
+        $targetKary = $effKaryId ? \DB::table('m_kary')->where('id', $effKaryId)->first() : null;
+        if ($effKaryId && !$targetKary) {
+            return response([
+                "status"  => "error",
+                "message" => "Data karyawan tidak ditemukan.",
+                "errors"  => ["m_kary_id" => ["Data karyawan tidak ditemukan."]],
+            ], 422);
+        }
+
+        if ($authUser && $respoCore) {
+            $isHrdOrAdmin = $respoCore->isUserHrdOrAdmin($authUser);
+            $authKaryId = !empty($authUser->m_kary_id) ? (int) $authUser->m_kary_id : null;
+
+            if (!$isHrdOrAdmin) {
+                if (!$authKaryId || ($existing && (int) $existing->m_kary_id !== $authKaryId)) {
+                    return response([
+                        "status"  => "error",
+                        "message" => "Tidak diizinkan mengubah pengajuan cuti karyawan lain.",
+                        "errors"  => ["m_kary_id" => ["Tidak diizinkan mengubah pengajuan cuti karyawan lain."]],
+                    ], 422);
+                }
+                if (!empty($arrayData['m_kary_id']) && (int) $arrayData['m_kary_id'] !== $authKaryId) {
+                    return response([
+                        "status"  => "error",
+                        "message" => "Tidak diizinkan memindahkan pengajuan cuti ke karyawan lain.",
+                        "errors"  => ["m_kary_id" => ["Tidak diizinkan memindahkan pengajuan cuti ke karyawan lain."]],
+                    ], 422);
+                }
+                if ($targetKary && !empty($targetKary->m_dir_id)) {
+                    $arrayData['m_dir_id'] = (int) $targetKary->m_dir_id;
+                }
+            } elseif ($targetKary && !empty($targetKary->m_dir_id) && !empty($arrayData['m_dir_id']) && (int) $arrayData['m_dir_id'] !== (int) $targetKary->m_dir_id) {
+                return response([
+                    "status"  => "error",
+                    "message" => "Company pengajuan cuti harus sesuai dengan Company karyawan terpilih.",
+                    "errors"  => ["m_dir_id" => ["Company pengajuan cuti harus sesuai dengan Company karyawan terpilih."]],
+                ], 422);
+            }
+
+            if ($scope && empty($scope['is_unrestricted'])) {
+                $existingDirId = $existing ? (!empty($existing->m_dir_id) ? (int) $existing->m_dir_id : (!empty($existingKary->m_dir_id) ? (int) $existingKary->m_dir_id : null)) : null;
+                $existingDivId = $existingKary ? ($existingKary->m_divisi_id ?? null) : null;
+                $existingDeptId = $existingKary ? ($existingKary->m_dept_id ?? null) : null;
+                if ($existing && !$respoCore->matchesActiveCompanyScope($existingDirId, $existingDivId, $existingDeptId, $authUser)) {
+                    return response([
+                        "status"  => "error",
+                        "message" => "Tidak diizinkan mengubah pengajuan cuti di luar scope responsibility aktif.",
+                        "errors"  => ["m_dir_id" => ["Data cuti berada di luar scope responsibility aktif."]],
+                    ], 422);
+                }
+
+                $effDirId = !empty($arrayData['m_dir_id'])
+                    ? (int) $arrayData['m_dir_id']
+                    : (($targetKary && !empty($targetKary->m_dir_id)) ? (int) $targetKary->m_dir_id : $existingDirId);
+                $targetDivId = $targetKary ? ($targetKary->m_divisi_id ?? null) : null;
+                $targetDeptId = $targetKary ? ($targetKary->m_dept_id ?? null) : null;
+                if (!$respoCore->matchesActiveCompanyScope($effDirId, $targetDivId, $targetDeptId, $authUser)) {
+                    return response([
+                        "status"  => "error",
+                        "message" => "Tidak diizinkan memindahkan pengajuan cuti ke luar scope Company/Divisi/Departemen aktif.",
+                        "errors"  => ["m_kary_id" => ["Target karyawan atau Company berada di luar scope responsibility aktif."]],
+                    ], 422);
+                }
+            }
+        }
 
         $interval = null;
         $interval_min = null;
@@ -385,7 +621,7 @@ class t_cuti extends \App\Models\BasicModels\t_cuti
 
         if (app()->request->header("Source") == "mobile") {
             $data = t_cuti::where('id', $id)->first();
-            if($data["status"] === 'REVISED'){
+            if($data && $data["status"] === 'REVISED'){
                 $status = 'IN APPROVAL';
             }
         }
@@ -394,8 +630,11 @@ class t_cuti extends \App\Models\BasicModels\t_cuti
             "interval" =>@ $interval ?? @$arrayData['interval'],
             "interval_min" => @$interval_min ?? @$arrayData['interval_min'] 
         ]);
-        if (empty($newArrayData['m_dir_id']) && !empty($newArrayData['m_kary_id'])) {
-            $newArrayData['m_dir_id'] = \DB::table('m_kary')->where('id', $newArrayData['m_kary_id'])->value('m_dir_id');
+        if (empty($newArrayData['m_dir_id']) && !empty($targetKary->m_dir_id)) {
+            $newArrayData['m_dir_id'] = (int) $targetKary->m_dir_id;
+        }
+        if (empty($newArrayData['m_comp_id']) && !empty($targetKary->m_comp_id)) {
+            $newArrayData['m_comp_id'] = (int) $targetKary->m_comp_id;
         }
 
         foreach (['date_from', 'date_to'] as $dCol) {
@@ -433,7 +672,52 @@ class t_cuti extends \App\Models\BasicModels\t_cuti
 
     public function custom_send_approval()
     {
-        $app = $this->createAppTicket(req("id"));
+        $trxId = req("id");
+        $trx = $trxId ? \DB::table('t_cuti')->where('id', $trxId)->first() : null;
+        if (!$trx) {
+            return $this->helper->customResponse(
+                "Data cuti tidak ditemukan",
+                404
+            );
+        }
+
+        $respoCore = getCore('Respo');
+        $authUser = auth()->check() ? auth()->user() : null;
+        if ($authUser && $respoCore && !$respoCore->isUserSuperadmin($authUser)) {
+            $scope = $respoCore->getActiveCompanyScope($authUser);
+            if (($scope['m_dir_id'] ?? null) === -1) {
+                return $this->helper->customResponse(
+                    "Responsibility aktif tidak ditemukan atau sedang nonaktif.",
+                    403
+                );
+            }
+
+            $isHrdOrAdmin = $respoCore->isUserHrdOrAdmin($authUser);
+            $authKaryId = (int) ($authUser->m_kary_id ?? 0);
+            $authUserId = (int) ($authUser->id ?? 0);
+            $isOwner = ($authKaryId > 0 && (int) $trx->m_kary_id === $authKaryId)
+                || ($authUserId > 0 && (int) $trx->creator_id === $authUserId);
+
+            if (!$isHrdOrAdmin && !$isOwner) {
+                return $this->helper->customResponse(
+                    "Tidak diizinkan mengirim approval pengajuan cuti karyawan lain.",
+                    403
+                );
+            }
+
+            if (empty($scope['is_unrestricted'])) {
+                $kary = !empty($trx->m_kary_id) ? \DB::table('m_kary')->where('id', $trx->m_kary_id)->first() : null;
+                $effDir = !empty($trx->m_dir_id) ? (int) $trx->m_dir_id : (!empty($kary->m_dir_id) ? (int) $kary->m_dir_id : null);
+                if (!$respoCore->matchesActiveCompanyScope($effDir, $kary->m_divisi_id ?? null, $kary->m_dept_id ?? null, $authUser)) {
+                    return $this->helper->customResponse(
+                        "Tidak diizinkan mengirim approval data di luar scope responsibility aktif.",
+                        403
+                    );
+                }
+            }
+        }
+
+        $app = $this->createAppTicket($trxId);
         if (!$app) {
             return $this->helper->customResponse(
                 "Terjadi kesalahan, coba kembali nanti",
@@ -442,7 +726,7 @@ class t_cuti extends \App\Models\BasicModels\t_cuti
         }
 
         if (app()->request->header("Source") != "mobile") {
-            $spd = t_cuti::find(req("id"));
+            $spd = t_cuti::find($trxId);
             if ($spd) {
                 $spd->update([
                     "status" => "IN APPROVAL",
@@ -617,6 +901,12 @@ class t_cuti extends \App\Models\BasicModels\t_cuti
         $data = $this->helper->approvalDetail($id);
         if ($data && isset($data->trx)) {
             $trx = $data->trx;
+            $app = $data->approval ?? null;
+            if ($app && ($app->trx_table ?? 't_cuti') === 't_cuti') {
+                if (!$this->canAccessCutiApprovalOrTrx($trx, $app)) {
+                    return $this->helper->customResponse("Anda tidak memiliki akses ke detail approval cuti ini.", 403);
+                }
+            }
             $nomor = $trx->nomor ?? null;
             $intv = $trx->interval ?? ($data->approval->interval ?? null);
             if (!empty($trx->date_from)) {
@@ -630,8 +920,23 @@ class t_cuti extends \App\Models\BasicModels\t_cuti
     }
     public function custom_log($req)
     {
+        $trxId = (int) ($req->id ?? 0);
+        if ($trxId > 0) {
+            $trx = \DB::table('t_cuti')->where('id', $trxId)->first();
+            if ($trx) {
+                $genApp = \DB::table('generate_approval')
+                    ->where('trx_table', 't_cuti')
+                    ->where('trx_id', $trxId)
+                    ->orderBy('id', 'desc')
+                    ->first();
+                if (!$this->canAccessCutiApprovalOrTrx($trx, $genApp)) {
+                    return $this->helper->customResponse("Anda tidak memiliki akses ke log approval cuti ini.", 403);
+                }
+            }
+        }
+
         $conf = [
-            "trx_id" => $req->id ?? 0,
+            "trx_id" => $trxId,
             "trx_table" => $this->getTable(),
         ];
         $data = $this->helper->approvalLog($conf);

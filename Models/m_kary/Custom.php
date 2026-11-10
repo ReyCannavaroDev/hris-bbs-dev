@@ -2,6 +2,7 @@
 
 namespace App\Models\CustomModels;
 use Carbon\Carbon;
+use Illuminate\Database\Eloquent\Builder;
 
 class m_kary extends \App\Models\BasicModels\m_kary
 {
@@ -18,6 +19,49 @@ class m_kary extends \App\Models\BasicModels\m_kary
         $this->searchable  = array_merge($this->searchable, ['gaji_pokok', 'gaji_acuan']);
     }
 
+    protected static function boot()
+    {
+        parent::boot();
+
+        // Isolasi Master Karyawan sesuai active Respo (Company / Divisi / Departemen) khusus endpoint CRUD /operation/m_kary
+        static::addGlobalScope('respo_scope', function (Builder $builder) {
+            $respoCore = getCore('Respo');
+            if (!$respoCore || !$respoCore->isOperationCrudRequest('m_kary', ['GET', 'PUT', 'PATCH', 'DELETE'])) {
+                return;
+            }
+
+            $user = auth()->user();
+            if (!$user) {
+                $builder->whereRaw('1 = 0');
+                return;
+            }
+
+            $scope = $respoCore->getActiveCompanyScope($user);
+            if (($scope['m_dir_id'] ?? null) === -1) {
+                $builder->whereRaw('1 = 0');
+                return;
+            }
+            if (!empty($scope['is_unrestricted'])) {
+                return;
+            }
+
+            $targetId = $respoCore->getOperationCrudTargetId('m_kary');
+            $userKaryId = (int) ($user->m_kary_id ?? 0);
+            $method = app()->bound('request') && app()->request ? strtoupper((string) app()->request->getMethod()) : '';
+            $isSelfProfileAccess = ($targetId !== null && $userKaryId > 0 && $targetId === $userKaryId && in_array($method, ['GET', 'PUT', 'PATCH'], true));
+
+            if ($isSelfProfileAccess) {
+                return;
+            }
+
+            $respoCore->applyActiveOrgScopeToQuery($builder, 'm_kary', [
+                'dir_col'    => 'm_kary.m_dir_id',
+                'divisi_col' => 'm_kary.m_divisi_id',
+                'dept_col'   => 'm_kary.m_dept_id',
+            ], $user);
+        });
+    }
+
     public $fileColumns = [
         /*file_column*/
     ];
@@ -27,6 +71,42 @@ class m_kary extends \App\Models\BasicModels\m_kary
 
     public function createBefore($model, $arrayData, $metaData, $id = null)
     {
+        $respoCore = getCore('Respo');
+        $authUser = auth()->check() ? auth()->user() : null;
+        if ($authUser && $respoCore) {
+            $scope = $respoCore->getActiveCompanyScope($authUser);
+            if (($scope['m_dir_id'] ?? null) === -1) {
+                return [
+                    "status"  => "error",
+                    "message" => "Responsibility aktif tidak ditemukan atau sedang nonaktif.",
+                    "errors"  => ["m_dir_id" => ["Responsibility aktif tidak ditemukan atau sedang nonaktif."]],
+                ];
+            }
+            if (empty($scope['is_unrestricted'])) {
+                if (!empty($scope['m_dir_id']) && empty($arrayData['m_dir_id'])) {
+                    $arrayData['m_dir_id'] = (int) $scope['m_dir_id'];
+                }
+                if (!empty($scope['m_divisi_id']) && empty($arrayData['m_divisi_id'])) {
+                    $arrayData['m_divisi_id'] = (int) $scope['m_divisi_id'];
+                }
+                if (!empty($scope['m_dept_id']) && empty($arrayData['m_dept_id'])) {
+                    $arrayData['m_dept_id'] = (int) $scope['m_dept_id'];
+                }
+                if (!$respoCore->matchesActiveCompanyScope(
+                    $arrayData['m_dir_id'] ?? null,
+                    $arrayData['m_divisi_id'] ?? null,
+                    $arrayData['m_dept_id'] ?? null,
+                    $authUser
+                )) {
+                    return [
+                        "status"  => "error",
+                        "message" => "Tidak diizinkan membuat data karyawan di luar scope Company/Divisi/Departemen aktif.",
+                        "errors"  => ["m_dir_id" => ["Target Company/Divisi/Departemen berada di luar scope responsibility aktif."]],
+                    ];
+                }
+            }
+        }
+
         $m_comp_id = $arrayData['m_comp_id'] ?? null;
         if (empty($m_comp_id) && !empty($arrayData['m_dir_id'])) {
             $m_comp_id = \DB::table('m_dir')->where('id', $arrayData['m_dir_id'])->value('m_comp_id');
@@ -129,6 +209,55 @@ class m_kary extends \App\Models\BasicModels\m_kary
     {
         $newArrayData = $arrayData;
 
+        $respoCore = getCore('Respo');
+        $authUser = auth()->check() ? auth()->user() : null;
+        $existingKary = $id ? \DB::table('m_kary')->where('id', $id)->first() : null;
+        $lockSelfOrgFields = false;
+        if ($authUser && $respoCore) {
+            $scope = $respoCore->getActiveCompanyScope($authUser);
+            if (($scope['m_dir_id'] ?? null) === -1) {
+                return [
+                    "status"  => "error",
+                    "message" => "Responsibility aktif tidak ditemukan atau sedang nonaktif.",
+                    "errors"  => ["m_dir_id" => ["Responsibility aktif tidak ditemukan atau sedang nonaktif."]],
+                ];
+            }
+            $isSelfProfile = $existingKary && !empty($authUser->m_kary_id) && (int) $existingKary->id === (int) $authUser->m_kary_id;
+            if (empty($scope['is_unrestricted'])) {
+                if ($existingKary && !$isSelfProfile && !$respoCore->matchesActiveCompanyScope(
+                    $existingKary->m_dir_id,
+                    $existingKary->m_divisi_id,
+                    $existingKary->m_dept_id,
+                    $authUser
+                )) {
+                    return [
+                        "status"  => "error",
+                        "message" => "Tidak diizinkan mengubah data karyawan di luar scope responsibility aktif.",
+                        "errors"  => ["m_dir_id" => ["Data karyawan berada di luar scope responsibility aktif."]],
+                    ];
+                }
+
+                if ($isSelfProfile && !$respoCore->isUserHrdOrAdmin($authUser) && $existingKary) {
+                    $lockSelfOrgFields = true;
+                    $newArrayData['m_comp_id'] = $existingKary->m_comp_id;
+                    $newArrayData['m_dir_id'] = $existingKary->m_dir_id;
+                    $newArrayData['m_divisi_id'] = $existingKary->m_divisi_id;
+                    $newArrayData['m_dept_id'] = $existingKary->m_dept_id;
+                } else {
+                    $effDir = array_key_exists('m_dir_id', $newArrayData) ? $newArrayData['m_dir_id'] : ($existingKary->m_dir_id ?? null);
+                    $effDiv = array_key_exists('m_divisi_id', $newArrayData) ? $newArrayData['m_divisi_id'] : ($existingKary->m_divisi_id ?? null);
+                    $effDept = array_key_exists('m_dept_id', $newArrayData) ? $newArrayData['m_dept_id'] : ($existingKary->m_dept_id ?? null);
+                    if (!$respoCore->matchesActiveCompanyScope($effDir, $effDiv, $effDept, $authUser)) {
+                        return [
+                            "status"  => "error",
+                            "message" => "Tidak diizinkan memindahkan data karyawan ke luar scope Company/Divisi/Departemen aktif.",
+                            "errors"  => ["m_dir_id" => ["Target Company/Divisi/Departemen berada di luar scope responsibility aktif."]],
+                        ];
+                    }
+                }
+            }
+        }
+
         $ktp = null;
         if (!empty($newArrayData['ktp_no'])) {
             $ktp = trim((string)$newArrayData['ktp_no']);
@@ -169,7 +298,10 @@ class m_kary extends \App\Models\BasicModels\m_kary
         }
 
         // Sinkronisasi Dua Arah (Two-Way Trigger) Status Resign & Inactive Karyawan
-        if (!empty($newArrayData['tgl_berhenti'])) {
+        if ($lockSelfOrgFields && $existingKary) {
+            $newArrayData['is_active'] = $existingKary->is_active;
+            $newArrayData['tgl_berhenti'] = $existingKary->tgl_berhenti;
+        } elseif (!empty($newArrayData['tgl_berhenti'])) {
             // 1. Jika tanggal berhenti kerja diisi, otomatis ubah status menjadi Inactive
             $newArrayData['is_active'] = false;
         } elseif (array_key_exists('is_active', $newArrayData)) {

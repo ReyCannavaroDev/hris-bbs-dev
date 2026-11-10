@@ -48,7 +48,7 @@
         <div>
           <label class="font-semibold">Company</label>
           <FieldSelect
-            :bind="{ disabled: !actionText || !store.user.data?.is_superadmin, clearable: !(!actionText || !store.user.data?.is_superadmin) }"
+            :bind="{ disabled: !actionText || !(respoScope.isUnrestricted && respoScope.isHrdOrAdmin), clearable: Boolean(actionText && respoScope.isUnrestricted && respoScope.isHrdOrAdmin) }"
             class="w-full py-2 !mt-0"
             :value="values.m_dir_id"
             @input="v=>values.m_dir_id=v"
@@ -66,7 +66,7 @@
                 },
                 params: {
                   simplest:true,
-                  where: `this.is_active='true'`,
+                  where: respoScope.isLockedMissing ? '1=0' : ((!respoScope.isUnrestricted && respoScope.dirId) ? `this.id=${respoScope.dirId} AND this.is_active='true'` : `this.is_active='true'`),
                   transform:false,
                   selectfield: 'this.id, this.nama, this.is_active'
                 }
@@ -81,11 +81,11 @@
         </div>
         <div>
           <label class="font-semibold">Karyawan<span class="text-red-500 space-x-0 pl-0">*</span></label>
-          <FieldPopup :bind="{ readonly: !actionText || !store.user.data?.is_superadmin }" class="w-full py-2 !mt-0" :value="values.m_kary_id"
+          <FieldPopup :bind="{ readonly: !actionText || !respoScope.isHrdOrAdmin }" class="w-full py-2 !mt-0" :value="values.m_kary_id"
             @input="(v)=>values.m_kary_id=v"
             @update:valueFull="(v)=>{
               if(v){
-                values.m_dir_id = v['m_dir.id'] || v.m_dir_id || (v.m_dir ? v.m_dir.id : null)
+                values.m_dir_id = v['m_dir.id'] || v.m_dir_id || (v.m_dir ? v.m_dir.id : values.m_dir_id)
                 values.m_comp_id = v['m_comp.id'] || v.m_comp_id || store.user.data?.m_comp_id || 1
               }
             }"
@@ -95,6 +95,7 @@
                   headers: { 'Content-Type': 'Application/json', Authorization: `${store.user.token_type} ${store.user.token}`},
                   params: {
                     simplest:true,
+                    where: respoScope.isLockedMissing ? '1=0' : ((values.m_dir_id ? `this.m_dir_id=${values.m_dir_id} AND ` : '') + `this.is_active='true'`),
                     searchfield:'id, nama_lengkap, nik, kode, m_divisi.nama, m_zona.nama, m_dir.nama',
                   }
                 }" placeholder="Pilih Karyawan" label="" :check="false" :columns="[

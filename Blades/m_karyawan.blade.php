@@ -108,11 +108,15 @@
         <div v-if="!isProfile" class="col-span-8 md:col-span-6">
           <div class="grid grid-cols-12 items-center">
             <label class="col-span-12">Company<label class="text-red-500 space-x-0 pl-0">*</label></label>
-            <FieldSelect :bind="{ disabled: !actionText && !isProfile, clearable:true }"
+            <FieldSelect :bind="{ disabled: (!actionText && !isProfile) || (!activeRespoScope.isUnrestricted && (!!activeRespoScope.dirId || activeRespoScope.isLockedMissing)), clearable: activeRespoScope.isUnrestricted }"
               class="col-span-12 !mt-0 w-full" :value="values.m_dir_id" @input="(v)=>{
                 values.m_dir_id = v
-                values.m_divisi_id = null
-                values.m_dept_id = null
+                if (!(!activeRespoScope.isUnrestricted && activeRespoScope.divId)) {
+                  values.m_divisi_id = null
+                }
+                if (!(!activeRespoScope.isUnrestricted && activeRespoScope.deptId)) {
+                  values.m_dept_id = null
+                }
               }"
               @update:valueFull="(objVal)=>{
                 if (objVal && objVal.m_comp_id) {
@@ -124,7 +128,7 @@
                   headers: { 'Content-Type': 'Application/json', Authorization: `${store.user.token_type} ${store.user.token}`},
                   params: {
                     simplest:true,
-                    where: `this.is_active = 'true'`,
+                    where: activeRespoScope.isLockedMissing ? '1=0' : ((!activeRespoScope.isUnrestricted && activeRespoScope.dirId) ? `this.id=${activeRespoScope.dirId} AND this.is_active = 'true'` : `this.is_active = 'true'`),
                     transform:false,
                     selectfield: 'this.id, this.nama, this.m_comp_id, this.is_active'
                   }
@@ -134,16 +138,18 @@
         <div v-if="!isProfile" class="col-span-8 md:col-span-6">
           <div class="grid grid-cols-12 items-center">
             <label class="col-span-12">Divisi<label class="text-red-500 space-x-0 pl-0">*</label></label>
-            <FieldSelect :bind="{ disabled: !actionText && !isProfile, clearable:false }"
+            <FieldSelect :bind="{ disabled: (!actionText && !isProfile) || (!activeRespoScope.isUnrestricted && (!!activeRespoScope.divId || activeRespoScope.isLockedMissing)), clearable:false }"
               class="col-span-12 !mt-0 w-full" :value="values.m_divisi_id" @input="v=>values.m_divisi_id=v"
               :errorText="formErrors.m_divisi_id?'failed':''" @update:valueFull="(objVal)=>{
-                  values.m_dept_id = null
+                  if (!(!activeRespoScope.isUnrestricted && activeRespoScope.deptId)) {
+                    values.m_dept_id = null
+                  }
                 }" label="" placeholder="Pilih Divisi" :hints="formErrors.m_divisi_id" :api="{
                     url: `${store.server.url_backend}/operation/m_divisi`,
                     headers: { 'Content-Type': 'Application/json', Authorization: `${store.user.token_type} ${store.user.token}`},
                     params: {
                       simplest:true,
-                      where: values.m_dir_id ? `this.m_dir_id=${values.m_dir_id} AND this.is_active = 'true'` : `this.is_active = 'true'`
+                      where: activeRespoScope.isLockedMissing ? '1=0' : ((!activeRespoScope.isUnrestricted && activeRespoScope.divId) ? `this.id=${activeRespoScope.divId} AND this.is_active = 'true'` : (values.m_dir_id ? `this.m_dir_id=${values.m_dir_id} AND this.is_active = 'true'` : `this.is_active = 'true'`))
                     }
                 }" valueField="id" displayField="nama" :check="false" />
           </div>
@@ -151,14 +157,14 @@
         <div v-if="!isProfile" class="col-span-8 md:col-span-6">
           <div class="grid grid-cols-12 items-center">
             <label class="col-span-12">Departemen<label class="text-red-500 space-x-0 pl-0">*</label></label>
-            <FieldSelect :bind="{ disabled: !actionText, clearable:false }" class="col-span-12 !mt-0 w-full"
+            <FieldSelect :bind="{ disabled: !actionText || (!activeRespoScope.isUnrestricted && (!!activeRespoScope.deptId || activeRespoScope.isLockedMissing)), clearable:false }" class="col-span-12 !mt-0 w-full"
               :value="values.m_dept_id" @input="v=>values.m_dept_id=v" :errorText="formErrors.m_dept_id?'failed':''"
               label="" placeholder="Pilih Departemen" :hints="formErrors.m_dept_id" :api="{
                     url: `${store.server.url_backend}/operation/m_dept`,
                     headers: { 'Content-Type': 'Application/json', Authorization: `${store.user.token_type} ${store.user.token}`},
                     params: {
                       simplest:true,
-                      where: `m_divisi_id=${values.m_divisi_id} AND this.is_active = 'true'`
+                      where: activeRespoScope.isLockedMissing ? '1=0' : ((!activeRespoScope.isUnrestricted && activeRespoScope.deptId) ? `this.id=${activeRespoScope.deptId} AND this.is_active = 'true'` : (values.m_divisi_id ? `this.m_divisi_id=${values.m_divisi_id} AND this.is_active = 'true'` : `this.is_active = 'true'`))
                     }
                 }" valueField="id" displayField="nama" :check="false" />
           </div>

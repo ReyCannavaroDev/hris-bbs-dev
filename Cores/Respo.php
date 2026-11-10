@@ -239,6 +239,18 @@ class Respo
     }
 
     /**
+     * Memeriksa kata kunci role Admin operasional (Admin, Admin Master, Administrator, dll)
+     */
+    public function isAdminKeyword(?string $text): bool
+    {
+        $str = strtolower(trim((string) $text));
+        if ($str === '') {
+            return false;
+        }
+        return (bool) preg_match('/(?:^|[^a-z])(admin[a-z]*)(?:[^a-z]|$)/i', $str);
+    }
+
+    /**
      * Memeriksa apakah user berperan sebagai HRD melalui active Respo role / legacy role,
      * dengan fallback ke jabatan/divisi m_kary pada Legacy Mode atau respo tanpa role.
      */
@@ -282,6 +294,38 @@ class Respo
         }
 
         return false;
+    }
+
+    /**
+     * Memeriksa apakah user berwenang melihat data seluruh karyawan di dalam scope org aktifnya
+     * (Superadmin, HRD/Personalia, atau Admin Operasional via active Respo / legacy role).
+     */
+    public function isUserHrdOrAdmin($user = null, bool $allowKaryFallback = true): bool
+    {
+        $userObj = $this->resolveUser($user);
+        if (!$userObj) {
+            return false;
+        }
+
+        if ($this->isUserSuperadmin($userObj)) {
+            return true;
+        }
+
+        $uid = (int) ($userObj->id ?? 0);
+        $hasRespo = $uid ? $this->userHasAssignedRespo($uid) : false;
+        $activeRespo = $hasRespo ? $this->checkRespoActive($uid) : null;
+        if ($hasRespo && !$activeRespo) {
+            return false;
+        }
+
+        foreach ($this->getEffectiveRoles($userObj) as $role) {
+            $roleName = $role->name ?? '';
+            if ($this->isHrdKeyword($roleName) || $this->isAdminKeyword($roleName)) {
+                return true;
+            }
+        }
+
+        return $this->isUserHrd($userObj, $allowKaryFallback);
     }
 
     /**
@@ -658,6 +702,227 @@ class Respo
             'm_dept_id'       => null,
             'm_respo_id'      => null,
         ];
+    }
+
+    /**
+     * Memeriksa apakah HTTP request saat ini merupakan endpoint CRUD standar (/operation/{model} atau /operation/{model}/{id}).
+     * Berguna agar GlobalScope pada model tidak memblokir query internal lintas-modul (approval, payroll, custom endpoint).
+     */
+    public function isOperationCrudRequest(string $modelName, array $methods = ['GET', 'PUT', 'PATCH', 'DELETE']): bool
+    {
+        if (!app()->bound('request') || !app()->request) {
+            return false;
+        }
+
+        $req = app()->request;
+        $method = strtoupper((string) $req->getMethod());
+        $allowedMethods = array_map('strtoupper', $methods);
+        if (!in_array($method, $allowedMethods, true)) {
+            return false;
+        }
+
+        $rawPath = (string) ($req->getPathInfo() ?: parse_url((string) $req->getRequestUri(), PHP_URL_PATH) ?: '');
+        $path = '/' . ltrim($rawPath, '/');
+        return (bool) preg_match('#(?:^|/)operation/' . preg_quote($modelName, '#') . '(?:/\d+)?/?$#i', $path);
+    }
+
+    /**
+     * Mengambil ID target numerik dari URL CRUD /operation/{model}/{id} (null bila request collection / endpoint lain).
+     */
+    public function getOperationCrudTargetId(string $modelName): ?int
+    {
+        if (!app()->bound('request') || !app()->request) {
+            return null;
+        }
+
+        $req = app()->request;
+        $rawPath = (string) ($req->getPathInfo() ?: parse_url((string) $req->getRequestUri(), PHP_URL_PATH) ?: '');
+        $path = '/' . ltrim($rawPath, '/');
+        if (preg_match('#(?:^|/)operation/' . preg_quote($modelName, '#') . '/(\d+)/?$#i', $path, $m)) {
+            return (int) $m[1];
+        }
+
+        return null;
+    }
+
+    /**
+     * Helper standar Master / Referensi: menerapkan isolasi scope Company (m_dir_id), Divisi (m_divisi_id),
+     * dan Departemen (m_dept_id) sesuai active Respo user ke query builder Eloquent.
+     *
+     * Opsi $options:
+     * - dir_col     : kolom m_dir_id di tabel target (default "{tableAlias}.m_dir_id", set null jika tidak ada)
+     * - divisi_col  : kolom m_divisi_id di tabel target (default "{tableAlias}.m_divisi_id", set null jika via m_kary)
+     * - dept_col    : kolom m_dept_id di tabel target (default "{tableAlias}.m_dept_id", set null jika via m_kary)
+     * - kary_fk_col : FK menuju m_kary.id (opsional, untuk fallback org dari m_kary bila kolom org tidak ada di tabel)
+     */
+    public function applyActiveOrgScopeToQuery($builder, string $tableAlias, array $options = [], $user = null)
+    {
+        $scope = $this->getActiveCompanyScope($user);
+
+        if (!empty($scope['is_unrestricted'])) {
+            return $builder;
+        }
+
+        if (($scope['m_dir_id'] ?? null) === -1) {
+            return $builder->whereRaw('1 = 0');
+        }
+
+        $safeAlias = preg_replace('/[^a-zA-Z0-9_]/', '', $tableAlias) ?: $tableAlias;
+        $dirCol = array_key_exists('dir_col', $options) ? $options['dir_col'] : "{$safeAlias}.m_dir_id";
+        $divCol = array_key_exists('divisi_col', $options) ? $options['divisi_col'] : "{$safeAlias}.m_divisi_id";
+        $deptCol = array_key_exists('dept_col', $options) ? $options['dept_col'] : "{$safeAlias}.m_dept_id";
+        $karyFkCol = $options['kary_fk_col'] ?? null;
+
+        $sanitizeCol = function ($col) {
+            return $col ? preg_replace('/[^a-zA-Z0-9_.]/', '', (string) $col) : null;
+        };
+
+        $dirCol = $sanitizeCol($dirCol);
+        $divCol = $sanitizeCol($divCol);
+        $deptCol = $sanitizeCol($deptCol);
+        $karyFkCol = $sanitizeCol($karyFkCol);
+
+        $builder->where(function ($scopeQ) use ($scope, $dirCol, $divCol, $deptCol, $karyFkCol) {
+            if (!empty($scope['m_dir_id'])) {
+                $dirId = (int) $scope['m_dir_id'];
+                if ($dirCol && $karyFkCol) {
+                    $scopeQ->whereRaw("coalesce({$dirCol}, (select mk_scope.m_dir_id from m_kary mk_scope where mk_scope.id = {$karyFkCol})) = {$dirId}");
+                } elseif ($dirCol) {
+                    $scopeQ->where($dirCol, $dirId);
+                } elseif ($karyFkCol) {
+                    $scopeQ->whereRaw("exists (select 1 from m_kary mk_scope where mk_scope.id = {$karyFkCol} and mk_scope.m_dir_id = {$dirId})");
+                }
+            }
+
+            if (!empty($scope['m_divisi_id'])) {
+                $divId = (int) $scope['m_divisi_id'];
+                if ($divCol && $karyFkCol) {
+                    $scopeQ->whereRaw("coalesce({$divCol}, (select mk_scope.m_divisi_id from m_kary mk_scope where mk_scope.id = {$karyFkCol})) = {$divId}");
+                } elseif ($divCol) {
+                    $scopeQ->where($divCol, $divId);
+                } elseif ($karyFkCol) {
+                    $scopeQ->whereRaw("exists (select 1 from m_kary mk_scope where mk_scope.id = {$karyFkCol} and mk_scope.m_divisi_id = {$divId})");
+                }
+            }
+
+            if (!empty($scope['m_dept_id'])) {
+                $deptId = (int) $scope['m_dept_id'];
+                if ($deptCol && $karyFkCol) {
+                    $scopeQ->whereRaw("coalesce({$deptCol}, (select mk_scope.m_dept_id from m_kary mk_scope where mk_scope.id = {$karyFkCol})) = {$deptId}");
+                } elseif ($deptCol) {
+                    $scopeQ->where($deptCol, $deptId);
+                } elseif ($karyFkCol) {
+                    $scopeQ->whereRaw("exists (select 1 from m_kary mk_scope where mk_scope.id = {$karyFkCol} and mk_scope.m_dept_id = {$deptId})");
+                }
+            }
+        });
+
+        return $builder;
+    }
+
+    /**
+     * Helper standar Transaksi Karyawan (t_cuti, t_lembur, t_potongan, dll):
+     * - Superadmin: unrestricted.
+     * - HRD / Admin: terisolasi ke Company/Divisi/Dept pada active Respo (Holding HRD/Admin = semua PT).
+     * - User Non-HRD / Karyawan Biasa: pada list/write hanya melihat data miliknya (m_kary_id),
+     *   sedangkan pada single-record GET detail tetap bisa membuka transaksi yang perlu/pernah di-approve
+     *   (atasan langsung atau approver terdaftar pada generate_approval).
+     */
+    public function applyActiveEmployeeTransactionScopeToQuery($builder, string $tableAlias, array $options = [], $user = null)
+    {
+        $userObj = $this->resolveUser($user);
+        if (!$userObj) {
+            return $builder->whereRaw('1 = 0');
+        }
+
+        if ($this->isUserSuperadmin($userObj)) {
+            return $builder;
+        }
+
+        $scope = $this->getActiveCompanyScope($userObj);
+        if (($scope['m_dir_id'] ?? null) === -1) {
+            return $builder->whereRaw('1 = 0');
+        }
+
+        $safeAlias = preg_replace('/[^a-zA-Z0-9_]/', '', $tableAlias) ?: $tableAlias;
+        $trxTable = preg_replace('/[^a-zA-Z0-9_]/', '', (string) ($options['trx_table'] ?? $safeAlias)) ?: $safeAlias;
+        $karyFkCol = preg_replace('/[^a-zA-Z0-9_.]/', '', (string) ($options['kary_fk_col'] ?? "{$safeAlias}.m_kary_id"));
+        $orgOptions = [
+            'dir_col'     => array_key_exists('dir_col', $options) ? $options['dir_col'] : "{$safeAlias}.m_dir_id",
+            'divisi_col'  => array_key_exists('divisi_col', $options) ? $options['divisi_col'] : null,
+            'dept_col'    => array_key_exists('dept_col', $options) ? $options['dept_col'] : null,
+            'kary_fk_col' => $karyFkCol,
+        ];
+
+        $isHrdOrAdmin = $this->isUserHrdOrAdmin($userObj);
+        $allowApproverOnSingle = array_key_exists('allow_approver_on_single', $options) ? (bool) $options['allow_approver_on_single'] : true;
+        $targetId = $options['target_id'] ?? $this->getOperationCrudTargetId($safeAlias);
+        $isGetMethod = app()->bound('request') && app()->request ? app()->request->isMethod('GET') : false;
+        $canUseSingleApprover = ($allowApproverOnSingle && $targetId !== null && $isGetMethod);
+
+        $uid = (int) ($userObj->id ?? 0);
+        $userKaryId = (int) ($userObj->m_kary_id ?? 0);
+        $roleIds = array_values(array_filter(array_map('intval', $this->getEffectiveRoleIds($userObj))));
+        $roleIdsIn = !empty($roleIds) ? implode(',', $roleIds) : null;
+
+        $applyApproverOrWhere = function ($q) use ($safeAlias, $trxTable, $karyFkCol, $uid, $userKaryId, $roleIdsIn, $scope, $userObj) {
+            if ($userKaryId > 0) {
+                $q->orWhere($karyFkCol, $userKaryId);
+                $q->orWhereRaw("exists (select 1 from m_kary mk_at_scope where mk_at_scope.id = {$karyFkCol} and mk_at_scope.atasan_id = {$userKaryId})");
+            }
+            if ($uid > 0) {
+                $companyScopeSql = $this->buildGenerateApprovalScopeSql('ga_scope', $scope, $userObj);
+                $roleClauseSql = $roleIdsIn
+                    ? "or ({$companyScopeSql} and exists (select 1 from generate_approval_det gad_r where gad_r.generate_approval_id = ga_scope.id and gad_r.default_user_id is null and gad_r.m_role_id in ({$roleIdsIn})))"
+                    : "";
+
+                $q->orWhereRaw("exists (
+                    select 1 from generate_approval ga_scope
+                    where ga_scope.trx_table = '{$trxTable}'
+                      and ga_scope.trx_id = {$safeAlias}.id
+                      and (
+                          ga_scope.last_approve_id = {$uid}
+                          or exists (
+                              select 1 from generate_approval_det gad_scope
+                              where gad_scope.generate_approval_id = ga_scope.id
+                                and (gad_scope.default_user_id = {$uid} or gad_scope.action_user_id = {$uid})
+                          )
+                          {$roleClauseSql}
+                      )
+                )");
+            }
+        };
+
+        if ($isHrdOrAdmin) {
+            if (!empty($scope['is_unrestricted'])) {
+                return $builder;
+            }
+
+            if ($canUseSingleApprover) {
+                $builder->where(function ($outerQ) use ($safeAlias, $orgOptions, $userObj, $applyApproverOrWhere) {
+                    $outerQ->where(function ($orgQ) use ($safeAlias, $orgOptions, $userObj) {
+                        $this->applyActiveOrgScopeToQuery($orgQ, $safeAlias, $orgOptions, $userObj);
+                    });
+                    $applyApproverOrWhere($outerQ);
+                });
+                return $builder;
+            }
+
+            return $this->applyActiveOrgScopeToQuery($builder, $safeAlias, $orgOptions, $userObj);
+        }
+
+        $builder->where(function ($outerQ) use ($karyFkCol, $userKaryId, $canUseSingleApprover, $applyApproverOrWhere) {
+            if ($userKaryId > 0) {
+                $outerQ->where($karyFkCol, $userKaryId);
+            } else {
+                $outerQ->whereRaw('1 = 0');
+            }
+            if ($canUseSingleApprover) {
+                $applyApproverOrWhere($outerQ);
+            }
+        });
+
+        return $builder;
     }
 
     /**

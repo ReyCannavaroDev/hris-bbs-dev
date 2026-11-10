@@ -22,12 +22,69 @@ let isApproved = ref(false)
 let modalOpen = ref(false)
 let isFinish = ref(false)
 const is_superadmin = ref(false);
+const isTruthyFlag = (val) => val === true || val === 1 || val === '1' || String(val || '').toLowerCase() === 'true' || String(val || '').toLowerCase() === 't'
+
+const getUserSnapshot = () => {
+  const storeData = store.user?.data || {}
+  let localData = {}
+  if (typeof window !== 'undefined' && window.localStorage?.user) {
+    try {
+      localData = JSON.parse(window.localStorage.user)?.data || {}
+    } catch (e) {}
+  }
+  return { ...localData, ...storeData }
+}
+
+const isHrdOrAdminRoleName = (name) => /(?:^|[^a-z])(hr[a-z]*|personalia|sdm|admin[a-z]*|human[\s_]*capital|human[\s_]*resources?)(?:[^a-z]|$)/i.test(String(name || ''))
+
+const getActiveRespoScope = () => {
+  const u = getUserSnapshot()
+  const ar = u.active_respo || null
+  const isSuper = u.username === 'developer' || isTruthyFlag(u.is_superadmin)
+  const hasRespo = isTruthyFlag(u.has_respo) || Boolean(ar)
+  const dirId = ar ? (ar.m_dir_id ?? null) : (u.m_dir_id ?? null)
+  const divId = ar ? (ar.m_divisi_id ?? null) : null
+  const deptId = ar ? (ar.m_dept_id ?? null) : null
+  const isHolding = hasRespo ? (ar ? !dirId : false) : !dirId
+  const rawRoles = Array.isArray(u.roles) && u.roles.length
+    ? u.roles.map(r => (typeof r === 'string' ? r : (r?.name || '')))
+    : (typeof u.role_names === 'string' && u.role_names.trim()
+        ? u.role_names.split(',').map(s => s.trim())
+        : (Array.isArray(u.role_names) ? u.role_names : []))
+  const isHrdOrAdmin = isSuper || (!(hasRespo && !ar) && rawRoles.some(rn => isHrdOrAdminRoleName(rn)))
+  return {
+    isSuper,
+    hasRespo,
+    isHrdOrAdmin,
+    isHolding,
+    isUnrestricted: isSuper || isHolding,
+    dirId: dirId ? Number(dirId) : null,
+    divId: divId ? Number(divId) : null,
+    deptId: deptId ? Number(deptId) : null,
+    isLockedMissing: hasRespo && !ar
+  }
+}
+
+const respoScope = ref(getActiveRespoScope())
+
+const getLandingWhereClause = () => {
+  const scope = getActiveRespoScope()
+  const u = getUserSnapshot()
+  if (scope.isLockedMissing) {
+    return '1=0'
+  }
+  if (!scope.isHrdOrAdmin) {
+    return `this.m_kary_id=${u.m_kary_id || 0}`
+  }
+  return ''
+}
+
 // ------------------------------ PERSIAPAN
 const endpointApi = '/t_cuti'
 onBeforeMount(() => {
   document.title = is_approval ? 'Approval Cuti' : 'Transaksi Cuti'
-  is_superadmin.value = store.user.data?.is_superadmin ?? false
-  console.log(store.user.data?.is_superadmin)
+  respoScope.value = getActiveRespoScope()
+  is_superadmin.value = respoScope.value.isSuper
 })
 
 function parseDate(v) {
@@ -282,15 +339,17 @@ onBeforeMount(async () => {
             Authorization: `${store.user.token_type} ${store.user.token}`
           },
         })
-        const resultJson = await apiApp.json()
-        console.log(resultJson.data)
+        const resultJson = await apiApp.json().catch(() => ({}))
+        if (!apiApp.ok || !resultJson?.data?.approval?.trx_id) {
+          throw new Error(resultJson?.message || "Failed when trying to read data")
+        }
         const apiTrx = await fetch(`${store.server.url_backend}/operation${endpointApi}/${resultJson.data.approval.trx_id}`, {
           headers: {
             'Content-Type': 'Application/json',
             Authorization: `${store.user.token_type} ${store.user.token}`
           },
         })
-        if (!apiTrx.ok || !apiApp.ok) throw new Error("Failed when trying to read data")
+        if (!apiTrx.ok) throw new Error("Failed when trying to read data")
         const resultTrxJson = await apiTrx.json()
         values.interval = resultJson?.data.approval
         values.approval = resultJson?.data.approval
@@ -376,10 +435,21 @@ onBeforeMount(async () => {
 })
 
 onMounted(()=>{
-  if(!isRead && !is_approval && !is_superadmin.value){
-    values.m_kary_id = store.user.data?.m_kary_id
-    if (!values.m_dir_id) values.m_dir_id = store.user.data?.m_dir_id
-    if (!values.m_comp_id) values.m_comp_id = store.user.data?.m_comp_id || 1
+  const scope = getActiveRespoScope()
+  respoScope.value = scope
+  const u = getUserSnapshot()
+  if(!isRead && !is_approval){
+    if (!scope.isHrdOrAdmin) {
+      values.m_kary_id = u.m_kary_id ?? null
+    }
+    if (!values.m_dir_id) {
+      values.m_dir_id = (!scope.isUnrestricted && scope.dirId)
+        ? scope.dirId
+        : (!scope.isHrdOrAdmin ? (u.m_dir_id ?? null) : null)
+    }
+    if (!values.m_comp_id) {
+      values.m_comp_id = u.m_comp_id || 1
+    }
   }
 })
 
@@ -735,7 +805,7 @@ const landing = reactive({
   icon: 'edit',
   title: "Edit",
   class: 'bg-blue-600 text-light-100',
-  show: (row) => row.status?.toUpperCase() === 'DRAFT' || row.status?.toUpperCase() === 'REVISED' || (row.status?.toUpperCase() === 'IN APPROVAL' && store.user.data?.is_superadmin),
+  show: (row) => row.status?.toUpperCase() === 'DRAFT' || row.status?.toUpperCase() === 'REVISED' || (row.status?.toUpperCase() === 'IN APPROVAL' && respoScope.value.isSuper),
   click(row) {
     router.push(`${route.path}/${row.id}?action=Edit&` + tsId);
   }
@@ -780,10 +850,10 @@ const landing = reactive({
                 body: JSON.stringify({ id: row.id })
               })
               if (!res.ok) {
-                if ([400, 422, 500].includes(res.status)) {
-                  const responseJson = await res.json()
+                if ([400, 403, 404, 422, 500].includes(res.status)) {
+                  const responseJson = await res.json().catch(() => ({}))
                   formErrors.value = responseJson.errors || {}
-                  throw (responseJson.message+ " "+responseJson.data.errorText || "Failed when trying to post data")
+                  throw (responseJson?.data?.errorText || responseJson?.message || "Failed when trying to post data")
                 } else {
                   throw ("Failed when trying to post data")
                 }
@@ -821,7 +891,7 @@ const landing = reactive({
       simplest: true,
       join: true,
       searchfield: 'nomor, m_kary.nama_lengkap, m_dir.nama, alasan.value, tipe_cuti.value, date_from, date_to, status',
-      where: `${!store.user.data?.is_superadmin ? ('this.m_kary_id='+store.user.data?.m_kary_id ?? 0) : ''}`
+      where: getLandingWhereClause()
     },
     onsuccess(response) {
       if (response && response.data) {

@@ -46,6 +46,28 @@ const detectSyncCanViewSalary = () => {
   return false
 }
 
+const getActiveRespoScope = () => {
+  const u = getUserSnapshot()
+  const ar = u.active_respo || null
+  const isSuper = u.username === 'developer' || isTruthyFlag(u.is_superadmin)
+  const hasRespo = isTruthyFlag(u.has_respo) || Boolean(ar)
+  const dirId = ar ? (ar.m_dir_id ?? null) : (u.m_dir_id ?? null)
+  const divId = ar ? (ar.m_divisi_id ?? null) : null
+  const deptId = ar ? (ar.m_dept_id ?? null) : null
+  const isHolding = hasRespo ? (ar ? !dirId : false) : !dirId
+  return {
+    isSuper,
+    hasRespo,
+    isUnrestricted: isSuper || isHolding,
+    dirId: dirId ? Number(dirId) : null,
+    divId: divId ? Number(divId) : null,
+    deptId: deptId ? Number(deptId) : null,
+    isLockedMissing: hasRespo && !ar
+  }
+}
+
+const activeRespoScope = ref(getActiveRespoScope())
+
 const canViewSalary = ref(detectSyncCanViewSalary())
 
 const clearRestrictedSalaryFields = () => {
@@ -186,6 +208,7 @@ const checkCanViewSalary = async () => {
 const endpointApi = '/m_kary'
 onBeforeMount(async () => {
   document.title = 'Master Karyawan'
+  activeRespoScope.value = getActiveRespoScope()
   await checkCanViewSalary()
 })
 onMounted(() => {
@@ -686,8 +709,16 @@ onBeforeMount(async () => {
   if (values.lama_kontrak_akhir) values.lama_kontrak_akhir = formatDateDisplay(values.lama_kontrak_akhir)
 
   if (!isRead) {
+    const scope = getActiveRespoScope()
+    activeRespoScope.value = scope
     values.m_comp_id = store.user.data?.m_comp_id ?? 1
-    values.m_dir_id = store.user.data?.m_dir_id ?? null
+    values.m_dir_id = !scope.isUnrestricted && scope.dirId ? scope.dirId : (store.user.data?.m_dir_id ?? null)
+    if (!scope.isUnrestricted && scope.divId) {
+      values.m_divisi_id = scope.divId
+    }
+    if (!scope.isUnrestricted && scope.deptId) {
+      values.m_dept_id = scope.deptId
+    }
     isInitialLoaded.value = true
   } else if (!values.m_comp_id) {
     values.m_comp_id = store.user.data?.m_comp_id ?? 1
