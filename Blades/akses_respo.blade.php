@@ -27,62 +27,61 @@
     </RouterLink>
   </div>
 
-  <!-- TABLE RESPONSIBILITY -->
-  <div v-else class="overflow-x-auto border border-gray-200 rounded">
-    <table class="w-full text-sm text-left border-collapse">
-      <thead class="bg-gray-50 text-gray-600 text-xs font-semibold border-b border-gray-200">
-        <tr>
-          <th class="px-3 py-2.5 text-center border-r border-gray-200 w-12">No</th>
-          <th class="px-3 py-2.5 border-r border-gray-200 whitespace-nowrap">Kode</th>
-          <th class="px-3 py-2.5 border-r border-gray-200">Responsibility</th>
-          <th class="px-3 py-2.5 border-r border-gray-200">Company</th>
-          <th class="px-3 py-2.5 border-r border-gray-200">Divisi</th>
-          <th class="px-3 py-2.5 border-r border-gray-200">Departemen</th>
-          <th class="px-3 py-2.5 text-center border-r border-gray-200 w-24">Status</th>
-          <th class="px-3 py-2.5 text-center w-24">Aksi</th>
-        </tr>
-      </thead>
-      <tbody class="divide-y divide-gray-200 bg-white">
-        <tr
-          v-for="(item, idx) in respoList"
-          :key="item.user_respo_id || item.m_respo_id || idx"
-          class="hover:bg-gray-50"
+  <!-- GRID CARD RESPONSIBILITY -->
+  <div v-else class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+    <div
+      v-for="(item, idx) in respoList"
+      :key="item.user_respo_id || item.m_respo_id || idx"
+      class="bg-white border rounded-lg p-4 flex flex-col justify-between"
+      :class="item.is_primary ? 'border-green-500' : 'border-gray-200 hover:border-gray-300'"
+    >
+      <div>
+        <div class="flex items-center justify-between gap-2">
+          <span class="text-xs text-gray-400 whitespace-nowrap">{{ item.respo_kode || item.m_respo_id }}</span>
+          <span v-if="item.is_primary" class="text-xs font-medium text-green-500 whitespace-nowrap">Active</span>
+          <span v-else class="text-xs font-medium text-gray-500 whitespace-nowrap">Inactive</span>
+        </div>
+
+        <h3 class="text-sm font-bold text-gray-800 mt-1.5 leading-snug">
+          {{ item.respo_nama }}
+        </h3>
+
+        <div class="mt-3 pt-3 border-t border-gray-100 space-y-1.5 text-xs">
+          <div class="flex justify-between gap-3">
+            <span class="text-gray-400 shrink-0">Company</span>
+            <span class="text-gray-800 font-medium text-right">{{ item.dir_nama || 'Holding (Semua Company)' }}</span>
+          </div>
+          <div class="flex justify-between gap-3">
+            <span class="text-gray-400 shrink-0">Divisi</span>
+            <span class="text-gray-700 text-right">{{ item.divisi_nama || 'Semua Divisi' }}</span>
+          </div>
+          <div class="flex justify-between gap-3">
+            <span class="text-gray-400 shrink-0">Departemen</span>
+            <span class="text-gray-700 text-right">{{ item.dept_nama || 'Semua Departemen' }}</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="mt-4 pt-3 border-t border-gray-100">
+        <button
+          v-if="item.is_primary"
+          type="button"
+          disabled
+          class="w-full py-1.5 px-3 rounded text-xs font-medium bg-gray-100 text-gray-400 cursor-default"
         >
-          <td class="px-3 py-2.5 text-center border-r border-gray-200 text-gray-600">{{ idx + 1 }}</td>
-          <td class="px-3 py-2.5 border-r border-gray-200 text-gray-600 whitespace-nowrap text-xs">
-            {{ item.respo_kode || item.m_respo_id }}
-          </td>
-          <td class="px-3 py-2.5 border-r border-gray-200 font-medium text-gray-800">
-            {{ item.respo_nama }}
-          </td>
-          <td class="px-3 py-2.5 border-r border-gray-200 text-gray-700">
-            {{ item.dir_nama || 'Holding (Semua Company)' }}
-          </td>
-          <td class="px-3 py-2.5 border-r border-gray-200 text-gray-600">
-            {{ item.divisi_nama || 'Semua Divisi' }}
-          </td>
-          <td class="px-3 py-2.5 border-r border-gray-200 text-gray-600">
-            {{ item.dept_nama || 'Semua Departemen' }}
-          </td>
-          <td class="px-3 py-2.5 text-center border-r border-gray-200">
-            <span v-if="item.is_primary" class="text-green-500 text-xs font-medium">Active</span>
-            <span v-else class="text-gray-500 text-xs font-medium">Inactive</span>
-          </td>
-          <td class="px-3 py-2.5 text-center">
-            <span v-if="item.is_primary" class="text-xs text-gray-400">-</span>
-            <button
-              v-else
-              type="button"
-              @click="onSwitch(item)"
-              :disabled="isSwitching"
-              class="px-3 py-1 rounded text-xs font-medium bg-blue-600 hover:bg-blue-700 text-white disabled:opacity-50"
-            >
-              Pilih
-            </button>
-          </td>
-        </tr>
-      </tbody>
-    </table>
+          Sedang Aktif
+        </button>
+        <button
+          v-else
+          type="button"
+          @click="onSwitch(item)"
+          :disabled="isSwitching"
+          class="w-full py-1.5 px-3 rounded text-xs font-medium border border-blue-600 text-blue-600 hover:bg-blue-600 hover:text-white disabled:opacity-50 transition"
+        >
+          Gunakan Peran Ini
+        </button>
+      </div>
+    </div>
   </div>
 </div>
 @endverbatim
