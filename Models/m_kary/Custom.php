@@ -183,12 +183,13 @@ class m_kary extends \App\Models\BasicModels\m_kary
         //     trigger_error("NIK (Nomor Induk Karyawan) wajib diisi!");
         // }
 
+        $autoJatah = self::hitungJatahCutiReguler($arrayData['tgl_masuk'] ?? null);
         $newArrayData = array_merge($arrayData, [
             "kode" => $kode,
             "nik" => $ktp ?: null,
             "m_comp_id" => $m_comp_id,
-            "cuti_jatah_reguler" => $arrayData['cuti_jatah_reguler'] ?? self::hitungJatahCutiReguler($arrayData['tgl_masuk'] ?? null),
-            "cuti_sisa_reguler" => $arrayData['cuti_sisa_reguler'] ?? self::hitungJatahCutiReguler($arrayData['tgl_masuk'] ?? null),
+            "cuti_jatah_reguler" => $autoJatah,
+            "cuti_sisa_reguler" => $autoJatah,
         ]);
 
         // Proteksi field gaji berdasarkan izin role aktif (can_view_salary / Superadmin)
@@ -327,6 +328,54 @@ class m_kary extends \App\Models\BasicModels\m_kary
                     $newArrayData[$df] = sprintf('%04d-%02d-%02d', $m[3], $m[2], $m[1]);
                 }
             }
+        }
+
+        // Auto hitung jatah & sisa cuti reguler berdasarkan tgl_masuk
+        $effTglMasuk = $newArrayData['tgl_masuk'] ?? ($existingKary->tgl_masuk ?? null);
+        if (!empty($effTglMasuk)) {
+            $autoJatah = self::hitungJatahCutiReguler($effTglMasuk);
+            $newArrayData['cuti_jatah_reguler'] = $autoJatah;
+
+            $currentYear = (int) Date('Y');
+            $tipeRegulerIds = \DB::table('m_general')->where('group', 'TIPE CUTI')->where(function($q) {
+                $q->where('key', '02')->orWhere('value', 'ilike', '%reguler%')->orWhere('value', 'ilike', '%tahunan%');
+            })->pluck('id')->toArray();
+
+            $cutiTerpakai = 0;
+            if (!empty($tipeRegulerIds) && $id) {
+                $cutiTerpakai = \DB::table('t_cuti')
+                    ->leftJoin('m_general as al', 'al.id', '=', 't_cuti.alasan_id')
+                    ->leftJoin('m_general as tc', 'tc.id', '=', 't_cuti.tipe_cuti_id')
+                    ->where('t_cuti.m_kary_id', $id)
+                    ->whereIn('t_cuti.tipe_cuti_id', $tipeRegulerIds)
+                    ->whereIn('t_cuti.status', ['APPROVED', 'POSTED'])
+                    ->whereYear('t_cuti.date_from', $currentYear)
+                    ->where(function($q) {
+                        $q->where(function($sub) {
+                            $sub->whereNull('al.value')
+                                ->orWhere(function($w) {
+                                    $w->whereRaw("LOWER(COALESCE(al.value, '')) NOT LIKE '%sakit%'")
+                                      ->whereRaw("LOWER(COALESCE(al.value, '')) NOT LIKE '%nikah%'")
+                                      ->whereRaw("LOWER(COALESCE(al.value, '')) NOT LIKE '%meninggal%'")
+                                      ->whereRaw("LOWER(COALESCE(al.value, '')) NOT LIKE '%kematian%'")
+                                      ->whereRaw("LOWER(COALESCE(al.value, '')) NOT LIKE '%duka%'");
+                                });
+                        })->where(function($sub2) {
+                            $sub2->whereNull('tc.value')
+                                 ->orWhere(function($w2) {
+                                     $w2->whereRaw("LOWER(COALESCE(tc.value, '')) NOT LIKE '%sakit%'")
+                                        ->whereRaw("LOWER(COALESCE(tc.value, '')) NOT LIKE '%nikah%'")
+                                        ->whereRaw("LOWER(COALESCE(tc.value, '')) NOT LIKE '%meninggal%'")
+                                        ->whereRaw("LOWER(COALESCE(tc.value, '')) NOT LIKE '%kematian%'")
+                                        ->whereRaw("LOWER(COALESCE(tc.value, '')) NOT LIKE '%duka%'");
+                                 });
+                        });
+                    })
+                    ->sum('t_cuti.interval') ?? 0;
+            }
+
+            $adjReguler = $id ? (\DB::table('t_cuti_adjustment')->where('m_kary_id', $id)->whereIn('tipe_cuti_id', $tipeRegulerIds)->whereYear('date', $currentYear)->sum('value') ?? 0) : 0;
+            $newArrayData['cuti_sisa_reguler'] = max(0, ($autoJatah + $adjReguler) - $cutiTerpakai);
         }
 
         // Proteksi field gaji berdasarkan izin role aktif (can_view_salary / Superadmin)
