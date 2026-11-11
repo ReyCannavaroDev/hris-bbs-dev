@@ -260,6 +260,71 @@ const values = reactive({
   max_hari_berturut: null,
 })
 const totalDays = ref();
+const karySisaCutiFallback = ref({ id: null, sisa: null })
+const sisaCutiInfo = reactive({
+  sisa: null,
+  loading: false,
+})
+let sisaCutiReqSeq = 0
+
+function setSisaCutiFallback(karyId, sisa) {
+  karySisaCutiFallback.value = karyId ? { id: Number(karyId), sisa: sisa ?? null } : { id: null, sisa: null }
+}
+
+function getSisaCutiFallback(karyId) {
+  if (!karyId) return null
+  if (Number(karySisaCutiFallback.value?.id) === Number(karyId)) {
+    const val = karySisaCutiFallback.value.sisa
+    return (val !== null && val !== undefined && val !== '') ? Number(val) : null
+  }
+  return null
+}
+
+async function fetchSisaCutiKaryawan(karyId) {
+  const reqId = ++sisaCutiReqSeq
+  if (!karyId) {
+    sisaCutiInfo.sisa = null
+    sisaCutiInfo.loading = false
+    return
+  }
+  sisaCutiInfo.loading = true
+  try {
+    const dataURL = `${store.server.url_backend}/operation/m_kary/${karyId}`
+    const fixedParams = new URLSearchParams({ join: true, transform: false, detail: true })
+    const res = await fetch(dataURL + '?' + fixedParams, {
+      headers: {
+        'Content-Type': 'Application/json',
+        Authorization: `${store.user.token_type} ${store.user.token}`
+      },
+    })
+    if (reqId !== sisaCutiReqSeq) return
+    if (!res.ok) {
+      sisaCutiInfo.sisa = getSisaCutiFallback(karyId)
+      return
+    }
+    const resultJson = await res.json().catch(() => ({}))
+    if (reqId !== sisaCutiReqSeq) return
+    const d = resultJson?.data || {}
+    const info = d?.info_cuti || {}
+    const rawSisa = info.sisa_cuti_reguler ?? d.sisa_cuti_reguler ?? info.sisa_cuti_1_hari ?? d.cuti_sisa_reguler ?? getSisaCutiFallback(karyId)
+    sisaCutiInfo.sisa = (rawSisa !== null && rawSisa !== undefined && rawSisa !== '') ? Number(rawSisa) : null
+  } catch (e) {
+    if (reqId === sisaCutiReqSeq) {
+      sisaCutiInfo.sisa = getSisaCutiFallback(karyId)
+    }
+  } finally {
+    if (reqId === sisaCutiReqSeq) {
+      sisaCutiInfo.loading = false
+    }
+  }
+}
+
+watch(() => values.m_kary_id, (newKaryId) => {
+  if (!newKaryId) {
+    setSisaCutiFallback(null, null)
+  }
+  fetchSisaCutiKaryawan(newKaryId)
+}, { immediate: true })
 
 const isCutiSakit = computed(() => {
   const strCheck = ((values.alasan_string || '') + ' ' + (values.tipe_string || '') + ' ' + (values.keterangan || '')).toLowerCase();
@@ -413,6 +478,10 @@ onBeforeMount(async () => {
     isRequesting.value = false
   }
 
+  setSisaCutiFallback(
+    initialValues?.m_kary_id,
+    initialValues?.['m_kary.cuti_sisa_reguler'] ?? initialValues?.m_kary?.cuti_sisa_reguler ?? null
+  )
   for (const key in initialValues) {
     values[key] = initialValues[key]
   }
