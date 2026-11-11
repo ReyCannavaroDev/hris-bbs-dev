@@ -326,6 +326,15 @@ watch(() => values.m_kary_id, (newKaryId) => {
   fetchSisaCutiKaryawan(newKaryId)
 }, { immediate: true })
 
+const sisaCutiDisplay = computed(() => {
+  if (!values.m_kary_id) return null
+  if (sisaCutiInfo.loading) return 'Memuat...'
+  if (sisaCutiInfo.sisa !== null && sisaCutiInfo.sisa !== undefined) {
+    return `${sisaCutiInfo.sisa} Hari`
+  }
+  return '-'
+})
+
 const isCutiSakit = computed(() => {
   const strCheck = ((values.alasan_string || '') + ' ' + (values.tipe_string || '') + ' ' + (values.keterangan || '')).toLowerCase();
   return strCheck.includes('sakit');

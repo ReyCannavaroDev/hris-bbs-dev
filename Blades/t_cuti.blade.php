@@ -170,15 +170,11 @@
                 cellClass: ['border-r', '!border-gray-200', 'justify-center']
               },                                         
             ]" />
-          <div v-if="values.m_kary_id" class="!mt-[-0.25rem] mb-1 flex items-center gap-2 text-xs">
-            <span class="font-semibold text-gray-600">Sisa Cuti Karyawan:</span>
-            <span v-if="sisaCutiInfo.loading" class="text-gray-400 italic">Memuat...</span>
-            <span v-else-if="sisaCutiInfo.sisa !== null && sisaCutiInfo.sisa !== undefined"
-              :class="Number(sisaCutiInfo.sisa) > 0 ? 'inline-flex items-center px-2 py-0.5 rounded bg-blue-50 text-blue-700 border border-blue-200 font-semibold' : 'inline-flex items-center px-2 py-0.5 rounded bg-red-50 text-red-700 border border-red-200 font-semibold'">
-              {{ sisaCutiInfo.sisa }} Hari
-            </span>
-            <span v-else class="text-gray-400">-</span>
-          </div>
+        </div>
+        <div>
+          <label class="font-semibold">Sisa Cuti</label>
+          <FieldX :bind="{ readonly: true, disabled: true }" label="" class="w-full py-2 !mt-0"
+            :value="sisaCutiDisplay" :check="false" placeholder="Pilih karyawan terlebih dahulu" />
         </div>
         <div>
           <label class="font-semibold">Alasan<span class="text-red-500 space-x-0 pl-0">*</span></label>
