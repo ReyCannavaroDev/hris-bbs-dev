@@ -45,9 +45,9 @@
           />
         </div>
 
-        <!-- Direktorat -->
+        <!-- Company -->
         <div>
-          <label class="font-semibold">Direktorat</label>
+          <label class="font-semibold">Company</label>
           <FieldSelect 
             :bind="{ readonly: !actionText }" 
             class="w-full py-2 !mt-0"
@@ -62,7 +62,7 @@
               values.m_dept_id = null
               values.m_kary_id = null
             }"
-            placeholder="Pilih Direktorat"
+            placeholder="Pilih Company"
             valueField="id" 
             displayField="nama"
             :api="{
