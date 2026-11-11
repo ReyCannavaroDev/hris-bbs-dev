@@ -33,7 +33,7 @@ const getUserSnapshot = () => {
   if (typeof window !== 'undefined' && window.localStorage?.user) {
     try {
       localData = JSON.parse(window.localStorage.user)?.data || {}
-    } catch (e) {}
+    } catch (e) { }
   }
   return { ...localData, ...storeData }
 }
@@ -419,54 +419,6 @@ watch(() => values.is_active, (newVal) => {
     }
   }
   nextTick(() => { isSyncingStatusResign = false })
-})
-
-const hitungJatahCutiAuto = (tglMasukStr) => {
-  if (!tglMasukStr) return 0
-  const dObj = parseDate(tglMasukStr)
-  if (!dObj || isNaN(dObj.getTime())) return 0
-
-  const now = new Date()
-  const tahunSekarang = now.getFullYear()
-
-  // Tanggal genap 1 tahun masa kerja: tahun tgl_masuk + 1, bulan dan tanggal sama
-  const tglGenap1Tahun = new Date(dObj.getFullYear() + 1, dObj.getMonth(), dObj.getDate())
-  const tahunGenap = tglGenap1Tahun.getFullYear()
-  const bulanGenap = tglGenap1Tahun.getMonth() + 1 // 1 - 12
-
-  // 1. Belum mencapai 1 tahun masa kerja
-  if (now < tglGenap1Tahun) {
-    return 0
-  }
-
-  // 2. Pada tahun pertama saat genap 1 tahun masa kerja (prorata sisa bulan hingga akhir tahun)
-  // Contoh: Genap 1 tahun di bulan Juni (bulan 6) -> sisa Juli s/d Des = 12 - 6 = 6 hari
-  if (tahunSekarang === tahunGenap) {
-    return Math.max(0, 12 - bulanGenap)
-  }
-
-  // 3. Setelah ganti tahun (tahun sekarang > tahun genap 1 tahun): Reset ke default 12 hari
-  if (tahunSekarang > tahunGenap) {
-    return 12
-  }
-
-  return 0
-}
-
-watch(() => values.tgl_masuk, (newVal) => {
-  if (!newVal) {
-    values.cuti_1_hari = 0
-    values.cuti_reguler = 0
-    values.sisa_cuti_1_hari = 0
-    values.sisa_cuti_reguler = 0
-    return
-  }
-  const jatah = hitungJatahCutiAuto(newVal)
-  values.cuti_1_hari = jatah
-  values.cuti_reguler = jatah
-  const terpakai = Number(values.cuti_satu_hari_terpakai || values.cuti_reguler_terpakai || 0)
-  values.sisa_cuti_1_hari = Math.max(0, jatah - terpakai)
-  values.sisa_cuti_reguler = Math.max(0, jatah - terpakai)
 })
 
 const valuesPendidikan = reactive({
@@ -1785,9 +1737,6 @@ async function onSave() {
     if (payload.npwp_tgl_berlaku) payload.npwp_tgl_berlaku = formatDateApi(payload.npwp_tgl_berlaku)
     if (payload.lama_kontrak_awal) payload.lama_kontrak_awal = formatDateApi(payload.lama_kontrak_awal)
     if (payload.lama_kontrak_akhir) payload.lama_kontrak_akhir = formatDateApi(payload.lama_kontrak_akhir)
-
-    payload.cuti_jatah_reguler = values.cuti_1_hari ?? hitungJatahCutiAuto(values.tgl_masuk)
-    payload.cuti_sisa_reguler = values.sisa_cuti_1_hari ?? payload.cuti_jatah_reguler
 
     if (!canViewSalary.value) {
       delete payload.gaji_pokok

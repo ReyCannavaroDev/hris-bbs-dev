@@ -113,6 +113,72 @@ class m_kary extends \App\Models\BasicModels\m_kary
         return 0;
     }
 
+    /**
+     * Memeriksa apakah user adalah Superadmin atau Kepala HRD (Head/Manager HRD)
+     */
+    public static function isUserKepalaHrdOrSuperadmin($user = null): bool
+    {
+        $respoCore = getCore('Respo');
+        $userObj = $user ?: (auth()->check() ? auth()->user() : null);
+        if (!$userObj) {
+            return false;
+        }
+
+        // 1. Superadmin / Developer
+        if ($respoCore && $respoCore->isUserSuperadmin($userObj)) {
+            return true;
+        }
+        if (!empty($userObj->is_superadmin) || ($userObj->username ?? '') === 'developer') {
+            return true;
+        }
+
+        // 2. Cek Role aktif: Memiliki keyword HRD dan Head/Kepala
+        $roles = $respoCore ? $respoCore->getEffectiveRoles($userObj) : [];
+        foreach ($roles as $role) {
+            $roleName = strtolower(trim((string) ($role->name ?? '')));
+            if ($roleName === '') continue;
+
+            $isHrd = (bool) preg_match('/(?:^|[^a-z])(hr[a-z]*|personalia|sdm|human[\s_]*capital|human[\s_]*resources?)(?:[^a-z]|$)/i', $roleName);
+            $isHead = (bool) preg_match('/(?:^|[^a-z])(kepala|head|manager|mgr|kadiv|kabag|lead|leader|supervisor|spv)(?:[^a-z]|$)/i', $roleName);
+
+            if (($isHrd && $isHead) || str_contains($roleName, 'kepala hrd') || str_contains($roleName, 'head hrd') || str_contains($roleName, 'manager hrd')) {
+                return true;
+            }
+        }
+
+        // 3. Fallback: Cek m_kary user login (m_posisi is_head == true atau nama posisi kepala/manager, dan divisi/posisi/dept HRD)
+        if (!empty($userObj->m_kary_id)) {
+            $userKary = \DB::table('m_kary')
+                ->leftJoin('m_posisi', 'm_posisi.id', '=', 'm_kary.m_posisi_id')
+                ->leftJoin('m_divisi', 'm_divisi.id', '=', 'm_kary.m_divisi_id')
+                ->leftJoin('m_dept', 'm_dept.id', '=', 'm_kary.m_dept_id')
+                ->where('m_kary.id', $userObj->m_kary_id)
+                ->select(
+                    'm_posisi.desc_kerja as posisi_nama',
+                    'm_posisi.is_head as posisi_is_head',
+                    'm_divisi.nama as divisi_nama',
+                    'm_dept.nama as dept_nama'
+                )
+                ->first();
+
+            if ($userKary) {
+                $posisiLower = strtolower(trim((string) ($userKary->posisi_nama ?? '')));
+                $divisiLower = strtolower(trim((string) ($userKary->divisi_nama ?? '')));
+                $deptLower = strtolower(trim((string) ($userKary->dept_nama ?? '')));
+
+                $isOrgHrd = (bool) preg_match('/(?:^|[^a-z])(hr[a-z]*|personalia|sdm|human[\s_]*capital|human[\s_]*resources?)(?:[^a-z]|$)/i', $posisiLower . ' ' . $divisiLower . ' ' . $deptLower);
+                $isPosisiHead = !empty($userKary->posisi_is_head)
+                    || (bool) preg_match('/(?:^|[^a-z])(kepala|head|manager|mgr|kadiv|kabag|lead|leader)(?:[^a-z]|$)/i', $posisiLower);
+
+                if ($isOrgHrd && $isPosisiHead) {
+                    return true;
+                }
+            }
+        }
+
+        return false;
+    }
+
     public function createBefore($model, $arrayData, $metaData, $id = null)
     {
         $respoCore = getCore('Respo');
@@ -184,12 +250,18 @@ class m_kary extends \App\Models\BasicModels\m_kary
         // }
 
         $autoJatah = self::hitungJatahCutiReguler($arrayData['tgl_masuk'] ?? null);
+        $isKepalaHrdOrSuperadmin = self::isUserKepalaHrdOrSuperadmin($authUser);
+        $sisaCuti = $autoJatah;
+        if ($isKepalaHrdOrSuperadmin && isset($arrayData['cuti_sisa_reguler']) && $arrayData['cuti_sisa_reguler'] !== '') {
+            $sisaCuti = (int) $arrayData['cuti_sisa_reguler'];
+        }
+
         $newArrayData = array_merge($arrayData, [
             "kode" => $kode,
             "nik" => $ktp ?: null,
             "m_comp_id" => $m_comp_id,
             "cuti_jatah_reguler" => $autoJatah,
-            "cuti_sisa_reguler" => $autoJatah,
+            "cuti_sisa_reguler" => $sisaCuti,
         ]);
 
         // Proteksi field gaji berdasarkan izin role aktif (can_view_salary / Superadmin)
@@ -336,46 +408,56 @@ class m_kary extends \App\Models\BasicModels\m_kary
             $autoJatah = self::hitungJatahCutiReguler($effTglMasuk);
             $newArrayData['cuti_jatah_reguler'] = $autoJatah;
 
-            $currentYear = (int) Date('Y');
-            $tipeRegulerIds = \DB::table('m_general')->where('group', 'TIPE CUTI')->where(function($q) {
-                $q->where('key', '02')->orWhere('value', 'ilike', '%reguler%')->orWhere('value', 'ilike', '%tahunan%');
-            })->pluck('id')->toArray();
+            $isKepalaHrdOrSuperadmin = self::isUserKepalaHrdOrSuperadmin($authUser);
 
-            $cutiTerpakai = 0;
-            if (!empty($tipeRegulerIds) && $id) {
-                $cutiTerpakai = \DB::table('t_cuti')
-                    ->leftJoin('m_general as al', 'al.id', '=', 't_cuti.alasan_id')
-                    ->leftJoin('m_general as tc', 'tc.id', '=', 't_cuti.tipe_cuti_id')
-                    ->where('t_cuti.m_kary_id', $id)
-                    ->whereIn('t_cuti.tipe_cuti_id', $tipeRegulerIds)
-                    ->whereIn('t_cuti.status', ['APPROVED', 'POSTED'])
-                    ->whereYear('t_cuti.date_from', $currentYear)
-                    ->where(function($q) {
-                        $q->where(function($sub) {
-                            $sub->whereNull('al.value')
-                                ->orWhere(function($w) {
-                                    $w->whereRaw("LOWER(COALESCE(al.value, '')) NOT LIKE '%sakit%'")
-                                      ->whereRaw("LOWER(COALESCE(al.value, '')) NOT LIKE '%nikah%'")
-                                      ->whereRaw("LOWER(COALESCE(al.value, '')) NOT LIKE '%meninggal%'")
-                                      ->whereRaw("LOWER(COALESCE(al.value, '')) NOT LIKE '%kematian%'")
-                                      ->whereRaw("LOWER(COALESCE(al.value, '')) NOT LIKE '%duka%'");
-                                });
-                        })->where(function($sub2) {
-                            $sub2->whereNull('tc.value')
-                                 ->orWhere(function($w2) {
-                                     $w2->whereRaw("LOWER(COALESCE(tc.value, '')) NOT LIKE '%sakit%'")
-                                        ->whereRaw("LOWER(COALESCE(tc.value, '')) NOT LIKE '%nikah%'")
-                                        ->whereRaw("LOWER(COALESCE(tc.value, '')) NOT LIKE '%meninggal%'")
-                                        ->whereRaw("LOWER(COALESCE(tc.value, '')) NOT LIKE '%kematian%'")
-                                        ->whereRaw("LOWER(COALESCE(tc.value, '')) NOT LIKE '%duka%'");
-                                 });
-                        });
-                    })
-                    ->sum('t_cuti.interval') ?? 0;
+            // Jika diedit oleh Kepala HRD atau Superadmin dan nilai diberikan, gunakan nilai manual
+            if ($isKepalaHrdOrSuperadmin && isset($arrayData['cuti_sisa_reguler']) && $arrayData['cuti_sisa_reguler'] !== '') {
+                $newArrayData['cuti_sisa_reguler'] = (int) $arrayData['cuti_sisa_reguler'];
+            } elseif ($existingKary && isset($existingKary->cuti_sisa_reguler) && empty($arrayData['tgl_masuk'])) {
+                // Pertahankan sisa cuti yang ada jika tgl_masuk tidak diubah dan tidak diedit manual
+                $newArrayData['cuti_sisa_reguler'] = (int) $existingKary->cuti_sisa_reguler;
+            } else {
+                $currentYear = (int) Date('Y');
+                $tipeRegulerIds = \DB::table('m_general')->where('group', 'TIPE CUTI')->where(function($q) {
+                    $q->where('key', '02')->orWhere('value', 'ilike', '%reguler%')->orWhere('value', 'ilike', '%tahunan%');
+                })->pluck('id')->toArray();
+
+                $cutiTerpakai = 0;
+                if (!empty($tipeRegulerIds) && $id) {
+                    $cutiTerpakai = \DB::table('t_cuti')
+                        ->leftJoin('m_general as al', 'al.id', '=', 't_cuti.alasan_id')
+                        ->leftJoin('m_general as tc', 'tc.id', '=', 't_cuti.tipe_cuti_id')
+                        ->where('t_cuti.m_kary_id', $id)
+                        ->whereIn('t_cuti.tipe_cuti_id', $tipeRegulerIds)
+                        ->whereIn('t_cuti.status', ['APPROVED', 'POSTED'])
+                        ->whereYear('t_cuti.date_from', $currentYear)
+                        ->where(function($q) {
+                            $q->where(function($sub) {
+                                $sub->whereNull('al.value')
+                                    ->orWhere(function($w) {
+                                        $w->whereRaw("LOWER(COALESCE(al.value, '')) NOT LIKE '%sakit%'")
+                                          ->whereRaw("LOWER(COALESCE(al.value, '')) NOT LIKE '%nikah%'")
+                                          ->whereRaw("LOWER(COALESCE(al.value, '')) NOT LIKE '%meninggal%'")
+                                          ->whereRaw("LOWER(COALESCE(al.value, '')) NOT LIKE '%kematian%'")
+                                          ->whereRaw("LOWER(COALESCE(al.value, '')) NOT LIKE '%duka%'");
+                                    });
+                            })->where(function($sub2) {
+                                $sub2->whereNull('tc.value')
+                                     ->orWhere(function($w2) {
+                                         $w2->whereRaw("LOWER(COALESCE(tc.value, '')) NOT LIKE '%sakit%'")
+                                            ->whereRaw("LOWER(COALESCE(tc.value, '')) NOT LIKE '%nikah%'")
+                                            ->whereRaw("LOWER(COALESCE(tc.value, '')) NOT LIKE '%meninggal%'")
+                                            ->whereRaw("LOWER(COALESCE(tc.value, '')) NOT LIKE '%kematian%'")
+                                            ->whereRaw("LOWER(COALESCE(tc.value, '')) NOT LIKE '%duka%'");
+                                     });
+                            });
+                        })
+                        ->sum('t_cuti.interval') ?? 0;
+                }
+
+                $adjReguler = $id ? (\DB::table('t_cuti_adjustment')->where('m_kary_id', $id)->whereIn('tipe_cuti_id', $tipeRegulerIds)->whereYear('date', $currentYear)->sum('value') ?? 0) : 0;
+                $newArrayData['cuti_sisa_reguler'] = max(0, ($autoJatah + $adjReguler) - $cutiTerpakai);
             }
-
-            $adjReguler = $id ? (\DB::table('t_cuti_adjustment')->where('m_kary_id', $id)->whereIn('tipe_cuti_id', $tipeRegulerIds)->whereYear('date', $currentYear)->sum('value') ?? 0) : 0;
-            $newArrayData['cuti_sisa_reguler'] = max(0, ($autoJatah + $adjReguler) - $cutiTerpakai);
         }
 
         // Proteksi field gaji berdasarkan izin role aktif (can_view_salary / Superadmin)

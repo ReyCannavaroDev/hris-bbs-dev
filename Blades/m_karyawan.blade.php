@@ -818,7 +818,7 @@
           <div class="grid grid-cols-12 items-center gap-1 ">
             <div class="grid grid-cols-12 col-span-6">
               <label class="col-span-12">Sisa Cuti Tahunan (Hari)<label class="text-red-500 space-x-0 pl-0"></label></label>
-              <FieldX :bind="{ readonly: true }" type="number" class="col-span-12 !mt-0 w-full"
+              <FieldX :bind="{ readonly: !canEditSisaCuti || (!actionText && !isProfile) }" type="number" class="col-span-12 !mt-0 w-full"
                 :value="values.sisa_cuti_1_hari" label="" placeholder="Sisa Cuti Tahunan"
                 :errorText="formErrors.sisa_cuti_1_hari?'failed':''" @input="v=>values.sisa_cuti_1_hari=v"
                 :hints="formErrors.sisa_cuti_1_hari" :check="false" />
