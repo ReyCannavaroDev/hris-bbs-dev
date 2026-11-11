@@ -69,6 +69,50 @@ class m_kary extends \App\Models\BasicModels\m_kary
     public $createAdditionalData = ["creator_id" => "auth:id"];
     public $updateAdditionalData = ["last_editor_id" => "auth:id"];
 
+    /**
+     * Menghitung jatah cuti tahunan/reguler:
+     * - Masa kerja < 1 tahun: 0 hari
+     * - Pada tahun karyawan genap 1 tahun masa kerja: prorata sisa bulan hingga akhir tahun (12 - bulan genap 1 tahun)
+     *   Contoh: Genap 1 tahun di bulan Juni (bulan 6) -> sisa Juli s/d Des = 12 - 6 = 6 hari
+     * - Setelah ganti tahun (tahun berjalan > tahun genap 1 tahun): reset ke default 12 hari
+     */
+    public static function hitungJatahCutiReguler($tglMasuk, $targetDate = null): int
+    {
+        if (empty($tglMasuk)) {
+            return 0;
+        }
+
+        try {
+            $tglMasukObj = Carbon::parse($tglMasuk);
+            $now = $targetDate ? Carbon::parse($targetDate) : Carbon::now();
+            $tahunSekarang = (int) $now->format('Y');
+
+            $tglGenap1Tahun = $tglMasukObj->copy()->addYear();
+            $tahunGenap1Tahun = (int) $tglGenap1Tahun->format('Y');
+            $bulanGenap1Tahun = (int) $tglGenap1Tahun->format('n');
+
+            // Belum genap 1 tahun masa kerja pada tanggal target
+            if ($now->lt($tglGenap1Tahun)) {
+                return 0;
+            }
+
+            // Pada tahun pertama saat karyawan genap 1 tahun masa kerja (pertengahan tahun anniversary)
+            // Jatah cuti = sisa bulan setelah bulan genap hingga akhir tahun (Desember)
+            if ($tahunSekarang === $tahunGenap1Tahun) {
+                return max(0, 12 - $bulanGenap1Tahun);
+            }
+
+            // Setelah ganti tahun berikutnya: reset ke default 12 hari
+            if ($tahunSekarang > $tahunGenap1Tahun) {
+                return 12;
+            }
+        } catch (\Throwable $e) {
+            return 0;
+        }
+
+        return 0;
+    }
+
     public function createBefore($model, $arrayData, $metaData, $id = null)
     {
         $respoCore = getCore('Respo');
@@ -143,8 +187,8 @@ class m_kary extends \App\Models\BasicModels\m_kary
             "kode" => $kode,
             "nik" => $ktp ?: null,
             "m_comp_id" => $m_comp_id,
-            "cuti_jatah_reguler" => $arrayData['cuti_jatah_reguler'] ?? ((!empty($arrayData['tgl_masuk']) && Carbon::parse($arrayData['tgl_masuk'])->diffInYears(Carbon::now()) >= 1) ? 12 : 0),
-            "cuti_sisa_reguler" => $arrayData['cuti_sisa_reguler'] ?? ((!empty($arrayData['tgl_masuk']) && Carbon::parse($arrayData['tgl_masuk'])->diffInYears(Carbon::now()) >= 1) ? 12 : 0),
+            "cuti_jatah_reguler" => $arrayData['cuti_jatah_reguler'] ?? self::hitungJatahCutiReguler($arrayData['tgl_masuk'] ?? null),
+            "cuti_sisa_reguler" => $arrayData['cuti_sisa_reguler'] ?? self::hitungJatahCutiReguler($arrayData['tgl_masuk'] ?? null),
         ]);
 
         // Proteksi field gaji berdasarkan izin role aktif (can_view_salary / Superadmin)
@@ -383,23 +427,40 @@ class m_kary extends \App\Models\BasicModels\m_kary
     {
         $object = [];
         if(app()->request->detail){
-            if (!empty($row['tgl_masuk']) && (empty($row['cuti_jatah_reguler']) || $row['cuti_jatah_reguler'] <= 0)) {
-                $yearsOfWork = Carbon::parse($row['tgl_masuk'])->diffInYears(Carbon::now());
-                if ($yearsOfWork >= 1) {
+            $karyId = $row['id'] ?? 0;
+            $currentYear = (int) Date('Y');
+            $jatahProrata = self::hitungJatahCutiReguler($row['tgl_masuk'] ?? null);
+
+            // Deteksi pergantian tahun: cek apakah exp_date_cuti sudah lewat tahun kalender berjalan
+            $expDate = !empty($row['exp_date_cuti']) ? Carbon::parse($row['exp_date_cuti']) : null;
+            $isTahunBerganti = $expDate && ((int) $expDate->format('Y') < $currentYear);
+
+            if ($isTahunBerganti && !empty($row['tgl_masuk'])) {
+                // Reset tahunan: saat ganti tahun baru, jatah cuti direset sesuai hak tahun berjalan (misal 12 hari)
+                \DB::table('m_kary')->where('id', $row['id'])->update([
+                    'cuti_jatah_reguler' => $jatahProrata,
+                    'cuti_sisa_reguler'  => $jatahProrata,
+                    'exp_date_cuti'      => Carbon::now()->endOfYear()->format('Y-m-d')
+                ]);
+                $row['cuti_jatah_reguler'] = $jatahProrata;
+                $row['cuti_sisa_reguler']  = $jatahProrata;
+                $row['exp_date_cuti']      = Carbon::now()->endOfYear()->format('Y-m-d');
+            } elseif (!empty($row['tgl_masuk']) && (empty($row['cuti_jatah_reguler']) || $row['cuti_jatah_reguler'] <= 0)) {
+                if ($jatahProrata > 0) {
                     \DB::table('m_kary')->where('id', $row['id'])->update([
-                        'cuti_jatah_reguler' => 12,
-                        'cuti_sisa_reguler' => 12,
-                        'exp_date_cuti' => Carbon::now()->endOfYear()->format('Y-m-d')
+                        'cuti_jatah_reguler' => $jatahProrata,
+                        'cuti_sisa_reguler'  => $jatahProrata,
+                        'exp_date_cuti'      => Carbon::now()->endOfYear()->format('Y-m-d')
                     ]);
-                    $row['cuti_jatah_reguler'] = 12;
-                    $row['cuti_sisa_reguler'] = 12;
-                    $row['exp_date_cuti'] = Carbon::now()->endOfYear()->format('Y-m-d');
+                    $row['cuti_jatah_reguler'] = $jatahProrata;
+                    $row['cuti_sisa_reguler']  = $jatahProrata;
+                    $row['exp_date_cuti']      = Carbon::now()->endOfYear()->format('Y-m-d');
                 }
             }
-            $karyId = $row['id'] ?? 0;
-            $currentYear = Date('Y');
-            $yearsOfWork = !empty($row['tgl_masuk']) ? Carbon::parse($row['tgl_masuk'])->diffInYears(Carbon::now()) : 0;
-            $jatahCuti = ($yearsOfWork >= 1) ? (!empty($row['cuti_jatah_reguler']) && $row['cuti_jatah_reguler'] > 0 ? (int)$row['cuti_jatah_reguler'] : 12) : (!empty($row['cuti_jatah_reguler']) ? (int)$row['cuti_jatah_reguler'] : 0);
+
+            $jatahCuti = (!empty($row['cuti_jatah_reguler']) && $row['cuti_jatah_reguler'] > 0)
+                ? (int) $row['cuti_jatah_reguler']
+                : $jatahProrata;
 
             $tipeRegulerIds = \DB::table('m_general')->where('group', 'TIPE CUTI')->where(function($q) {
                 $q->where('key', '02')->orWhere('value', 'ilike', '%reguler%')->orWhere('value', 'ilike', '%tahunan%');
@@ -554,19 +615,12 @@ class m_kary extends \App\Models\BasicModels\m_kary
             $employees = m_kary::where('is_active', true)->get();
 
             foreach ($employees as $employee) {
-                $employmentStartDate = Carbon::parse($employee->tgl_masuk);  
-
-                $yearsOfWork = $employmentStartDate->diffInYears(Carbon::now());
-
-                $baseLeaveDays = 12;
-                if ($yearsOfWork >= 1) {
-                    $employee->cuti_jatah_reguler = $baseLeaveDays;
-
-                    $employee->cuti_sisa_reguler = $baseLeaveDays;
-
+                $jatahHari = self::hitungJatahCutiReguler($employee->tgl_masuk);
+                if ($jatahHari > 0) {
+                    $employee->cuti_jatah_reguler = $jatahHari;
+                    $employee->cuti_sisa_reguler = $jatahHari;
                     $employee->cuti_sisa_panjang = 16;
                     $employee->exp_date_cuti = Carbon::now()->endOfYear()->format('Y-m-d');
-
                     $employee->save();
                 }
             }

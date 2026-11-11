@@ -304,10 +304,11 @@ class t_cuti extends \App\Models\BasicModels\t_cuti
             return null;
         }
 
-        // Cuti Reguler / Tahunan: Memotong kuota 12 hari cuti reguler tahunan karyawan
+        // Cuti Reguler / Tahunan: Memotong kuota cuti reguler tahunan karyawan
         $kary = \DB::table('m_kary')->where('id', $karyId)->first();
         if ($kary) {
-            $sisaCuti = (int) ($kary->cuti_sisa_reguler ?? 12);
+            $jatahProrata = \App\Models\CustomModels\m_kary::hitungJatahCutiReguler($kary->tgl_masuk ?? null);
+            $sisaCuti = isset($kary->cuti_sisa_reguler) ? (int) $kary->cuti_sisa_reguler : $jatahProrata;
             if ($id) {
                 $oldCuti = \DB::table('t_cuti')->where('id', $id)->first();
                 if ($oldCuti && in_array($oldCuti->status, ['APPROVED', 'POSTED'])) {
