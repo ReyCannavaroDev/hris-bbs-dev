@@ -13,7 +13,10 @@ class t_pengumuman extends \App\Models\BasicModels\t_pengumuman
         $this->createable  = array_merge($this->createable, ['m_divisi_id']);
         $this->updateable  = array_merge($this->updateable, ['m_divisi_id']);
         $this->searchable  = array_merge($this->searchable, ['m_divisi_id']);
-        $this->joins       = array_merge($this->joins, ['m_divisi.id=t_pengumuman.m_divisi_id']);
+        // Kosongkan $joins agar generator tidak melakukan INNER JOIN otomatis
+        // yang mengeliminasi pengumuman untuk seluruh divisi (m_divisi_id IS NULL).
+        // Nama target divisi sudah ditangani dengan aman melalui transformRowData().
+        $this->joins = [];
     }
     
     public $fileColumns = [ 'thumb' ];

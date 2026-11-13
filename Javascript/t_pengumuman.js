@@ -253,7 +253,7 @@ const landing = reactive({
     },
     params: {
       simplest: true,
-      searchfield:'this.id, this.judul, m_divisi.nama, this.tag, this.content',
+      searchfield:'this.id, this.judul, this.tag, this.content',
     },
     onsuccess(response) {
       if (response && response.data) {
