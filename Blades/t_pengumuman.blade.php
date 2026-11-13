@@ -136,7 +136,7 @@
           >
           <div class="flex w-40">
             <div class="flex-auto">
-              <i class="text-red-500">Tidak Aktif</i>
+              <i class="text-red-500"> InActive </i>
             </div>
             <div class="flex-auto">
               <input
@@ -150,7 +150,7 @@
                 />
             </div>
             <div class="flex-auto">
-              <i class="text-green-500">Aktif</i>
+              <i class="text-green-500">Active</i>
             </div>
           </div>
         </div>
