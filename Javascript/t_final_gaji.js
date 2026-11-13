@@ -43,14 +43,6 @@ function formatRupiah(amount) {
   return new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR' }).format(amount)
 }
 
-//  @if( $id )------------------- VALUES FORM ! PENTING JANGAN DIHAPUS
-let initialValues = {}
-let _id = 0
-
-let now = new Date()
-let tempYear = now.getFullYear()
-let tempMonth = now.getMonth()
-
 function parseDate(v) {
   if (!v) return null
   if (v instanceof Date) return isNaN(v.getTime()) ? null : v
@@ -96,6 +88,14 @@ function formatDateApi(d) {
   return `${year}-${month}-${day}`
 }
 
+//  @if( $id )------------------- VALUES FORM ! PENTING JANGAN DIHAPUS
+let initialValues = {}
+let _id = 0
+
+let now = new Date()
+let tempYear = now.getFullYear()
+let tempMonth = now.getMonth()
+
 let dStart = new Date(tempYear, tempMonth, 1)
 let dEnd = new Date(tempYear, tempMonth + 1, 0)
 let firstDay = formatDateDisplay(dStart)
@@ -112,7 +112,10 @@ const values = reactive({
   total_pengeluaran_gaji: 0,
 })
 
+const isLoadingData = ref(true)
+
 function clearDetail() {
+  if (isLoadingData.value) return
   detailArr.value = []
   values.total_pengeluaran_gaji = 0
 }
@@ -161,43 +164,93 @@ function isTipeLemburSaja() {
   return t.includes('LEMBUR') || values.periode_gaji_id === 'LEMBUR'
 }
 
-
 function onPeriodeAwalChange(v) {
+  if (isLoadingData.value) return
   const d = parseDate(v)
-  values.periode_awal = d ? formatDateDisplay(d) : v
+  const formatted = d ? formatDateDisplay(d) : v
+  if (values.periode_awal === formatted) return
+  values.periode_awal = formatted
   clearDetail()
 }
 
 function onPeriodeAkhirChange(v) {
+  if (isLoadingData.value) return
   const d = parseDate(v)
-  values.periode_akhir = d ? formatDateDisplay(d) : v
+  const formatted = d ? formatDateDisplay(d) : v
+  if (values.periode_akhir === formatted) return
+  values.periode_akhir = formatted
+  clearDetail()
+}
+
+function onCompanyChange(v) {
+  if (isLoadingData.value) return
+  if (values.m_dir_id === v) return
+  values.m_dir_id = v
+  values.m_divisi_id = null
+  values.m_dept_id = null
+  clearDetail()
+}
+
+function onDivisiChange(v) {
+  if (isLoadingData.value) return
+  if (values.m_divisi_id === v) return
+  values.m_divisi_id = v
+  values.m_dept_id = null
+  clearDetail()
+}
+
+function onDeptChange(v) {
+  if (isLoadingData.value) return
+  if (values.m_dept_id === v) return
+  values.m_dept_id = v
   clearDetail()
 }
 
 function onTipePeriodeChange(objVal) {
+  if (isLoadingData.value) return
+  let newId = null
+  let newText = ''
   if (objVal && typeof objVal === 'object') {
-    tipePeriodeText.value = String(objVal.value || objVal.nama || objVal.label || '').toUpperCase()
+    newText = String(objVal.value || objVal.nama || objVal.label || '').toUpperCase()
     if (objVal.id !== undefined) {
-      values.periode_gaji_id = objVal.id
-      periodeOptionsMap[objVal.id] = tipePeriodeText.value
+      newId = objVal.id
+      periodeOptionsMap[objVal.id] = newText
     }
   } else if (typeof objVal === 'string' || typeof objVal === 'number') {
-    values.periode_gaji_id = objVal
-    tipePeriodeText.value = periodeOptionsMap[objVal] || String(objVal).toUpperCase()
-  } else {
-    values.periode_gaji_id = null
-    tipePeriodeText.value = ''
+    newId = objVal
+    newText = periodeOptionsMap[objVal] || String(objVal).toUpperCase()
   }
+
+  if (values.periode_gaji_id === newId) return
+  values.periode_gaji_id = newId
+  tipePeriodeText.value = newText
   clearDetail()
 }
 
-function openDetail(i) {
+async function openDetail(i) {
   idxOpen.value = i
   openedRincian.value = []
   detailArrAdjOpen.items = []
   objectOpen.items = detailArr.value[i]
   titleOpen.value = (detailArr.value[i]['m_kary.nama_lengkap'] || detailArr.value[i].m_kary?.nama_lengkap || detailArr.value[i].karyawan || '-') + ' - ' + (detailArr.value[i]['m_kary.nik'] || detailArr.value[i].m_kary?.nik || '')
   
+  if ((!detailArr.value[i]?.detail_gaji || !detailArr.value[i].detail_gaji.length) && (!detailArr.value[i]?.t_final_gaji_det_rincian || !detailArr.value[i].t_final_gaji_det_rincian.length) && detailArr.value[i]?.id) {
+    try {
+      const rincianRes = await fetch(`${store.server.url_backend}/operation/t_final_gaji_det_rincian?where=this.t_final_gaji_det_id=${detailArr.value[i].id}&join=false&simplest=true&paginate=9999`, {
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `${store.user.token_type} ${store.user.token}`
+        }
+      })
+      if (rincianRes.ok) {
+        const rincianJson = await rincianRes.json()
+        detailArr.value[i].t_final_gaji_det_rincian = rincianJson.data || []
+      }
+    } catch (e) {
+      console.warn('Gagal memuat fallback rincian gaji:', e)
+    }
+  }
+
   let dataFormat = (detailArr.value[i]?.detail_gaji && detailArr.value[i].detail_gaji.length) 
     ? detailArr.value[i].detail_gaji.slice() 
     : (detailArr.value[i]?.t_final_gaji_det_rincian?.slice().sort((a, b) => a.seq - b.seq) ?? [])
@@ -648,7 +701,15 @@ async function posted() {
 async function onSave() {
   const isCreating = ['Create', 'Copy', 'Tambah'].includes(actionText.value)
   let dataSave = JSON.parse(JSON.stringify(values))
+
+  const effDirId = values.m_dir_id || detailArr.value[0]?.m_kary_dir_id || null
+  const effDivisiId = values.m_divisi_id || detailArr.value[0]?.m_kary_divisi_id || null
+  const effDeptId = values.m_dept_id || detailArr.value[0]?.m_kary_dept_id || null
+
   delete dataSave['periode_gaji_id']
+  delete dataSave['m_dir_id']
+  delete dataSave['m_divisi_id']
+  delete dataSave['m_dept_id']
   
   dataSave['periode_awal'] = formatDate(dataSave['periode_awal'])
   dataSave['periode_akhir'] = formatDate(dataSave['periode_akhir'])
@@ -687,9 +748,9 @@ async function onSave() {
     const detObj = {
       t_perhitungan_gaji_id: isTipeLemburSaja() ? null : (v.t_perhitungan_gaji_id || (isCreating ? v.id : null)),
       m_kary_id: v.m_kary_id,
-      m_kary_dir_id: v.m_kary_dir_id || null,
-      m_kary_divisi_id: v.m_kary_divisi_id || null,
-      m_kary_dept_id: v.m_kary_dept_id || null,
+      m_kary_dir_id: v.m_kary_dir_id || effDirId,
+      m_kary_divisi_id: v.m_kary_divisi_id || effDivisiId,
+      m_kary_dept_id: v.m_kary_dept_id || effDeptId,
       periode: v.periode || (dataSave['periode_awal'] + ' s/d ' + dataSave['periode_akhir']),
       periode_in_date: formatDate(v.periode_in_date) || dataSave['periode_awal'],
       total_gaji: Number(v.total_gaji) || 0,
@@ -775,6 +836,7 @@ function onReset() {
 }
 
 onBeforeMount(async () => {
+  isLoadingData.value = true
   await loadPeriodeGajiOptions()
   if (isRead) {
     try {
@@ -782,7 +844,7 @@ onBeforeMount(async () => {
       const dataURL = `${store.server.url_backend}/operation${endpointApi}/${editedId}`
       isRequesting.value = true
 
-      const params = { transform: false }
+      const params = { join: false, transform: false }
       const fixedParams = new URLSearchParams(params)
       const res = await fetch(dataURL + '?' + fixedParams, {
         headers: {
@@ -795,21 +857,155 @@ onBeforeMount(async () => {
       const resultJson = await res.json()
       initialValues = resultJson.data || {}
 
-      detailArr.value = initialValues.t_final_gaji_det?.sort((a, b) => a.id - b.id) || []
-      detailArr.value.forEach((item) => {
-        item['m_kary.nik'] = item['m_kary.nik'] || item.m_kary?.nik || ''
-        item['m_kary.nama_lengkap'] = item['m_kary.nama_lengkap'] || item.m_kary?.nama_lengkap || ''
-        item.karyawan = item.karyawan || item['m_kary.nama_lengkap'] || item.m_kary?.nama_lengkap || '-'
-        item['m_kary_dir.nama'] = item['m_kary_dir.nama'] || item.m_kary_dir?.nama || item['m_dir.nama'] || item.m_dir?.nama || '-'
-        item['m_kary_divisi.nama'] = item['m_kary_divisi.nama'] || item.m_kary_divisi?.nama || item.m_divisi?.nama || '-'
-        item['m_kary_dept.nama'] = item['m_kary_dept.nama'] || item.m_kary_dept?.nama || item.m_dept?.nama || '-'
+      for (const key in initialValues) {
+        if (initialValues[key] !== undefined && initialValues[key] !== null) {
+          values[key] = initialValues[key]
+        }
+      }
+
+      if (initialValues.periode_awal) {
+        values.periode_awal = formatDateDisplay(initialValues.periode_awal)
+      }
+      if (initialValues.periode_akhir) {
+        values.periode_akhir = formatDateDisplay(initialValues.periode_akhir)
+      }
+      if (initialValues.total_pengeluaran_gaji !== undefined) {
+        values.total_pengeluaran_gaji = Number(initialValues.total_pengeluaran_gaji)
+      }
+
+      let detList = Array.isArray(initialValues.t_final_gaji_det) ? initialValues.t_final_gaji_det : []
+
+      // 1. Muat detail data karyawan via endpoint custom_getDetail
+      if (!detList.length) {
+        try {
+          const detRes = await fetch(`${store.server.url_backend}/operation${endpointApi}/getDetail?id=${editedId}`, {
+            headers: {
+              'Content-Type': 'application/json',
+              Authorization: `${store.user.token_type} ${store.user.token}`
+            }
+          })
+          if (detRes.ok) {
+            const detJson = await detRes.json()
+            const parsed = Array.isArray(detJson) ? detJson : (detJson.data || [])
+            if (parsed.length) {
+              detList = parsed
+            }
+            if (detJson.header) {
+              if (!values.m_dir_id && detJson.header.m_dir_id) values.m_dir_id = detJson.header.m_dir_id
+              if (!values.m_divisi_id && detJson.header.m_divisi_id) values.m_divisi_id = detJson.header.m_divisi_id
+              if (!values.m_dept_id && detJson.header.m_dept_id) values.m_dept_id = detJson.header.m_dept_id
+            }
+          }
+        } catch (errDet) {
+          console.warn('Gagal memuat detail dari custom_getDetail:', errDet)
+        }
+      }
+
+      // 2. Fallback child endpoints jika custom_getDetail belum terisi
+      if (!detList.length) {
+        try {
+          const endpoints = [
+            `${store.server.url_backend}/operation/t_final_gaji_det?where=this.t_final_gaji_id=${editedId}&paginate=9999`,
+            `${store.server.url_backend}/operation/t_final_gaji_det?where=t_final_gaji_id=${editedId}&paginate=9999`,
+            `${store.server.url_backend}/operation/t_final_gaji_det?where=this.t_final_gaji_id='${editedId}'&paginate=9999`,
+            `${store.server.url_backend}/operation/t_final_gaji_det?where=t_final_gaji_id='${editedId}'&paginate=9999`
+          ]
+          for (const ep of endpoints) {
+            try {
+              const detRes = await fetch(ep, {
+                headers: {
+                  'Content-Type': 'application/json',
+                  Authorization: `${store.user.token_type} ${store.user.token}`
+                }
+              })
+              if (detRes.ok) {
+                const rawData = await detRes.json()
+                let parsed = []
+                if (Array.isArray(rawData)) {
+                  parsed = rawData
+                } else if (rawData && Array.isArray(rawData.data)) {
+                  parsed = rawData.data
+                } else if (rawData && rawData.data && Array.isArray(rawData.data.data)) {
+                  parsed = rawData.data.data
+                } else if (rawData && Array.isArray(rawData.items)) {
+                  parsed = rawData.items
+                }
+                if (parsed.length) {
+                  detList = parsed
+                  break
+                }
+              }
+            } catch (errLoop) {}
+          }
+        } catch (e) {
+          console.warn('Gagal memuat detail final gaji:', e)
+        }
+      }
+
+      initialValues.t_final_gaji_det = detList
+      detailArr.value = detList.slice().sort((a, b) => (a.id || 0) - (b.id || 0))
+
+      detailArr.value.forEach((item, index) => {
+        item._id = item.id || (index + 1)
+        item['m_kary.nik'] = item['m_kary.nik'] || item.m_kary?.nik || item.kary_nik || ''
+        item['m_kary.nama_lengkap'] = item['m_kary.nama_lengkap'] || item.m_kary?.nama_lengkap || item.kary_nama || ''
+        item.karyawan = item.karyawan || item['m_kary.nama_lengkap'] || item.m_kary?.nama_lengkap || item.kary_nama || '-'
+        item['m_kary_dir.nama'] = item['m_kary_dir.nama'] || item.m_kary_dir?.nama || item.dir_nama || item['m_dir.nama'] || item.m_dir?.nama || '-'
+        item['m_kary_divisi.nama'] = item['m_kary_divisi.nama'] || item.m_kary_divisi?.nama || item.divisi_nama || item['m_divisi.nama'] || item.m_divisi?.nama || '-'
+        item['m_kary_dept.nama'] = item['m_kary_dept.nama'] || item.m_kary_dept?.nama || item.dept_nama || item['m_dept.nama'] || item.m_dept?.nama || '-'
         if ((!item.detail_gaji || !item.detail_gaji.length) && item.t_final_gaji_det_rincian?.length) {
           item.detail_gaji = item.t_final_gaji_det_rincian.slice().sort((a, b) => a.seq - b.seq)
         }
       })
 
-      for (const key in initialValues) {
-        values[key] = initialValues[key]
+      // Fallback isi form header jika company/divisi/dept/periode di header masih null (misal dari data lama)
+      if (!values.m_dir_id && initialValues.m_dir_id) values.m_dir_id = initialValues.m_dir_id
+      if (!values.m_divisi_id && initialValues.m_divisi_id) values.m_divisi_id = initialValues.m_divisi_id
+      if (!values.m_dept_id && initialValues.m_dept_id) values.m_dept_id = initialValues.m_dept_id
+
+      if (detailArr.value.length) {
+        if (!values.m_dir_id && detailArr.value[0]?.m_kary_dir_id) values.m_dir_id = detailArr.value[0].m_kary_dir_id
+        if (!values.m_divisi_id && detailArr.value[0]?.m_kary_divisi_id) values.m_divisi_id = detailArr.value[0].m_kary_divisi_id
+        if (!values.m_dept_id && detailArr.value[0]?.m_kary_dept_id) values.m_dept_id = detailArr.value[0].m_kary_dept_id
+        if (!values.periode_gaji_id && detailArr.value[0]?.periode_id) {
+          values.periode_gaji_id = detailArr.value[0].periode_id
+          tipePeriodeText.value = periodeOptionsMap[values.periode_gaji_id] || ''
+        }
+      }
+
+      // Lookup nama karyawan & NIK jika masih berupa strip atau kosong
+      const missingKaryItems = detailArr.value.filter(item => !item['m_kary.nama_lengkap'] || item.karyawan === '-')
+      if (missingKaryItems.length) {
+        const karyIds = [...new Set(missingKaryItems.map(x => x.m_kary_id).filter(Boolean))]
+        if (karyIds.length) {
+          try {
+            const karyRes = await fetch(`${store.server.url_backend}/operation/m_kary?where=this.id in (${karyIds.join(',')})&paginate=9999`, {
+              headers: {
+                Authorization: `${store.user.token_type} ${store.user.token}`
+              }
+            })
+            if (karyRes.ok) {
+              const karyJson = await karyRes.json()
+              const karyList = Array.isArray(karyJson) ? karyJson : (Array.isArray(karyJson.data) ? karyJson.data : (karyJson.data?.data || []))
+              const karyMap = {}
+              karyList.forEach(k => { karyMap[k.id] = k })
+              detailArr.value.forEach(item => {
+                if (karyMap[item.m_kary_id]) {
+                  const k = karyMap[item.m_kary_id]
+                  item['m_kary.nik'] = item['m_kary.nik'] || k.nik || ''
+                  item['m_kary.nama_lengkap'] = item['m_kary.nama_lengkap'] || k.nama_lengkap || ''
+                  item.karyawan = item.karyawan === '-' ? (k.nama_lengkap || item.karyawan) : (item.karyawan || k.nama_lengkap)
+                }
+              })
+            }
+          } catch (e) {
+            console.warn('Gagal lookup data karyawan:', e)
+          }
+        }
+      }
+
+      if (!values.total_pengeluaran_gaji && detailArr.value.length) {
+        summaryPengeluaranGaji()
       }
     } catch (err) {
       isBadForm.value = true
@@ -821,7 +1017,14 @@ onBeforeMount(async () => {
       }).then(() => router.back())
     } finally {
       isRequesting.value = false
+      setTimeout(() => {
+        isLoadingData.value = false
+      }, 500)
     }
+  } else {
+    setTimeout(() => {
+      isLoadingData.value = false
+    }, 300)
   }
 })
 
@@ -875,7 +1078,7 @@ const landing = reactive({
       title: "Detail",
       class: 'bg-green-600 text-light-100',
       click(row) {
-        router.push(`${route.path}/${row.id}?` + tsId)
+        router.push(`${route.path}/${row.id}?ts=${Date.now()}`)
       }
     },
     {
@@ -884,7 +1087,7 @@ const landing = reactive({
       class: 'bg-blue-600 text-light-100',
       show: (row) => row.status?.toUpperCase() === 'DRAFT',
       click(row) {
-        router.push(`${route.path}/${row.id}?action=Edit&` + tsId)
+        router.push(`${route.path}/${row.id}?action=Edit&ts=${Date.now()}`)
       }
     },
     {
@@ -893,7 +1096,7 @@ const landing = reactive({
       class: 'bg-rose-700 rounded-lg text-white',
       show: (row) => row.status?.toUpperCase() === 'DRAFT',
       click(row) {
-        router.push(`${route.path}/${row.id}?action=Verifikasi&` + tsId)
+        router.push(`${route.path}/${row.id}?action=Verifikasi&ts=${Date.now()}`)
       }
     }
   ],
@@ -917,7 +1120,7 @@ const landing = reactive({
   columns: [
     {
       headerName: 'No',
-      valueGetter: (params) => params.node.rowIndex + 1,
+      valueGetter: (params) => (params.node ? params.node.rowIndex + 1 : 1),
       width: 60,
       sortable: true,
       resizable: true,
@@ -936,15 +1139,28 @@ const landing = reactive({
       cellClass: ['border-r', '!border-gray-200', 'justify-start']
     },
     {
-      field: 'desc',
-      headerName: 'Deskripsi Pendek',
+      field: 'm_dir.nama',
+      headerName: 'Company',
       filter: true,
-      sortable: true,
       wrapText: true,
+      sortable: true,
       flex: 1,
       filter: 'ColFilter',
       resizable: true,
-      cellClass: ['border-r', '!border-gray-200', 'justify-start']
+      cellClass: ['border-r', '!border-gray-200', 'justify-start'],
+      valueGetter: (params) => params.data?.['m_dir.nama'] || params.data?.company || params.data?.m_dir?.nama || params.data?.['m_kary_dir.nama'] || '-'
+    },
+    {
+      field: 'm_divisi.nama',
+      headerName: 'Divisi',
+      filter: true,
+      wrapText: true,
+      sortable: true,
+      flex: 1,
+      filter: 'ColFilter',
+      resizable: true,
+      cellClass: ['border-r', '!border-gray-200', 'justify-start'],
+      valueGetter: (params) => params.data?.['m_divisi.nama'] || params.data?.divisi || params.data?.m_divisi?.nama || params.data?.['m_kary_divisi.nama'] || '-'
     },
     {
       field: 'periode_awal',
@@ -955,7 +1171,10 @@ const landing = reactive({
       flex: 1,
       filter: 'ColFilter',
       resizable: true,
-      cellClass: ['border-r', '!border-gray-200', 'justify-start']
+      cellClass: ['border-r', '!border-gray-200', 'justify-center'],
+      valueGetter: (params) => {
+        return formatDateDisplay(params?.data?.periode_awal) || '-'
+      }
     },
     {
       field: 'periode_akhir',
@@ -966,7 +1185,10 @@ const landing = reactive({
       flex: 1,
       filter: 'ColFilter',
       resizable: true,
-      cellClass: ['border-r', '!border-gray-200', 'justify-start']
+      cellClass: ['border-r', '!border-gray-200', 'justify-center'],
+      valueGetter: (params) => {
+        return formatDateDisplay(params?.data?.periode_akhir) || '-'
+      }
     },
     {
       field: 'total_pengeluaran_gaji',
@@ -981,6 +1203,17 @@ const landing = reactive({
       cellRenderer: ({ value }) => {
         return formatRupiah(value)
       }
+    },
+    {
+      field: 'desc',
+      headerName: 'Deskripsi Pendek',
+      filter: true,
+      sortable: true,
+      wrapText: true,
+      flex: 1,
+      filter: 'ColFilter',
+      resizable: true,
+      cellClass: ['border-r', '!border-gray-200', 'justify-start']
     },
     {
       field: 'status',

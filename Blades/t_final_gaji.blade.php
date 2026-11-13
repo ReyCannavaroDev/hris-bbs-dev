@@ -44,10 +44,7 @@
           <label class="font-semibold">Company</label>
           <FieldSelect class="w-full py-2 !mt-0" :bind="{ disabled: !actionText, clearable:true }"
             :value="values.m_dir_id" :check="false" @input="(v)=>{
-              values.m_dir_id=v
-              values.m_divisi_id=null
-              values.m_dept_id=null
-              clearDetail()
+              onCompanyChange(v)
             }" :errorText="formErrors.m_dir_id?'failed':''" :hints="formErrors.m_dir_id" placeholder="Pilih Company"
             label=""
             displayField="nama" valueField="id" :api="{
@@ -68,9 +65,7 @@
           <label class="font-semibold">Divisi<span class="text-red-500 space-x-0 pl-0"></span></label>
           <FieldSelect class="w-full py-2 !mt-0" :bind="{ disabled: !actionText, clearable:true }"
             :value="values.m_divisi_id" :check="false" @input="(v)=>{
-              values.m_divisi_id=v
-              values.m_dept_id=null
-              clearDetail()
+              onDivisiChange(v)
             }" :errorText="formErrors.m_divisi_id?'failed':''" :hints="formErrors.m_divisi_id" placeholder="Pilih Divisi"
             label=""
             displayField="nama" valueField="id" :api="{
@@ -91,8 +86,7 @@
           <label class="font-semibold">Departemen<span class="text-red-500 space-x-0 pl-0"></span></label>
           <FieldSelect class="w-full py-2 !mt-0" :bind="{ disabled: !actionText, clearable:true }"
             :value="values.m_dept_id" :check="false" @input="(v)=>{
-              values.m_dept_id=v
-              clearDetail()
+              onDeptChange(v)
             }" :errorText="formErrors.m_dept_id?'failed':''" :hints="formErrors.m_dept_id" placeholder="Pilih Departemen"
             label=""
             displayField="nama" valueField="id" :api="{
@@ -206,7 +200,7 @@
             </tr>
           </thead>
           <tbody>
-            <tr v-if="detailArr.length" v-for="(item, i) in detailArr" :key="item.id"
+            <tr v-if="detailArr.length" v-for="(item, i) in detailArr" :key="item._id || item.id || i"
               class="border-t hover:bg-yellow-200">
               <td class="text-center border border-[#CACACA] px-2">
                 {{ i + 1 }}.
