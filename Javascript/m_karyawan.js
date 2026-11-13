@@ -422,6 +422,8 @@ watch(() => values.is_active, (newVal) => {
 })
 
 const valuesPendidikan = reactive({
+  _id: null,
+  id: null,
   tingkat_id: null,
   thn_masuk: thisYear,
   nama_sekolah: null,
@@ -435,6 +437,8 @@ const valuesPendidikan = reactive({
 })
 
 const valuesKeluarga = reactive({
+  _id: null,
+  id: null,
   keluarga_id: null,
   nama: null,
   pend_terakhir_id: null,
@@ -445,6 +449,8 @@ const valuesKeluarga = reactive({
 })
 
 const valuesPelatihan = reactive({
+  _id: null,
+  id: null,
   nama_pel: null,
   tahun: thisYear,
   nama_lem: null,
@@ -452,12 +458,16 @@ const valuesPelatihan = reactive({
 })
 
 const valuesPrestasi = reactive({
+  _id: null,
+  id: null,
   tingkat_pres_id: null,
   tahun: thisYear,
   nama_pres: null
 })
 
 const valuesOrganisasi = reactive({
+  _id: null,
+  id: null,
   nama: null,
   nama_org: null,
   tahun: thisYear,
@@ -471,20 +481,29 @@ const valuesOrganisasi = reactive({
 })
 
 const valuesBahasa = reactive({
+  _id: null,
+  id: null,
   bhs_dikuasai: null,
   nilai_lisan: null,
-  nilai_tertulis: null
+  level_lisan: null,
+  nilai_tertulis: null,
+  level_tertulis: null
 })
 
 const valuesPengalaman = reactive({
+  _id: null,
+  id: null,
   instansi: null,
   thn_masuk: thisYear,
   thn_keluar: thisYear,
   kota_id: null,
+  kota: null,
   alamat_kantor: null,
   surat_referensi: null,
+  surat_referensi_url: null,
   bidang_usaha: null,
   no_tlp: null,
+  no_telp: null,
   posisi: null
 })
 
@@ -621,6 +640,8 @@ onBeforeMount(async () => {
 
       initialValues['m_kary_det_pk']?.forEach((item) => {
         item._id = ++_idPk
+        item.no_telp = item.no_telp || item.no_tlp || null
+        item.no_tlp = item.no_tlp || item.no_telp || null
         detailPengalaman.value.push(item)
       })
 
@@ -1053,6 +1074,8 @@ const onEditPendidikan = (row) => {
   for (const k in valuesPendidikan) {
     if (k in row) valuesPendidikan[k] = row[k]
   }
+  valuesPendidikan._id = row._id
+  valuesPendidikan.id = row.id ?? null
 }
 
 const onDeletePendidikan = (row, api) => {
@@ -1112,8 +1135,13 @@ const onEditKeluarga = (row) => {
   for (const k in valuesKeluarga) {
     if (k in row) valuesKeluarga[k] = row[k]
   }
+  valuesKeluarga._id = row._id
+  valuesKeluarga.id = row.id ?? null
   if (!valuesKeluarga.pendidikan && row.pend_terakhir) {
     valuesKeluarga.pendidikan = row.pend_terakhir
+  }
+  if (!valuesKeluarga.pend_terakhir && row.pendidikan) {
+    valuesKeluarga.pend_terakhir = row.pendidikan
   }
 }
 
@@ -1173,6 +1201,8 @@ const onEditPelatihan = (row) => {
   for (const k in valuesPelatihan) {
     if (k in row) valuesPelatihan[k] = row[k]
   }
+  valuesPelatihan._id = row._id
+  valuesPelatihan.id = row.id ?? null
 }
 
 const onDeletePelatihan = (row, api) => {
@@ -1231,6 +1261,8 @@ const onEditPrestasi = (row) => {
   for (const k in valuesPrestasi) {
     if (k in row) valuesPrestasi[k] = row[k]
   }
+  valuesPrestasi._id = row._id
+  valuesPrestasi.id = row.id ?? null
 }
 
 const onDeletePrestasi = (row, api) => {
@@ -1295,9 +1327,14 @@ const onEditOrganisasi = (row) => {
   for (const k in valuesOrganisasi) {
     if (k in row) valuesOrganisasi[k] = row[k]
   }
+  valuesOrganisasi._id = row._id
+  valuesOrganisasi.id = row.id ?? null
   if (!valuesOrganisasi.nama && row.nama_org) valuesOrganisasi.nama = row.nama_org
+  if (!valuesOrganisasi.nama_org && row.nama) valuesOrganisasi.nama_org = row.nama
   if (!valuesOrganisasi.jenis && row.jenis_org) valuesOrganisasi.jenis = row.jenis_org
+  if (!valuesOrganisasi.jenis_org && row.jenis) valuesOrganisasi.jenis_org = row.jenis
   if (!valuesOrganisasi.kota && row.nama_kota) valuesOrganisasi.kota = row.nama_kota
+  if (!valuesOrganisasi.nama_kota && row.kota) valuesOrganisasi.nama_kota = row.kota
 }
 
 const onDeleteOrganisasi = (row, api) => {
@@ -1322,6 +1359,10 @@ const detailBahasa = ref([])
 const addBahasa = async () => {
   const tempObj = {}
   if (!valuesBahasa.bhs_dikuasai) tempObj.bhs_dikuasai = ['Bahasa wajib diisi']
+  if (valuesBahasa.nilai_lisan === null || valuesBahasa.nilai_lisan === undefined || valuesBahasa.nilai_lisan === '') tempObj.nilai_lisan = ['Nilai Lisan wajib diisi']
+  if (!valuesBahasa.level_lisan) tempObj.level_lisan = ['Level Lisan wajib diisi']
+  if (valuesBahasa.nilai_tertulis === null || valuesBahasa.nilai_tertulis === undefined || valuesBahasa.nilai_tertulis === '') tempObj.nilai_tertulis = ['Nilai Tertulis wajib diisi']
+  if (!valuesBahasa.level_tertulis) tempObj.level_tertulis = ['Level Tertulis wajib diisi']
 
   if (Object.keys(tempObj).length >= 1) {
     formErrorsBhs.value = tempObj
@@ -1354,6 +1395,8 @@ const onEditBahasa = (row) => {
   for (const k in valuesBahasa) {
     if (k in row) valuesBahasa[k] = row[k]
   }
+  valuesBahasa._id = row._id
+  valuesBahasa.id = row.id ?? null
 }
 
 const onDeleteBahasa = (row, api) => {
@@ -1409,10 +1452,14 @@ async function fileSrtRef(e) {
 
 const addPengalaman = async () => {
   const tempObj = {}
-  if (!valuesPengalaman.instansi) tempObj.instansi = ['Nama Instansi wajib diisi']
+  if (!valuesPengalaman.instansi) tempObj.instansi = ['Nama Perusahaan wajib diisi']
+  if (!valuesPengalaman.bidang_usaha) tempObj.bidang_usaha = ['Bidang Usaha wajib diisi']
+  if (!valuesPengalaman.no_tlp && !valuesPengalaman.no_telp) tempObj.no_tlp = ['No. Telp wajib diisi']
   if (!valuesPengalaman.posisi) tempObj.posisi = ['Posisi wajib diisi']
   if (!valuesPengalaman.thn_masuk) tempObj.thn_masuk = ['Tahun Masuk wajib dipilih']
   if (!valuesPengalaman.thn_keluar) tempObj.thn_keluar = ['Tahun Keluar wajib dipilih']
+  if (!valuesPengalaman.alamat_kantor) tempObj.alamat_kantor = ['Alamat Kantor wajib diisi']
+  if (!valuesPengalaman.kota_id) tempObj.kota_id = ['Kota wajib dipilih']
 
   if (Object.keys(tempObj)?.length >= 1) {
     formErrorsPK.value = tempObj
@@ -1424,6 +1471,8 @@ const addPengalaman = async () => {
   }
 
   const payloadPK = { ...valuesPengalaman }
+  payloadPK.no_tlp = payloadPK.no_tlp || payloadPK.no_telp || null
+  payloadPK.no_telp = payloadPK.no_tlp
   if (payloadPK._id) {
     const idx = detailPengalaman.value.findIndex(e => e._id === payloadPK._id)
     if (idx !== -1) {
@@ -1448,6 +1497,12 @@ const onEditPengalaman = (row) => {
   for (const k in valuesPengalaman) {
     if (k in row) valuesPengalaman[k] = row[k]
   }
+  valuesPengalaman._id = row._id
+  valuesPengalaman.id = row.id ?? null
+  valuesPengalaman.no_tlp = row.no_tlp || row.no_telp || null
+  valuesPengalaman.no_telp = valuesPengalaman.no_tlp
+  valuesPengalaman.surat_referensi = row.surat_referensi || null
+  valuesPengalaman.surat_referensi_url = row.surat_referensi_url || null
 }
 
 const onDeletePengalaman = (row, api) => {
@@ -1658,49 +1713,91 @@ async function onSave() {
     formErrors.value = {}
     const errors = {}
 
-    // --- MODE TESTING: Validasi mandatory dimatikan sementara untuk keperluan testing ---
-    /*
-    if (!values.m_dir_id) errors.m_dir_id = ['Company wajib dipilih']
-    if (!values.m_divisi_id) errors.m_divisi_id = ['Divisi wajib dipilih']
-    if (!values.m_dept_id) errors.m_dept_id = ['Departemen wajib dipilih']
-    if (!values.m_posisi_id) errors.m_posisi_id = ['Posisi wajib dipilih']
-    if (!values.m_zona_id) errors.m_zona_id = ['Zona wajib dipilih']
-    if (!values.grading_id) errors.grading_id = ['Grading wajib dipilih']
-    if (!values.m_standart_gaji_id) errors.m_standart_gaji_id = ['Standart Gaji wajib dipilih']
-    if (!values.tipe_jam_kerja_id) errors.tipe_jam_kerja_id = ['Tipe Jam Kerja wajib dipilih']
-    if (!values.costcentre_id && !values.costcontre_id) errors.costcontre_id = ['Costcentre wajib dipilih']
+    // 1. Organisasi & Posisi Kerja (hanya divalidasi jika bukan profile)
+    if (!isProfile) {
+      if (!values.m_dir_id) errors.m_dir_id = ['Company wajib dipilih']
+      if (!values.m_divisi_id) errors.m_divisi_id = ['Divisi wajib dipilih']
+      if (!values.m_dept_id) errors.m_dept_id = ['Departemen wajib dipilih']
+      if (!values.m_posisi_id) errors.m_posisi_id = ['Posisi wajib dipilih']
+      if (!values.m_zona_id) errors.m_zona_id = ['Zona wajib dipilih']
+      if (!values.grading_id) errors.grading_id = ['Grading wajib dipilih']
+      if (!values.m_standart_gaji_id) errors.m_standart_gaji_id = ['Standart Gaji wajib dipilih']
+      if (!values.tipe_jam_kerja_id) errors.tipe_jam_kerja_id = ['Tipe Jam Kerja wajib dipilih']
+      if (!values.costcentre_id && !values.costcontre_id) errors.costcontre_id = ['Costcentre wajib dipilih']
+      if (values['tipe_jam_kerja.value'] === 'OFFICE' && !values.t_jadwal_kerja_id) {
+        errors.t_jadwal_kerja_id = ['Jadwal Kerja wajib dipilih']
+      }
+    }
+
+    // 2. Data Karyawan & Pribadi (Tab 0)
     if (!values.kode || String(values.kode).trim() === '') errors.kode = ['NIK wajib diisi']
+    if (!values.atasan_id) errors.atasan_id = ['Atasan wajib dipilih']
     if (!values.nama_depan || String(values.nama_depan).trim() === '') errors.nama_depan = ['Nama Karyawan wajib diisi']
     if (!values.nama_panggilan || String(values.nama_panggilan).trim() === '') errors.nama_panggilan = ['Nama Panggilan wajib diisi']
     if (!values.jk_id) errors.jk_id = ['Jenis Kelamin wajib dipilih']
-    if (!values.tempat_lahir) errors.tempat_lahir = ['Tempat Lahir wajib diisi']
+    if (!values.tempat_lahir || String(values.tempat_lahir).trim() === '') errors.tempat_lahir = ['Tempat Lahir wajib diisi']
     if (!values.tgl_lahir) errors.tgl_lahir = ['Tanggal Lahir wajib diisi']
-    if (!values.alamat_asli && !values.alamat_domisili) errors.alamat_domisili = ['Alamat Tinggal wajib diisi']
+    if (!values.alamat_domisili || String(values.alamat_domisili).trim() === '') errors.alamat_domisili = ['Alamat Tinggal wajib diisi']
     if (!values.provinsi_id) errors.provinsi_id = ['Provinsi wajib dipilih']
     if (!values.kota_id) errors.kota_id = ['Kota wajib dipilih']
     if (!values.kecamatan_id) errors.kecamatan_id = ['Kecamatan wajib dipilih']
-    if (!values.kode_pos) errors.kode_pos = ['Kode Pos wajib diisi']
-    if (!values.no_tlp) errors.no_tlp = ['No. Telepon wajib diisi']
-    if (!values.no_darurat) errors.no_darurat = ['No. Telepon Darurat wajib diisi']
-    if (!values.nama_kontak_darurat) errors.nama_kontak_darurat = ['Nama Kontak Darurat wajib diisi']
-    if (!values.hub_dgn_karyawan) errors.hub_dgn_karyawan = ['Hubungan Dengan Karyawan wajib diisi']
+    if (!values.kode_pos || String(values.kode_pos).trim() === '') errors.kode_pos = ['Kode Pos wajib diisi']
+    if (!values.no_tlp || String(values.no_tlp).trim() === '') errors.no_tlp = ['No. Telepon wajib diisi']
+    if (!values.no_darurat || String(values.no_darurat).trim() === '') errors.no_darurat = ['No. Telepon Darurat wajib diisi']
+    if (!values.nama_kontak_darurat || String(values.nama_kontak_darurat).trim() === '') errors.nama_kontak_darurat = ['Nama Kontak Darurat wajib diisi']
+    if (!values.hub_dgn_karyawan || String(values.hub_dgn_karyawan).trim() === '') errors.hub_dgn_karyawan = ['Hubungan Dengan Karyawan wajib diisi']
     if (!values.agama_id) errors.agama_id = ['Agama wajib dipilih']
     if (!values.gol_darah_id) errors.gol_darah_id = ['Golongan Darah wajib dipilih']
     if (!values.status_nikah_id) errors.status_nikah_id = ['Status Pernikahan wajib dipilih']
-    if (!values.status_kary_id) errors.status_kary_id = ['Status Karyawan wajib dipilih']
-    if (!values.tgl_masuk) errors.tgl_masuk = ['Tanggal Masuk wajib diisi']
+    if (values.limit_potong === null || values.limit_potong === undefined || String(values.limit_potong).trim() === '') errors.limit_potong = ['Limit Potong wajib diisi']
+    if (!values.tgl_masuk) errors.tgl_masuk = ['Tanggal Masuk Kerja wajib diisi']
+
+    // 3. Berkas Karyawan (Tab 0)
+    const hasPasFoto = !!(tempPasfoto || urlPasFoto.value || values.m_kary_det_kartu?.[0]?.pas_foto)
+    if (!hasPasFoto) errors.pas_foto = ['Foto Karyawan wajib diunggah']
+
+    const hasKtpFoto = !!(tempKTP || urlKTPFoto.value || values.m_kary_det_kartu?.[0]?.ktp_foto)
+    if (!hasKtpFoto) errors.ktp_foto = ['Foto KTP wajib diunggah']
+
+    if (!values.ktp_no || String(values.ktp_no).trim() === '') errors.ktp_no = ['No. KTP wajib diisi']
+    if (!values.alamat_asli || String(values.alamat_asli).trim() === '') errors.alamat_asli = ['Alamat Sesuai KTP wajib diisi']
+
+    const hasKkFoto = !!(tempKK || urlKKFoto.value || values.m_kary_det_kartu?.[0]?.kk_foto)
+    if (!hasKkFoto) errors.kk_foto = ['Foto Kartu Keluarga wajib diunggah']
+
+    if (!values.kk_no || String(values.kk_no).trim() === '') errors.kk_no = ['No. Kartu Keluarga wajib diisi']
+    if (values.npwp_no && !values.npwp_tgl_berlaku) errors.npwp_tgl_berlaku = ['Tanggal Berlaku NPWP wajib diisi jika No. NPWP diisi']
+    if (!values.bpjs_no_kesehatan || String(values.bpjs_no_kesehatan).trim() === '') errors.bpjs_no_kesehatan = ['No. BPJS Kesehatan wajib diisi']
+    if (!values.bpjs_no_ketenagakerjaan || String(values.bpjs_no_ketenagakerjaan).trim() === '') errors.bpjs_no_ketenagakerjaan = ['No. BPJS Ketenagakerjaan wajib diisi']
+    if (!values.bpjs_tipe_id) errors.bpjs_tipe_id = ['Tipe BPJS wajib dipilih']
+
+    // 4. Ukuran (Tab 0)
+    if (!values.uk_baju) errors.uk_baju = ['Ukuran Baju wajib dipilih']
+    if (values.uk_celana === null || values.uk_celana === undefined || String(values.uk_celana).trim() === '') errors.uk_celana = ['Ukuran Celana wajib diisi']
+    if (values.uk_sepatu === null || values.uk_sepatu === undefined || String(values.uk_sepatu).trim() === '') errors.uk_sepatu = ['Ukuran Sepatu wajib diisi']
+
+    // 5. Pembayaran (Tab 0 - hanya jika bukan profile)
+    if (!isProfile) {
+      if (!values.periode_gaji_id) errors.periode_gaji_id = ['Periode Gaji wajib dipilih']
+      if (!values.tipe_id) errors.tipe_id = ['Tipe Pembayaran wajib dipilih']
+      if (!values.bank_id) errors.bank_id = ['Nama Bank wajib dipilih']
+      if (!values.no_rek || String(values.no_rek).trim() === '') errors.no_rek = ['Nomor Rekening wajib diisi']
+      if (!values.atas_nama_rek || String(values.atas_nama_rek).trim() === '') errors.atas_nama_rek = ['Atas Nama Rekening wajib diisi']
+    }
 
     if (Object.keys(errors).length > 0) {
       formErrors.value = errors
       activeTabIndex.value = 0
+      const listErrors = Object.values(errors).map(e => Array.isArray(e) ? e[0] : e).slice(0, 10)
+      const errorHtml = listErrors.map(e => `<li>${e}</li>`).join('')
+      const moreText = Object.keys(errors).length > 10 ? `<p class="mt-2 text-sm text-gray-500">...dan ${Object.keys(errors).length - 10} field lainnya</p>` : ''
       swal.fire({
         icon: 'warning',
         title: 'Validasi Gagal',
-        text: 'Mohon lengkapi field mandatory bertanda bintang (*) yang masih kosong'
+        html: `<p class="text-left font-semibold mb-2">Mohon lengkapi field mandatory bertanda bintang (*) pada Informasi Umum yang masih kosong:</p><ul class="text-left list-disc list-inside text-sm text-red-600">${errorHtml}</ul>${moreText}`
       })
       return
     }
-    */
 
     values.nik = values.ktp_no ? String(values.ktp_no).trim() : null
     values.nama_lengkap = (values.nama_depan ?? '') + ' ' + (values.nama_belakang ?? '')
@@ -1813,20 +1910,42 @@ async function onSave() {
     })
 
     if (!res.ok) {
-      if ([400, 422].includes(res.status)) {
-        const responseJson = await res.json()
-        formErrors.value = responseJson.errors || {}
-        throw (responseJson.errors?.length ? responseJson.errors[0] : responseJson.message || "Failed when trying to post data")
-      } else {
-        throw ("Failed when trying to post data")
+      const responseJson = await res.json().catch(() => ({}))
+      if (responseJson.errors && typeof responseJson.errors === 'object') {
+        formErrors.value = responseJson.errors
       }
+
+      let errorMsg = ''
+      if (responseJson.errorText) {
+        errorMsg = responseJson.errorText.replace(/<br\s*[\/]?>/gi, '\n')
+      } else if (responseJson.errors && typeof responseJson.errors === 'object') {
+        const errLines = []
+        for (const [field, val] of Object.entries(responseJson.errors)) {
+          if (Array.isArray(val)) {
+            errLines.push(...val)
+          } else if (typeof val === 'string') {
+            errLines.push(val)
+          }
+        }
+        if (errLines.length > 0) {
+          errorMsg = errLines.join('\n')
+        }
+      }
+
+      if (!errorMsg) {
+        errorMsg = responseJson.message || 'Gagal menyimpan data karyawan'
+      }
+
+      throw new Error(errorMsg)
     }
     router.replace('/' + modulPath + '?reload=' + (Date.parse(new Date())))
   } catch (err) {
     isBadForm.value = true
+    const errMsg = err?.message || String(err)
     swal.fire({
       icon: 'error',
-      text: err
+      title: 'Gagal Menyimpan',
+      html: errMsg.replace(/\n/g, '<br>')
     })
   }
   isRequesting.value = false

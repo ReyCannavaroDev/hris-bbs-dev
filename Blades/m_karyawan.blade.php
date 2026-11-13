@@ -2417,6 +2417,7 @@
                   flex: 1,
                   headerName: 'No. Telp',
                   field: 'no_telp',
+                  valueGetter: (params) => params.data?.no_tlp || params.data?.no_telp || '-',
                   sortable: false, resizable: true, filter: false,
                   cellClass: ['!border-gray-200', 'justify-center'],
                 },
