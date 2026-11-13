@@ -59,15 +59,15 @@
 
   $total_diakui_menit = 0;
   $total_nominal_lembur = 0;
-  $periode_from_label = date('d-m-Y', strtotime($periode_from));
-  $periode_to_label = date('d-m-Y', strtotime($periode_to));
+  $periode_from_label = $periode_from ? date('d/m/Y', strtotime($periode_from)) : '-';
+  $periode_to_label = $periode_to ? date('d/m/Y', strtotime($periode_to)) : '-';
 @endphp
 
 <div style="width:100%; font-family: Arial, Helvetica, sans-serif; margin-bottom: 12px;">
   <div style="text-align: center; margin-bottom: 6px;">
-    <span style="font-size: 14pt; font-weight: bold; display: block; color: #1e293b; letter-spacing: 0.5px;">LAPORAN PERHITUNGAN & PEMBAYARAN LEMBUR</span>
-    <span style="font-size: 8pt; color: #64748b; display: block;">(Sesuai MoM BBS Poin 3.J & 3.K: Perhitungan min(Durasi SPK, Durasi Realisasi))</span>
-    <span style="font-size: 10pt; color: #475569; display: block; margin-top: 3px;">Periode: {{ $periode_from_label }} s/d {{ $periode_to_label }}</span>
+    <div style="font-size: 14pt; font-weight: bold; color: #1e293b; letter-spacing: 0.5px; line-height: 1.3;">LAPORAN PERHITUNGAN & PEMBAYARAN LEMBUR</div>
+    <div style="font-size: 8pt; color: #64748b; margin-top: 2px;">(Sesuai MoM BBS Poin 3.J & 3.K: Perhitungan min(Durasi SPK, Durasi Realisasi))</div>
+    <div style="font-size: 10pt; color: #475569; margin-top: 4px;">Periode: {{ $periode_from_label }} s/d {{ $periode_to_label }}</div>
   </div>
 
   @if(count($active_filters) > 0)
@@ -118,7 +118,7 @@
     @endphp
     <tr style="background-color: {{$backgroundColor}}">
       <td style="border: 0.5px solid #cbd5e1; text-align: center; padding: 3px;">{{ $i+1 }}</td>
-      <td style="border: 0.5px solid #cbd5e1; text-align: center; padding: 3px;">{{ $d->tanggal }}</td>
+      <td style="border: 0.5px solid #cbd5e1; text-align: center; padding: 3px;">{{ $d->tanggal ? date('d/m/Y', strtotime($d->tanggal)) : '-' }}</td>
       <td style="border: 0.5px solid #cbd5e1; text-align: left; padding: 3px 4px;">{{ $d->nomor }}</td>
       <td style="border: 0.5px solid #cbd5e1; text-align: center; padding: 3px;">{{ $d->nik }}</td>
       <td style="border: 0.5px solid #cbd5e1; text-align: left; padding: 3px 5px;">{{ $d->nama_lengkap }}</td>
