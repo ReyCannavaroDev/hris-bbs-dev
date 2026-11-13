@@ -459,9 +459,14 @@ const valuesPrestasi = reactive({
 
 const valuesOrganisasi = reactive({
   nama: null,
+  nama_org: null,
   tahun: thisYear,
   jenis_org_id: null,
+  jenis: null,
+  jenis_org: null,
   kota_id: null,
+  kota: null,
+  nama_kota: null,
   posisi: null
 })
 
@@ -551,50 +556,65 @@ onBeforeMount(async () => {
       })
 
       initialValues['m_kary_det_kel']?.forEach(async (item) => {
-        const res = await fetch(`${store.server.url_backend}/operation/m_general/${item.keluarga_id}`, {
-          headers: {
-            'Content-Type': 'Application/json',
-            Authorization: `${store.user.token_type} ${store.user.token}`
-          },
-        })
-        if (!res.ok) throw new Error("Failed when trying to read data")
-        const resultJson = await res.json()
-        const tempinitialValues = resultJson.data
+        try {
+          if (item.keluarga_id && !item.keluarga) {
+            const res = await fetch(`${store.server.url_backend}/operation/m_general/${item.keluarga_id}`, {
+              headers: {
+                'Content-Type': 'Application/json',
+                Authorization: `${store.user.token_type} ${store.user.token}`
+              },
+            })
+            if (res.ok) {
+              const resultJson = await res.json()
+              item.keluarga = resultJson.data?.value || null
+            }
+          }
 
-        const res2 = await fetch(`${store.server.url_backend}/operation/m_general/${item.pend_terakhir_id}`, {
-          headers: {
-            'Content-Type': 'Application/json',
-            Authorization: `${store.user.token_type} ${store.user.token}`
-          },
-        })
-        if (!res2.ok) throw new Error("Failed when trying to read data")
-        const resultJson2 = await res2.json()
-        const tempinitialValues2 = resultJson2.data
+          if (item.pend_terakhir_id && !item.pendidikan) {
+            const res2 = await fetch(`${store.server.url_backend}/operation/m_general/${item.pend_terakhir_id}`, {
+              headers: {
+                'Content-Type': 'Application/json',
+                Authorization: `${store.user.token_type} ${store.user.token}`
+              },
+            })
+            if (res2.ok) {
+              const resultJson2 = await res2.json()
+              item.pendidikan = resultJson2.data?.value || null
+              item.pend_terakhir = resultJson2.data?.value || null
+            }
+          }
 
-        const res3 = await fetch(`${store.server.url_backend}/operation/m_general/${item.jk_id}`, {
-          headers: {
-            'Content-Type': 'Application/json',
-            Authorization: `${store.user.token_type} ${store.user.token}`
-          },
-        })
-        if (!res3.ok) throw new Error("Failed when trying to read data")
-        const resultJson3 = await res3.json()
-        const tempinitialValues3 = resultJson3.data
+          if (item.jk_id && !item.jk) {
+            const res3 = await fetch(`${store.server.url_backend}/operation/m_general/${item.jk_id}`, {
+              headers: {
+                'Content-Type': 'Application/json',
+                Authorization: `${store.user.token_type} ${store.user.token}`
+              },
+            })
+            if (res3.ok) {
+              const resultJson3 = await res3.json()
+              item.jk = resultJson3.data?.value || null
+            }
+          }
 
-        const res4 = await fetch(`${store.server.url_backend}/operation/m_general/${item.pekerjaan_id}`, {
-          headers: {
-            'Content-Type': 'Application/json',
-            Authorization: `${store.user.token_type} ${store.user.token}`
-          },
-        })
-        if (!res4.ok) throw new Error("Failed when trying to read data")
-        const resultJson4 = await res4.json()
-        const tempinitialValues4 = resultJson4.data
+          if (item.pekerjaan_id && !item.pekerjaan) {
+            const res4 = await fetch(`${store.server.url_backend}/operation/m_general/${item.pekerjaan_id}`, {
+              headers: {
+                'Content-Type': 'Application/json',
+                Authorization: `${store.user.token_type} ${store.user.token}`
+              },
+            })
+            if (res4.ok) {
+              const resultJson4 = await res4.json()
+              item.pekerjaan = resultJson4.data?.value || null
+            }
+          }
+        } catch (e) {
+          console.error("Gagal membaca detail keluarga:", e)
+        }
 
-        item.jk = tempinitialValues3.value
-        item.keluarga = tempinitialValues.value
-        item.pendidikan = tempinitialValues2.value
-        item.pekerjaan = tempinitialValues4.value
+        item.pend_terakhir = item.pendidikan || item.pend_terakhir || null
+        item.pendidikan = item.pend_terakhir || item.pendidikan || null
         item._id = ++_idKel
         detailKeluarga.value.push(item)
       })
@@ -605,28 +625,42 @@ onBeforeMount(async () => {
       })
 
       initialValues['m_kary_det_org']?.forEach(async (item) => {
-        const res = await fetch(`${store.server.url_backend}/operation/m_general/${item.jenis_org_id}`, {
-          headers: {
-            'Content-Type': 'Application/json',
-            Authorization: `${store.user.token_type} ${store.user.token}`
-          },
-        })
-        if (!res.ok) throw new Error("Failed when trying to read data")
-        const resultJson = await res.json()
-        const tempinitialValues = resultJson.data
+        try {
+          if (item.jenis_org_id && !item.jenis) {
+            const res = await fetch(`${store.server.url_backend}/operation/m_general/${item.jenis_org_id}`, {
+              headers: {
+                'Content-Type': 'Application/json',
+                Authorization: `${store.user.token_type} ${store.user.token}`
+              },
+            })
+            if (res.ok) {
+              const resultJson = await res.json()
+              item.jenis = resultJson.data?.value || null
+            }
+          }
 
-        const res2 = await fetch(`${store.server.url_backend}/operation/m_general/${item.kota_id}`, {
-          headers: {
-            'Content-Type': 'Application/json',
-            Authorization: `${store.user.token_type} ${store.user.token}`
-          },
-        })
-        if (!res2.ok) throw new Error("Failed when trying to read data")
-        const resultJson2 = await res2.json()
-        const tempinitialValues2 = resultJson2.data
+          if (item.kota_id && !item.kota) {
+            const res2 = await fetch(`${store.server.url_backend}/operation/m_general/${item.kota_id}`, {
+              headers: {
+                'Content-Type': 'Application/json',
+                Authorization: `${store.user.token_type} ${store.user.token}`
+              },
+            })
+            if (res2.ok) {
+              const resultJson2 = await res2.json()
+              item.kota = resultJson2.data?.value || null
+            }
+          }
+        } catch (e) {
+          console.error("Gagal membaca detail organisasi:", e)
+        }
 
-        item.kota = tempinitialValues2.value
-        item.jenis = tempinitialValues.value
+        item.nama_org = item.nama || item.nama_org || null
+        item.nama = item.nama_org || item.nama || null
+        item.jenis_org = item.jenis || item.jenis_org || null
+        item.jenis = item.jenis_org || item.jenis || null
+        item.nama_kota = item.kota || item.nama_kota || null
+        item.kota = item.nama_kota || item.kota || null
         item._id = ++_idOrg
         detailOrganisasi.value.push(item)
       })
@@ -734,9 +768,9 @@ onBeforeMount(async () => {
   }
 
   const cardKtp = (values.m_kary_det_kartu && values.m_kary_det_kartu.length > 0) ? values.m_kary_det_kartu[0].ktp_no : null
-  const realKtp = cardKtp || initialValues.nomor_ktp || (initialValues.nik && initialValues.nik !== initialValues.kode ? initialValues.nik : '') || ''
-  values.ktp_no = realKtp
-  values.nik = realKtp
+  const realKtp = cardKtp || initialValues.nomor_ktp || (initialValues.nik && initialValues.nik !== initialValues.kode && String(initialValues.nik).length >= 10 ? initialValues.nik : '') || ''
+  values.ktp_no = realKtp || ''
+  values.nik = realKtp || null
 
   if (values.m_kary_det_kartu?.length > 0) {
     values.kk_no = values.m_kary_det_kartu[0].kk_no
@@ -1055,6 +1089,8 @@ const addKeluarga = async () => {
   }
 
   const payloadKel = { ...valuesKeluarga }
+  payloadKel.pend_terakhir = payloadKel.pendidikan || payloadKel.pend_terakhir || null
+  payloadKel.pendidikan = payloadKel.pend_terakhir || payloadKel.pendidikan || null
   if (payloadKel._id) {
     const idx = detailKeluarga.value.findIndex(e => e._id === payloadKel._id)
     if (idx !== -1) {
@@ -1075,6 +1111,9 @@ const addKeluarga = async () => {
 const onEditKeluarga = (row) => {
   for (const k in valuesKeluarga) {
     if (k in row) valuesKeluarga[k] = row[k]
+  }
+  if (!valuesKeluarga.pendidikan && row.pend_terakhir) {
+    valuesKeluarga.pendidikan = row.pend_terakhir
   }
 }
 
@@ -1228,6 +1267,12 @@ const addOrganisasi = async () => {
   }
 
   const payloadOrg = { ...valuesOrganisasi }
+  payloadOrg.nama_org = payloadOrg.nama || payloadOrg.nama_org || null
+  payloadOrg.nama = payloadOrg.nama_org || payloadOrg.nama || null
+  payloadOrg.jenis_org = payloadOrg.jenis || payloadOrg.jenis_org || null
+  payloadOrg.jenis = payloadOrg.jenis_org || payloadOrg.jenis || null
+  payloadOrg.nama_kota = payloadOrg.kota || payloadOrg.nama_kota || null
+  payloadOrg.kota = payloadOrg.nama_kota || payloadOrg.kota || null
   if (payloadOrg._id) {
     const idx = detailOrganisasi.value.findIndex(e => e._id === payloadOrg._id)
     if (idx !== -1) {
@@ -1250,6 +1295,9 @@ const onEditOrganisasi = (row) => {
   for (const k in valuesOrganisasi) {
     if (k in row) valuesOrganisasi[k] = row[k]
   }
+  if (!valuesOrganisasi.nama && row.nama_org) valuesOrganisasi.nama = row.nama_org
+  if (!valuesOrganisasi.jenis && row.jenis_org) valuesOrganisasi.jenis = row.jenis_org
+  if (!valuesOrganisasi.kota && row.nama_kota) valuesOrganisasi.kota = row.nama_kota
 }
 
 const onDeleteOrganisasi = (row, api) => {
@@ -1654,7 +1702,7 @@ async function onSave() {
     }
     */
 
-    values.nik = values.ktp_no || (values.nik && values.nik !== values.kode ? values.nik : null)
+    values.nik = values.ktp_no ? String(values.ktp_no).trim() : null
     values.nama_lengkap = (values.nama_depan ?? '') + ' ' + (values.nama_belakang ?? '')
     values.m_kary_det_pres = detailPrestasi.value
 
@@ -1688,9 +1736,11 @@ async function onSave() {
       if (tempNPWP && (tempNPWP.startsWith('http://') || tempNPWP.startsWith('https://'))) tempNPWP = null
     }
 
+    const cleanKtpNo = values.ktp_no ? String(values.ktp_no).trim() : null
+
     if (isCreating || !values.m_kary_det_kartu || values.m_kary_det_kartu.length === 0) {
       values.m_kary_det_kartu = [{
-        ktp_no: values.ktp_no || null,
+        ktp_no: cleanKtpNo,
         ktp_foto: tempKTP,
         pas_foto: tempPasfoto,
         kk_no: values.kk_no,
@@ -1707,7 +1757,7 @@ async function onSave() {
       }]
     } else {
       console.log(values.m_kary_det_kartu)
-      values.m_kary_det_kartu[0].ktp_no = values.ktp_no || null
+      values.m_kary_det_kartu[0].ktp_no = cleanKtpNo
       if (initialValues.m_kary_det_kartu[0]?.ktp_foto !== tempKTP) {
         values.m_kary_det_kartu[0].ktp_foto = tempKTP
       }
@@ -1887,6 +1937,9 @@ const landing = reactive({
       if (response && response.data) {
         response.data = response.data.map((item) => {
           item.status = (item.is_active === true || item.is_active === 1 || item.is_active === '1' || item.is_active === 'true' || item.is_active === 't') ? 'Active' : 'Inactive'
+          if (item.nik && item.kode && String(item.nik).trim() === String(item.kode).trim()) {
+            item.nik = null
+          }
           return item
         })
       }
@@ -1926,7 +1979,7 @@ const landing = reactive({
     valueGetter: (params) => {
       const nik = params.data?.nik || params.data?.nomor_ktp || params.data?.['m_kary_det_kartu.0.ktp_no']
       const kode = params.data?.kode
-      if (!nik || nik === kode) return '-'
+      if (!nik || nik === kode || String(nik).trim() === '') return '-'
       return nik
     }
   },

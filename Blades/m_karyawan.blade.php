@@ -1521,7 +1521,8 @@
             <label class="col-span-12">Pendidikan Terakhir<label class="text-red-500 space-x-0 pl-0">*</label></label>
             <FieldSelect :bind="{ disabled: !actionText && !isProfile, clearable:false }"
               class="col-span-12 !mt-0 w-full" :value="valuesKeluarga.pend_terakhir_id" @update:valueFull="(objVal)=>{
-                  valuesKeluarga.pendidikan = objVal.value
+                  valuesKeluarga.pendidikan = objVal ? objVal.value : ''
+                  valuesKeluarga.pend_terakhir = objVal ? objVal.value : ''
                 }" label="" placeholder="Pilih Pendidikan Terakhir" @input="v=>valuesKeluarga.pend_terakhir_id=v"
               :errorText="formErrorsKel.pend_terakhir_id?'failed':''" :hints="formErrorsKel.pend_terakhir_id"
               valueField="id" displayField="value" :api="{
@@ -1673,7 +1674,7 @@
                 {
                   flex: 1,
                   headerName: 'Pendidikan Terakhir',
-                  field: 'pend_terakhir',
+                  valueGetter: (params) => params.data?.pendidikan || params.data?.pend_terakhir || '-',
                   sortable: false, resizable: true, filter: false,
                   cellClass: ['!border-gray-200', 'justify-center'],
                 },
@@ -1981,7 +1982,8 @@
               placeholder="Pilih Jenis Organisasi" class="col-span-12 !mt-0 w-full"
               :value="valuesOrganisasi.jenis_org_id" @input="v=>valuesOrganisasi.jenis_org_id=v"
               :errorText="formErrorsOrg.jenis_org_id?'failed':''" @update:valueFull="(objVal)=>{
-                  valuesOrganisasi.jenis = objVal.value
+                  valuesOrganisasi.jenis = objVal ? objVal.value : ''
+                  valuesOrganisasi.jenis_org = objVal ? objVal.value : ''
                 }" :hints="formErrorsOrg.jenis_org_id" valueField="id" displayField="value" :api="{
                   url: `${store.server.url_backend}/operation/m_general`,
                   headers: {
@@ -2002,10 +2004,11 @@
           <div class="grid grid-cols-12 items-center">
             <label class="col-span-12">Kota<label class="text-red-500 space-x-0 pl-0">*</label></label>
             <FieldSelect :bind="{ disabled: !actionText && !isProfile, clearable:false }" label=""
-              placeholder="Pilih Tingkat" class="col-span-12 !mt-0 w-full" :value="valuesOrganisasi.kota_id"
+              placeholder="Pilih Kota" class="col-span-12 !mt-0 w-full" :value="valuesOrganisasi.kota_id"
               @input="v=>valuesOrganisasi.kota_id=v" :errorText="formErrorsOrg.kota_id?'failed':''"
               :hints="formErrorsOrg.kota_id" @update:valueFull="(objVal)=>{
-                    valuesOrganisasi.kota = objVal.value
+                    valuesOrganisasi.kota = objVal ? objVal.value : ''
+                    valuesOrganisasi.nama_kota = objVal ? objVal.value : ''
                   }" valueField="id" displayField="value" :api="{
                     url: `${store.server.url_backend}/operation/m_general`,
                     headers: {
@@ -2071,14 +2074,14 @@
                 {
                   flex: 1,
                   headerName: 'Nama Organisasi',
-                  field: 'nama_org',
+                  valueGetter: (params) => params.data?.nama || params.data?.nama_org || '-',
                   sortable: false, resizable: true, filter: false,
                   cellClass: ['!border-gray-200', 'justify-center'],
                 },
                 {
                   flex: 1,
                   headerName: 'Jenis Organisasi',
-                  field: 'jenis_org',
+                  valueGetter: (params) => params.data?.jenis || params.data?.jenis_org || params.data?.jenis_organisasi || '-',
                   sortable: false, resizable: true, filter: false,
                   cellClass: ['!border-gray-200', 'justify-center'],
                 },
@@ -2099,7 +2102,7 @@
                 {
                   flex: 1,
                   headerName: 'Kota',
-                  valueGetter: (params) => params.data.kota || params.data.kota_id || '-',
+                  valueGetter: (params) => params.data?.kota || params.data?.nama_kota || params.data?.kota_id || '-',
                   sortable: false, resizable: true, filter: false,
                   cellClass: ['!border-gray-200', 'justify-center'],
                 }

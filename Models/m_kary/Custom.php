@@ -319,6 +319,10 @@ class m_kary extends \App\Models\BasicModels\m_kary
                     'updated_at' => Carbon::now(),
                 ]);
             }
+            \DB::table('m_kary')->where('id', $id)->update(['nik' => $ktp]);
+        } else {
+            \DB::table('m_kary')->where('id', $id)->update(['nik' => null]);
+            \DB::table('m_kary_det_kartu')->where('m_kary_id', $id)->update(['ktp_no' => null]);
         }
     }
 
@@ -529,6 +533,10 @@ class m_kary extends \App\Models\BasicModels\m_kary
                     'updated_at' => Carbon::now(),
                 ]);
             }
+            \DB::table('m_kary')->where('id', $id)->update(['nik' => $ktp]);
+        } else {
+            \DB::table('m_kary')->where('id', $id)->update(['nik' => null]);
+            \DB::table('m_kary_det_kartu')->where('m_kary_id', $id)->update(['ktp_no' => null]);
         }
     }
 
