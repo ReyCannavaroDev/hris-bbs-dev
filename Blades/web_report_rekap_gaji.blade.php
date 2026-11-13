@@ -23,7 +23,7 @@
   $active_filters = [];
   if (!empty($req->m_dir_id)) {
     $dirName = \DB::table('m_dir')->where('id', $req->m_dir_id)->value('nama');
-    if ($dirName) $active_filters['Direktorat'] = $dirName;
+    if ($dirName) $active_filters['Company'] = $dirName;
   }
   if (!empty($req->m_divisi_id)) {
     $divName = \DB::table('m_divisi')->where('id', $req->m_divisi_id)->value('nama');
@@ -52,8 +52,8 @@
 
 <div style="width:100%; font-family: Arial, Helvetica, sans-serif; margin-bottom: 12px;">
   <div style="text-align: center; margin-bottom: 6px;">
-    <span style="font-size: 14pt; font-weight: bold; display: block; color: #1e293b; letter-spacing: 0.5px;">LAPORAN REKAPITULASI GAJI</span>
-    <span style="font-size: 10pt; color: #64748b; display: block; margin-top: 2px;">Periode: {{ $periode_from_label }} s/d {{ $periode_to_label }}</span>
+    <div style="font-size: 14pt; font-weight: bold; color: #1e293b; letter-spacing: 0.5px; line-height: 1.3;">LAPORAN REKAPITULASI GAJI</div>
+    <div style="font-size: 10pt; color: #64748b; margin-top: 4px;">Periode: {{ $periode_from_label }} s/d {{ $periode_to_label }}</div>
   </div>
 
   @if(count($active_filters) > 0)
@@ -76,7 +76,7 @@
       <th style="border: 0.5px solid #94a3b8; font-weight: bold; text-align: center; padding: 6px 4px;">Tanggal</th>
       <th style="border: 0.5px solid #94a3b8; font-weight: bold; text-align: center; padding: 6px 4px;">NIK</th>
       <th style="border: 0.5px solid #94a3b8; font-weight: bold; text-align: center; padding: 6px 4px;">Nama Karyawan</th>
-      <th style="border: 0.5px solid #94a3b8; font-weight: bold; text-align: center; padding: 6px 4px;">Direktorat</th>
+      <th style="border: 0.5px solid #94a3b8; font-weight: bold; text-align: center; padding: 6px 4px;">Company</th>
       <th style="border: 0.5px solid #94a3b8; font-weight: bold; text-align: center; padding: 6px 4px;">Divisi</th>
       <th style="border: 0.5px solid #94a3b8; font-weight: bold; text-align: center; padding: 6px 4px;">Departemen</th>
       <th style="border: 0.5px solid #94a3b8; font-weight: bold; text-align: center; padding: 6px 4px;">Gaji</th>

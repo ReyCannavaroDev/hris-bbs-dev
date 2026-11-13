@@ -62,7 +62,7 @@
               </div>
           </div>
           <div>
-            <label class="font-semibold">Direktorat</label>
+            <label class="font-semibold">Company</label>
               <FieldSelect 
                 :bind="{ readonly: !actionText }" 
                 class="w-full py-2 !mt-0"
@@ -75,7 +75,7 @@
                 @update:valueFull="(objVal)=>{
                   values.m_divisi_id = null
                 }"
-                placeholder="Pilih Direktorat"
+                placeholder="Pilih Company"
                 valueField="id" 
                 displayField="nama"
                 :api="{
@@ -95,7 +95,7 @@
           <div>
             <label class="font-semibold">Divisi</label>
               <FieldSelect 
-                :bind="{ readonly: !actionText }" 
+                :bind="{ readonly: !actionText, clearable: true }" 
                 class="w-full py-2 !mt-0"
                 :value="values.m_divisi_id" 
                 :errorText="formErrors.m_divisi_id ? 'failed' : ''"
@@ -115,7 +115,7 @@
                     params: {
                         single: true,
                         join: false,
-                        where: `this.m_dir_id=${values.m_dir_id ?? 0} AND this.is_active='true'`
+                        where: values.m_dir_id ? `this.m_dir_id=${values.m_dir_id} AND this.is_active='true'` : `this.is_active='true'`
                     }
                 }"
             />
@@ -123,7 +123,7 @@
           <div>
             <label class="font-semibold">Departemen</label>
               <FieldSelect 
-                :bind="{ readonly: !actionText }" 
+                :bind="{ readonly: !actionText, clearable: true }" 
                 class="w-full py-2 !mt-0"
                 :value="values.m_dept_id" 
                 :errorText="formErrors.m_dept_id ? 'failed' : ''"
@@ -143,7 +143,7 @@
                     params: {
                         single: true,
                         join: false,                    
-                        where: `m_divisi_id=${values.m_divisi_id ?? 0} AND this.is_active='true'`
+                        where: values.m_divisi_id ? `m_divisi_id=${values.m_divisi_id} AND this.is_active='true'` : `this.is_active='true'`
                     }
                 }"
             />
@@ -151,7 +151,7 @@
           <div>
             <label class="font-semibold">Posisi</label>
               <FieldSelect 
-                :bind="{ readonly: !actionText }" 
+                :bind="{ readonly: !actionText, clearable: true }" 
                 class="w-full py-2 !mt-0"
                 :value="values.m_posisi_id" 
                 :errorText="formErrors.m_posisi_id ? 'failed' : ''"
@@ -179,6 +179,7 @@
           <div>
             <label class="font-semibold">NIK</label>
             <FieldPopup
+            :bind="{ clearable: true }"
             :value="values.m_kary_id" 
             :errorText="formErrors.m_kary_id ? 'failed' : ''"
             @input="v => values.m_kary_id = v" 
@@ -191,7 +192,13 @@
                 headers: { 'Content-Type': 'Application/json', Authorization: `${store.user.token_type} ${store.user.token}`},
                 params: {
                   simplest:true,
-                  where: `this.m_posisi_id=${values.m_posisi_id ?? 0}`,
+                  where: [
+                    `this.is_active='true'`,
+                    values.m_dir_id ? `this.m_dir_id=${values.m_dir_id}` : '',
+                    values.m_divisi_id ? `this.m_divisi_id=${values.m_divisi_id}` : '',
+                    values.m_dept_id ? `this.m_dept_id=${values.m_dept_id}` : '',
+                    values.m_posisi_id ? `this.m_posisi_id=${values.m_posisi_id}` : ''
+                  ].filter(Boolean).join(' AND '),
                   searchfield: 'this.nik, this.nama_lengkap, this.nama_depan, this.nama_belakang, m_zona.nama, m_dir.nama, m_divisi.nama, m_dept.nama'
                 }
               }"
@@ -230,7 +237,7 @@
                 flex: 1,
                 wrapText:true,
                 field: 'm_dir.nama',
-                headerName: 'Direktorat',
+                headerName: 'Company',
                 sortable: false, resizable: true, filter: 'ColFilter',
                 cellClass: ['border-r', '!border-gray-200', 'justify-start']
               },
