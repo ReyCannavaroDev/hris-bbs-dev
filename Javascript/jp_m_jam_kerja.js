@@ -297,7 +297,6 @@ const landing = reactive({
     params: {
       simplest: true,
       join: true,
-      scopes: 'filter',
       searchfield: 'this.id, this.kode, m_comp.nama, m_dir.nama, this.desc, tipe_jam_kerja.value',
     },
     onsuccess(response) {

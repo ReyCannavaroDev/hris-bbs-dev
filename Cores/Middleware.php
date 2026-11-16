@@ -301,47 +301,40 @@ class Middleware
             }
         }
 
-        // Normalisasi filter jam_kerja via query where agar support pencarian waktu mulai & waktu akhir
-        if (!empty($requestData['where']) && $modelInstance && in_array('waktu_mulai', $modelInstance->columns ?? [])) {
-            $requestData['where'] = preg_replace_callback(
-                '/(?:this\.|m_jam_kerja\.)?jam_kerja\s*(?:ilike|like|=)\s*[\'"]%?([^%\'"]+)%?[\'"]/i',
-                function ($m) {
-                    $raw = trim($m[1]);
-                    $raw = str_replace('.', ':', $raw);
-                    $raw = preg_replace('/\s*-\s*/', ' - ', $raw);
-                    if ($raw === '') {
-                        return "1=1";
-                    }
-                    return "concat(substr(m_jam_kerja.waktu_mulai::text,1,5),' - ',substr(m_jam_kerja.waktu_akhir::text,1,5)) ilike '%$raw%'";
-                },
-                $requestData['where']
-            );
-            $request->merge(['where' => $requestData['where']]);
-            if ($request->query) {
-                $request->query->set('where', $requestData['where']);
-            }
-            $_GET['where'] = $requestData['where'];
-            $_REQUEST['where'] = $requestData['where'];
-        }
-
-        // Normalisasi filter_jam_kerja: pertahankan parameter agar diproses oleh scopeFilter di Custom.php
+        // Normalisasi filter_jam_kerja
         if (isset($requestData['filter_jam_kerja']) && $modelInstance && in_array('waktu_mulai', $modelInstance->columns ?? [])) {
-            $val = trim((string)$requestData['filter_jam_kerja']);
-            $val = str_replace('.', ':', $val);
-            $val = preg_replace('/\s*-\s*/', ' - ', $val);
-            if ($val !== '') {
-                $request->merge(['filter_jam_kerja' => $val]);
-                if ($request->query) {
-                    $request->query->set('filter_jam_kerja', $val);
+            $raw = trim((string)$requestData['filter_jam_kerja']);
+            $raw = str_replace('.', ':', $raw);
+            $raw = preg_replace('/\s*-\s*/', ' - ', $raw);
+            if ($raw !== '') {
+                $condition = "concat(substr(this.waktu_mulai::text,1,5),' - ',substr(this.waktu_akhir::text,1,5)) ilike '%$raw%'";
+                if (!empty($requestData['where'])) {
+                    $requestData['where'] .= " and $condition";
+                } else {
+                    $requestData['where'] = $condition;
                 }
-                $_GET['filter_jam_kerja'] = $val;
-                $_REQUEST['filter_jam_kerja'] = $val;
+                $request->merge(['where' => $requestData['where']]);
+                if ($request->query) {
+                    $request->query->set('where', $requestData['where']);
+                    $request->query->remove('filter_jam_kerja');
+                }
+                if ($request->request) {
+                    $request->request->remove('filter_jam_kerja');
+                }
+                $request->offsetUnset('filter_jam_kerja');
+                $_GET['where'] = $requestData['where'];
+                $_REQUEST['where'] = $requestData['where'];
+                unset($_GET['filter_jam_kerja'], $_REQUEST['filter_jam_kerja']);
+                unset($requestData['filter_jam_kerja']);
             }
         }
 
+        // Normalisasi filter jam_kerja via query where agar support pencarian waktu mulai & waktu akhir
         if (!empty($requestData['where']) && $modelInstance && in_array('waktu_mulai', $modelInstance->columns ?? [])) {
             $requestData['where'] = preg_replace('/(?:this|m_jam_kerja)\.waktu_mulai(?:::text)?\s*(ilike|like)/i', 'm_jam_kerja.waktu_mulai::text $1', $requestData['where']);
             $requestData['where'] = preg_replace('/(?:this|m_jam_kerja)\.waktu_akhir(?:::text)?\s*(ilike|like)/i', 'm_jam_kerja.waktu_akhir::text $1', $requestData['where']);
+            $requestData['where'] = str_replace('this.waktu_mulai', 'm_jam_kerja.waktu_mulai', $requestData['where']);
+            $requestData['where'] = str_replace('this.waktu_akhir', 'm_jam_kerja.waktu_akhir', $requestData['where']);
             $requestData['where'] = preg_replace_callback(
                 '/(?:this\.|m_jam_kerja\.)?jam_kerja\s*(?:ilike|like|=)\s*[\'"]%?([^%\'"]+)%?[\'"]/i',
                 function ($m) {

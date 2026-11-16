@@ -85,9 +85,9 @@ class m_jam_kerja extends \App\Models\BasicModels\m_jam_kerja
         if ($status !== null) {
             $val = strtolower(trim((string)$status));
             if (in_array($val, ['inactive', 'inact', 'inac', 'ina', 'in', 'i', 'nonaktif', 'non', 'false', '0'])) {
-                $model = $model->where('this.is_active', false);
+                $model = $model->where('m_jam_kerja.is_active', false);
             } elseif (in_array($val, ['active', 'activ', 'acti', 'act', 'ac', 'a', 'aktif', 'true', '1'])) {
-                $model = $model->where('this.is_active', true);
+                $model = $model->where('m_jam_kerja.is_active', true);
             }
         }
 
@@ -95,9 +95,9 @@ class m_jam_kerja extends \App\Models\BasicModels\m_jam_kerja
         if ($hariLain !== null) {
             $val = strtolower(trim((string)$hariLain));
             if (in_array($val, ['tidak ada', 'tidak', 'tid', 'tdk', 'ti', 'no', 'false', '0'])) {
-                $model = $model->where('this.is_hari_berikutnya', false);
+                $model = $model->where('m_jam_kerja.is_hari_berikutnya', false);
             } elseif (in_array($val, ['ada', 'ad', 'a', 'yes', 'true', '1'])) {
-                $model = $model->where('this.is_hari_berikutnya', true);
+                $model = $model->where('m_jam_kerja.is_hari_berikutnya', true);
             }
         }
 
