@@ -307,36 +307,90 @@ class Middleware
             $raw = str_replace('.', ':', $raw);
             $raw = preg_replace('/\s*-\s*/', ' - ', $raw);
             if ($raw !== '') {
-                $condition = "concat(substr(this.waktu_mulai::text,1,5),' - ',substr(this.waktu_akhir::text,1,5)) ilike '%$raw%'";
-                if (!empty($requestData['where'])) {
-                    $requestData['where'] .= " and $condition";
+                $condition = null;
+                if (strpos($raw, '-') !== false) {
+                    $parts = explode('-', $raw);
+                    $startRaw = trim($parts[0]);
+                    $endRaw = trim($parts[1]);
+                    $conds = [];
+
+                    if (preg_match('/^(\d{1,2}):(\d{1,2})$/', $startRaw, $m)) {
+                        $h = str_pad($m[1], 2, '0', STR_PAD_LEFT);
+                        $i = str_pad($m[2], 2, '0', STR_PAD_LEFT);
+                        $conds[] = "this.waktu_mulai = '{$h}:{$i}:00'";
+                    } elseif (preg_match('/^(\d{1,2})$/', $startRaw, $m)) {
+                        $h = str_pad($m[1], 2, '0', STR_PAD_LEFT);
+                        $conds[] = "this.waktu_mulai >= '{$h}:00:00' and this.waktu_mulai <= '{$h}:59:59'";
+                    }
+
+                    if (preg_match('/^(\d{1,2}):(\d{1,2})$/', $endRaw, $m)) {
+                        $h = str_pad($m[1], 2, '0', STR_PAD_LEFT);
+                        $i = str_pad($m[2], 2, '0', STR_PAD_LEFT);
+                        $conds[] = "this.waktu_akhir = '{$h}:{$i}:00'";
+                    } elseif (preg_match('/^(\d{1,2})$/', $endRaw, $m)) {
+                        $h = str_pad($m[1], 2, '0', STR_PAD_LEFT);
+                        $conds[] = "this.waktu_akhir >= '{$h}:00:00' and this.waktu_akhir <= '{$h}:59:59'";
+                    }
+
+                    if (!empty($conds)) {
+                        $condition = implode(' and ', $conds);
+                    }
+                } elseif (preg_match('/^(\d{1,2}):(\d{1,2})$/', $raw, $m)) {
+                    $h = str_pad($m[1], 2, '0', STR_PAD_LEFT);
+                    $i = str_pad($m[2], 2, '0', STR_PAD_LEFT);
+                    $hInt = (int)$m[1];
+                    if ($hInt < 12) {
+                        $condition = "this.waktu_mulai = '{$h}:{$i}:00'";
+                    } else {
+                        $condition = "this.waktu_akhir = '{$h}:{$i}:00'";
+                    }
+                } elseif (preg_match('/^(\d{1,2})$/', $raw, $m)) {
+                    $h = str_pad($m[1], 2, '0', STR_PAD_LEFT);
+                    $hInt = (int)$m[1];
+                    if ($hInt < 12) {
+                        $condition = "this.waktu_mulai >= '{$h}:00:00' and this.waktu_mulai <= '{$h}:59:59'";
+                    } else {
+                        $condition = "this.waktu_akhir >= '{$h}:00:00' and this.waktu_akhir <= '{$h}:59:59'";
+                    }
+                }
+
+                if ($condition) {
+                    if (!empty($requestData['where'])) {
+                        $requestData['where'] .= " and $condition";
+                    } else {
+                        $requestData['where'] = $condition;
+                    }
+                    $request->merge(['where' => $requestData['where']]);
+                    if ($request->query) {
+                        $request->query->set('where', $requestData['where']);
+                        $request->query->remove('filter_jam_kerja');
+                    }
+                    if ($request->request) {
+                        $request->request->remove('filter_jam_kerja');
+                    }
+                    $request->offsetUnset('filter_jam_kerja');
+                    $_GET['where'] = $requestData['where'];
+                    $_REQUEST['where'] = $requestData['where'];
+                    unset($_GET['filter_jam_kerja'], $_REQUEST['filter_jam_kerja']);
+                    unset($requestData['filter_jam_kerja']);
                 } else {
-                    $requestData['where'] = $condition;
+                    if ($request->query) {
+                        $request->query->remove('filter_jam_kerja');
+                    }
+                    if ($request->request) {
+                        $request->request->remove('filter_jam_kerja');
+                    }
+                    $request->offsetUnset('filter_jam_kerja');
+                    unset($_GET['filter_jam_kerja'], $_REQUEST['filter_jam_kerja']);
+                    unset($requestData['filter_jam_kerja']);
                 }
-                $request->merge(['where' => $requestData['where']]);
-                if ($request->query) {
-                    $request->query->set('where', $requestData['where']);
-                    $request->query->remove('filter_jam_kerja');
-                }
-                if ($request->request) {
-                    $request->request->remove('filter_jam_kerja');
-                }
-                $request->offsetUnset('filter_jam_kerja');
-                $_GET['where'] = $requestData['where'];
-                $_REQUEST['where'] = $requestData['where'];
-                unset($_GET['filter_jam_kerja'], $_REQUEST['filter_jam_kerja']);
-                unset($requestData['filter_jam_kerja']);
             }
         }
 
         // Normalisasi filter jam_kerja via query where agar support pencarian waktu mulai & waktu akhir
         if (!empty($requestData['where']) && $modelInstance && in_array('waktu_mulai', $modelInstance->columns ?? [])) {
-            $requestData['where'] = preg_replace('/(?:this|m_jam_kerja)\.waktu_mulai(?:::text)?\s*(ilike|like)/i', 'm_jam_kerja.waktu_mulai::text $1', $requestData['where']);
-            $requestData['where'] = preg_replace('/(?:this|m_jam_kerja)\.waktu_akhir(?:::text)?\s*(ilike|like)/i', 'm_jam_kerja.waktu_akhir::text $1', $requestData['where']);
-            $requestData['where'] = str_replace('this.waktu_mulai', 'm_jam_kerja.waktu_mulai', $requestData['where']);
-            $requestData['where'] = str_replace('this.waktu_akhir', 'm_jam_kerja.waktu_akhir', $requestData['where']);
             $requestData['where'] = preg_replace_callback(
-                '/(?:this\.|m_jam_kerja\.)?jam_kerja\s*(?:ilike|like|=)\s*[\'"]%?([^%\'"]+)%?[\'"]/i',
+                '/(?:this\.)?jam_kerja\s*(?:ilike|like|=)\s*[\'"]%?([^%\'"]+)%?[\'"]/i',
                 function ($m) {
                     $raw = trim($m[1]);
                     $raw = str_replace('.', ':', $raw);
@@ -344,7 +398,37 @@ class Middleware
                     if ($raw === '') {
                         return "1=1";
                     }
-                    return "concat(substr(m_jam_kerja.waktu_mulai::text,1,5),' - ',substr(m_jam_kerja.waktu_akhir::text,1,5)) ilike '%$raw%'";
+                    if (strpos($raw, '-') !== false) {
+                        $parts = explode('-', $raw);
+                        $startRaw = trim($parts[0]);
+                        $endRaw = trim($parts[1]);
+                        $conds = [];
+                        if (preg_match('/^(\d{1,2}):(\d{1,2})$/', $startRaw, $sm)) {
+                            $h = str_pad($sm[1], 2, '0', STR_PAD_LEFT);
+                            $i = str_pad($sm[2], 2, '0', STR_PAD_LEFT);
+                            $conds[] = "this.waktu_mulai = '{$h}:{$i}:00'";
+                        } elseif (preg_match('/^(\d{1,2})$/', $startRaw, $sm)) {
+                            $h = str_pad($sm[1], 2, '0', STR_PAD_LEFT);
+                            $conds[] = "this.waktu_mulai >= '{$h}:00:00' and this.waktu_mulai <= '{$h}:59:59'";
+                        }
+                        if (preg_match('/^(\d{1,2}):(\d{1,2})$/', $endRaw, $em)) {
+                            $h = str_pad($em[1], 2, '0', STR_PAD_LEFT);
+                            $i = str_pad($em[2], 2, '0', STR_PAD_LEFT);
+                            $conds[] = "this.waktu_akhir = '{$h}:{$i}:00'";
+                        } elseif (preg_match('/^(\d{1,2})$/', $endRaw, $em)) {
+                            $h = str_pad($em[1], 2, '0', STR_PAD_LEFT);
+                            $conds[] = "this.waktu_akhir >= '{$h}:00:00' and this.waktu_akhir <= '{$h}:59:59'";
+                        }
+                        return !empty($conds) ? implode(' and ', $conds) : "1=1";
+                    } elseif (preg_match('/^(\d{1,2}):(\d{1,2})$/', $raw, $m)) {
+                        $h = str_pad($m[1], 2, '0', STR_PAD_LEFT);
+                        $i = str_pad($m[2], 2, '0', STR_PAD_LEFT);
+                        return ((int)$m[1] < 12) ? "this.waktu_mulai = '{$h}:{$i}:00'" : "this.waktu_akhir = '{$h}:{$i}:00'";
+                    } elseif (preg_match('/^(\d{1,2})$/', $raw, $m)) {
+                        $h = str_pad($m[1], 2, '0', STR_PAD_LEFT);
+                        return ((int)$m[1] < 12) ? "this.waktu_mulai >= '{$h}:00:00' and this.waktu_mulai <= '{$h}:59:59'" : "this.waktu_akhir >= '{$h}:00:00' and this.waktu_akhir <= '{$h}:59:59'";
+                    }
+                    return "1=1";
                 },
                 $requestData['where']
             );

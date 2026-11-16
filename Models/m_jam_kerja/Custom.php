@@ -85,9 +85,9 @@ class m_jam_kerja extends \App\Models\BasicModels\m_jam_kerja
         if ($status !== null) {
             $val = strtolower(trim((string)$status));
             if (in_array($val, ['inactive', 'inact', 'inac', 'ina', 'in', 'i', 'nonaktif', 'non', 'false', '0'])) {
-                $model = $model->where('m_jam_kerja.is_active', false);
+                $model = $model->where('this.is_active', false);
             } elseif (in_array($val, ['active', 'activ', 'acti', 'act', 'ac', 'a', 'aktif', 'true', '1'])) {
-                $model = $model->where('m_jam_kerja.is_active', true);
+                $model = $model->where('this.is_active', true);
             }
         }
 
@@ -95,18 +95,53 @@ class m_jam_kerja extends \App\Models\BasicModels\m_jam_kerja
         if ($hariLain !== null) {
             $val = strtolower(trim((string)$hariLain));
             if (in_array($val, ['tidak ada', 'tidak', 'tid', 'tdk', 'ti', 'no', 'false', '0'])) {
-                $model = $model->where('m_jam_kerja.is_hari_berikutnya', false);
+                $model = $model->where('this.is_hari_berikutnya', false);
             } elseif (in_array($val, ['ada', 'ad', 'a', 'yes', 'true', '1'])) {
-                $model = $model->where('m_jam_kerja.is_hari_berikutnya', true);
+                $model = $model->where('this.is_hari_berikutnya', true);
             }
         }
 
         $jamKerja = request('filter_jam_kerja') ?? request('jam_kerja');
         if (!empty($jamKerja)) {
-            $val = trim((string)$jamKerja);
-            $val = str_replace('.', ':', $val);
-            $val = preg_replace('/\s*-\s*/', ' - ', $val);
-            $model = $model->whereRaw("concat(substr(m_jam_kerja.waktu_mulai::text,1,5),' - ',substr(m_jam_kerja.waktu_akhir::text,1,5)) ilike ?", ["%$val%"]);
+            $raw = trim((string)$jamKerja);
+            $raw = str_replace('.', ':', $raw);
+            $raw = preg_replace('/\s*-\s*/', ' - ', $raw);
+            if (strpos($raw, '-') !== false) {
+                $parts = explode('-', $raw);
+                $startRaw = trim($parts[0]);
+                $endRaw = trim($parts[1]);
+                if (preg_match('/^(\d{1,2}):(\d{1,2})$/', $startRaw, $sm)) {
+                    $h = str_pad($sm[1], 2, '0', STR_PAD_LEFT);
+                    $i = str_pad($sm[2], 2, '0', STR_PAD_LEFT);
+                    $model = $model->where('this.waktu_mulai', "{$h}:{$i}:00");
+                } elseif (preg_match('/^(\d{1,2})$/', $startRaw, $sm)) {
+                    $h = str_pad($sm[1], 2, '0', STR_PAD_LEFT);
+                    $model = $model->where('this.waktu_mulai', '>=', "{$h}:00:00")->where('this.waktu_mulai', '<=', "{$h}:59:59");
+                }
+                if (preg_match('/^(\d{1,2}):(\d{1,2})$/', $endRaw, $em)) {
+                    $h = str_pad($em[1], 2, '0', STR_PAD_LEFT);
+                    $i = str_pad($em[2], 2, '0', STR_PAD_LEFT);
+                    $model = $model->where('this.waktu_akhir', "{$h}:{$i}:00");
+                } elseif (preg_match('/^(\d{1,2})$/', $endRaw, $em)) {
+                    $h = str_pad($em[1], 2, '0', STR_PAD_LEFT);
+                    $model = $model->where('this.waktu_akhir', '>=', "{$h}:00:00")->where('this.waktu_akhir', '<=', "{$h}:59:59");
+                }
+            } elseif (preg_match('/^(\d{1,2}):(\d{1,2})$/', $raw, $m)) {
+                $h = str_pad($m[1], 2, '0', STR_PAD_LEFT);
+                $i = str_pad($m[2], 2, '0', STR_PAD_LEFT);
+                if ((int)$m[1] < 12) {
+                    $model = $model->where('this.waktu_mulai', "{$h}:{$i}:00");
+                } else {
+                    $model = $model->where('this.waktu_akhir', "{$h}:{$i}:00");
+                }
+            } elseif (preg_match('/^(\d{1,2})$/', $raw, $m)) {
+                $h = str_pad($m[1], 2, '0', STR_PAD_LEFT);
+                if ((int)$m[1] < 12) {
+                    $model = $model->where('this.waktu_mulai', '>=', "{$h}:00:00")->where('this.waktu_mulai', '<=', "{$h}:59:59");
+                } else {
+                    $model = $model->where('this.waktu_akhir', '>=', "{$h}:00:00")->where('this.waktu_akhir', '<=', "{$h}:59:59");
+                }
+            }
         }
 
         return $model;
