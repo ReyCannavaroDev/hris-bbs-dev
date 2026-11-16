@@ -59,6 +59,14 @@
               return response
             }
           }" :columns="[{
+              headerName: 'Pilih',
+              checkboxSelection: true,
+              headerCheckboxSelection: true,
+              width: 80,
+              sortable: false, resizable: false, filter: false,
+              cellClass: ['justify-center', 'bg-gray-50']
+            },
+            {
               headerName: 'No',
               valueGetter:(params)=>params.node.rowIndex + 1,
               width: 60,
@@ -72,14 +80,6 @@
               cellClass: ['border-r', '!border-gray-200', 'justify-center'],
               filter:false,
               flex: 1
-            },
-            {
-              headerName: 'Pilih',
-              checkboxSelection: true,
-              headerCheckboxSelection: true,
-              width: 80,
-              sortable: false, resizable: false, filter: false,
-              cellClass: ['justify-center', 'bg-gray-50']
             }
             ]">
           <div
