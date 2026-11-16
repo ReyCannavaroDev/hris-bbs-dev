@@ -84,20 +84,20 @@ class m_jam_kerja extends \App\Models\BasicModels\m_jam_kerja
         $status = request('filter_is_active') ?? request('filter_status');
         if ($status !== null) {
             $val = strtolower(trim((string)$status));
-            if (in_array($val, ['active', 'true', '1'])) {
-                $model = $model->where('this.is_active', true);
-            } elseif (in_array($val, ['inactive', 'false', '0'])) {
+            if (in_array($val, ['inactive', 'inact', 'inac', 'ina', 'in', 'i', 'nonaktif', 'non', 'false', '0'])) {
                 $model = $model->where('this.is_active', false);
+            } elseif (in_array($val, ['active', 'activ', 'acti', 'act', 'ac', 'a', 'aktif', 'true', '1'])) {
+                $model = $model->where('this.is_active', true);
             }
         }
 
         $hariLain = request('filter_is_hari_berikutnya') ?? request('filter_hari_lain');
         if ($hariLain !== null) {
             $val = strtolower(trim((string)$hariLain));
-            if (in_array($val, ['ada', 'yes', 'true', '1'])) {
-                $model = $model->where('this.is_hari_berikutnya', true);
-            } elseif (in_array($val, ['tidak ada', 'no', 'false', '0'])) {
+            if (in_array($val, ['tidak ada', 'tidak', 'tid', 'tdk', 'ti', 'no', 'false', '0'])) {
                 $model = $model->where('this.is_hari_berikutnya', false);
+            } elseif (in_array($val, ['ada', 'ad', 'a', 'yes', 'true', '1'])) {
+                $model = $model->where('this.is_hari_berikutnya', true);
             }
         }
 
@@ -105,22 +105,8 @@ class m_jam_kerja extends \App\Models\BasicModels\m_jam_kerja
         if (!empty($jamKerja)) {
             $val = trim((string)$jamKerja);
             $val = str_replace('.', ':', $val);
-            $model = $model->where(function ($q) use ($val) {
-                if (str_contains($val, '-')) {
-                    $parts = explode('-', $val);
-                    $start = trim($parts[0]);
-                    $end = trim($parts[1]);
-                    if ($start !== '' && $end !== '') {
-                        $q->whereRaw("m_jam_kerja.waktu_mulai::text ilike ? and m_jam_kerja.waktu_akhir::text ilike ?", ["%$start%", "%$end%"]);
-                    } elseif ($start !== '') {
-                        $q->whereRaw("m_jam_kerja.waktu_mulai::text ilike ?", ["%$start%"]);
-                    } elseif ($end !== '') {
-                        $q->whereRaw("m_jam_kerja.waktu_akhir::text ilike ?", ["%$end%"]);
-                    }
-                } else {
-                    $q->whereRaw("(m_jam_kerja.waktu_mulai::text ilike ? or m_jam_kerja.waktu_akhir::text ilike ?)", ["%$val%", "%$val%"]);
-                }
-            });
+            $val = preg_replace('/\s*-\s*/', ' - ', $val);
+            $model = $model->whereRaw("concat(substr(m_jam_kerja.waktu_mulai::text,1,5),' - ',substr(m_jam_kerja.waktu_akhir::text,1,5)) ilike ?", ["%$val%"]);
         }
 
         return $model;

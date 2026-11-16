@@ -297,7 +297,8 @@ const landing = reactive({
     params: {
       simplest: true,
       join: true,
-      searchfield: 'this.id, this.kode, m_comp.nama, m_dir.nama, this.waktu_mulai, this.waktu_akhir, this.desc, tipe_jam_kerja.value, this.is_active, this.is_hari_berikutnya',
+      scopes: 'filter',
+      searchfield: 'this.id, this.kode, m_comp.nama, m_dir.nama, this.desc, tipe_jam_kerja.value',
     },
     onsuccess(response) {
       response.page = response.current_page
@@ -365,9 +366,13 @@ const landing = reactive({
   },
   {
     headerName: 'Jam Kerja',
+    field: 'jam_kerja',
     filter: true,
     sortable: true,
     filter: 'ColFilter',
+    filterParams: {
+      placeholder: '07:00, 16:00, 07:00 - 16:00'
+    },
     resizable: true,
     flex: 1,
     cellClass: ['border-r', '!border-gray-200', 'justify-start'],

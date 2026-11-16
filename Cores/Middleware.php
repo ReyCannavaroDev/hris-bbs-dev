@@ -35,13 +35,18 @@ class Middleware
         $user = auth()->user();
         $requestData = $request->all();
 
-        // Normalisasi filter is_active dan status agar support 'Active' dan 'Inactive' via query where
+        // Normalisasi filter is_active dan status agar support 'Active', 'Inactive', 'act', 'inact', dll via query where
         if (!empty($requestData['where']) && $modelInstance && in_array('is_active', $modelInstance->columns ?? [])) {
             $requestData['where'] = preg_replace_callback(
-                '/(?:this\.)?(?:status|is_active)\s*(?:=|ilike|like)\s*[\'"]?%?(active|inactive)%?[\'"]?/i',
+                '/(?:this\.)?(?:status|is_active)\s*(?:=|ilike|like)\s*[\'"]?%?([a-zA-Z0-9_-]+)%?[\'"]?/i',
                 function ($m) {
-                    $bool = strtolower($m[1]) === 'active' ? 'true' : 'false';
-                    return "this.is_active=$bool";
+                    $val = strtolower($m[1]);
+                    if (in_array($val, ['inactive', 'inact', 'inac', 'ina', 'in', 'i', 'nonaktif', 'non', 'false', '0'])) {
+                        return "this.is_active=false";
+                    } elseif (in_array($val, ['active', 'activ', 'acti', 'act', 'ac', 'a', 'aktif', 'true', '1'])) {
+                        return "this.is_active=true";
+                    }
+                    return "1=1";
                 },
                 $requestData['where']
             );
@@ -52,14 +57,18 @@ class Middleware
             $_GET['where'] = $requestData['where'];
         }
 
-        // Normalisasi filter is_hari_berikutnya dan hari_lain agar support 'Ada', 'Tidak Ada', 'true', 'false' via query where
+        // Normalisasi filter is_hari_berikutnya dan hari_lain agar support 'Ada', 'Tidak Ada', 'tidak', 'tdk', dll via query where
         if (!empty($requestData['where']) && $modelInstance && in_array('is_hari_berikutnya', $modelInstance->columns ?? [])) {
             $requestData['where'] = preg_replace_callback(
-                '/(?:this\.)?(?:hari_lain|is_hari_berikutnya)\s*(?:=|ilike|like)\s*[\'"]?%?(ada|tidak ada|yes|no|true|false|1|0)%?[\'"]?/i',
+                '/(?:this\.)?(?:hari_lain|is_hari_berikutnya)\s*(?:=|ilike|like)\s*[\'"]?%?([a-zA-Z0-9_\s-]+)%?[\'"]?/i',
                 function ($m) {
-                    $val = strtolower($m[1]);
-                    $bool = in_array($val, ['ada', 'yes', 'true', '1'], true) ? 'true' : 'false';
-                    return "this.is_hari_berikutnya=$bool";
+                    $val = strtolower(trim($m[1]));
+                    if (in_array($val, ['tidak ada', 'tidak', 'tid', 'tdk', 'ti', 'no', 'false', '0'])) {
+                        return "this.is_hari_berikutnya=false";
+                    } elseif (in_array($val, ['ada', 'ad', 'a', 'yes', 'true', '1'])) {
+                        return "this.is_hari_berikutnya=true";
+                    }
+                    return "1=1";
                 },
                 $requestData['where']
             );
@@ -295,26 +304,15 @@ class Middleware
         // Normalisasi filter jam_kerja via query where agar support pencarian waktu mulai & waktu akhir
         if (!empty($requestData['where']) && $modelInstance && in_array('waktu_mulai', $modelInstance->columns ?? [])) {
             $requestData['where'] = preg_replace_callback(
-                '/(?:this\.|m_jam_kerja\.)?jam_kerja\s*(?:=|ilike|like)\s*[\'\"]?%?([^%\'\"]*?)%?[\'\"]?/i',
+                '/(?:this\.|m_jam_kerja\.)?jam_kerja\s*(?:ilike|like|=)\s*[\'"]%?([^%\'"]+)%?[\'"]/i',
                 function ($m) {
                     $raw = trim($m[1]);
                     $raw = str_replace('.', ':', $raw);
+                    $raw = preg_replace('/\s*-\s*/', ' - ', $raw);
                     if ($raw === '') {
                         return "1=1";
                     }
-                    if (str_contains($raw, '-')) {
-                        $parts = explode('-', $raw);
-                        $start = trim($parts[0]);
-                        $end = trim($parts[1]);
-                        if ($start !== '' && $end !== '') {
-                            return "(m_jam_kerja.waktu_mulai::text ilike '%$start%' and m_jam_kerja.waktu_akhir::text ilike '%$end%')";
-                        } elseif ($start !== '') {
-                            return "m_jam_kerja.waktu_mulai::text ilike '%$start%'";
-                        } elseif ($end !== '') {
-                            return "m_jam_kerja.waktu_akhir::text ilike '%$end%'";
-                        }
-                    }
-                    return "(m_jam_kerja.waktu_mulai::text ilike '%$raw%' or m_jam_kerja.waktu_akhir::text ilike '%$raw%')";
+                    return "concat(substr(m_jam_kerja.waktu_mulai::text,1,5),' - ',substr(m_jam_kerja.waktu_akhir::text,1,5)) ilike '%$raw%'";
                 },
                 $requestData['where']
             );
@@ -330,6 +328,7 @@ class Middleware
         if (isset($requestData['filter_jam_kerja']) && $modelInstance && in_array('waktu_mulai', $modelInstance->columns ?? [])) {
             $val = trim((string)$requestData['filter_jam_kerja']);
             $val = str_replace('.', ':', $val);
+            $val = preg_replace('/\s*-\s*/', ' - ', $val);
             if ($val !== '') {
                 $request->merge(['filter_jam_kerja' => $val]);
                 if ($request->query) {
@@ -340,10 +339,22 @@ class Middleware
             }
         }
 
-        if (!empty($requestData['where'])) {
-            $requestData['where'] = str_replace('this.waktu_mulai', 'm_jam_kerja.waktu_mulai', $requestData['where']);
-            $requestData['where'] = str_replace('this.waktu_akhir', 'm_jam_kerja.waktu_akhir', $requestData['where']);
-            $requestData['where'] = str_replace('this.jam_kerja', 'm_jam_kerja.waktu_mulai', $requestData['where']);
+        if (!empty($requestData['where']) && $modelInstance && in_array('waktu_mulai', $modelInstance->columns ?? [])) {
+            $requestData['where'] = preg_replace('/(?:this|m_jam_kerja)\.waktu_mulai(?:::text)?\s*(ilike|like)/i', 'm_jam_kerja.waktu_mulai::text $1', $requestData['where']);
+            $requestData['where'] = preg_replace('/(?:this|m_jam_kerja)\.waktu_akhir(?:::text)?\s*(ilike|like)/i', 'm_jam_kerja.waktu_akhir::text $1', $requestData['where']);
+            $requestData['where'] = preg_replace_callback(
+                '/(?:this\.|m_jam_kerja\.)?jam_kerja\s*(?:ilike|like|=)\s*[\'"]%?([^%\'"]+)%?[\'"]/i',
+                function ($m) {
+                    $raw = trim($m[1]);
+                    $raw = str_replace('.', ':', $raw);
+                    $raw = preg_replace('/\s*-\s*/', ' - ', $raw);
+                    if ($raw === '') {
+                        return "1=1";
+                    }
+                    return "concat(substr(m_jam_kerja.waktu_mulai::text,1,5),' - ',substr(m_jam_kerja.waktu_akhir::text,1,5)) ilike '%$raw%'";
+                },
+                $requestData['where']
+            );
             $request->merge(['where' => $requestData['where']]);
             if ($request->query) {
                 $request->query->set('where', $requestData['where']);

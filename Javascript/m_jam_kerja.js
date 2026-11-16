@@ -199,309 +199,7 @@ async function onSave() {
 }
 
 //  @else----------------------- LANDING
-// Transform jam kerja query to apply action button concept to table column filters
-function transformJamKerjaUrl(url) {
-  try {
-    if (!url || typeof url !== 'string') return url
-    if (!url.includes('m_jam_kerja')) return url
-    if (!url.includes('where') && !url.includes('filter_is_active') && !url.includes('filter_status') && !url.includes('filter_is_hari_berikutnya') && !url.includes('filter_hari_lain') && !url.includes('filter_jam_kerja')) {
-      return url
-    }
-
-    const isRelative = url.startsWith('/')
-    const base = typeof window !== 'undefined' && window.location ? window.location.origin : 'http://localhost'
-    const urlObj = new URL(url, base)
-    const isActive = urlObj.searchParams.get('filter_is_active') ?? urlObj.searchParams.get('filter_status')
-    const isHariLain = urlObj.searchParams.get('filter_is_hari_berikutnya') ?? urlObj.searchParams.get('filter_hari_lain')
-    const jamKerja = urlObj.searchParams.get('filter_jam_kerja')
-    const currentWhere = urlObj.searchParams.get('where') || ''
-
-    let conds = []
-    if (currentWhere) {
-      conds = currentWhere.split(/\s+and\s+/i).map(c => c.trim()).filter(Boolean)
-    }
-
-    if (isActive !== null) {
-      const val = String(isActive).toLowerCase().trim()
-      const boolVal = (val === 'active' || val === 'true' || val === '1') ? 'true' : ((val === 'inactive' || val === 'false' || val === '0') ? 'false' : null)
-      conds = conds.filter(c => !/\bthis\.is_active\b/i.test(c))
-      if (boolVal !== null) {
-        conds.push('this.is_active=' + boolVal)
-      }
-      urlObj.searchParams.delete('filter_is_active')
-      urlObj.searchParams.delete('filter_status')
-    }
-
-    if (isHariLain !== null) {
-      const val = String(isHariLain).toLowerCase().trim()
-      const boolVal = (val === 'ada' || val === 'yes' || val === 'true' || val === '1') ? 'true' : ((val === 'tidak ada' || val === 'no' || val === 'false' || val === '0') ? 'false' : null)
-      conds = conds.filter(c => !/\bthis\.is_hari_berikutnya\b/i.test(c))
-      if (boolVal !== null) {
-        conds.push('this.is_hari_berikutnya=' + boolVal)
-      }
-      urlObj.searchParams.delete('filter_is_hari_berikutnya')
-      urlObj.searchParams.delete('filter_hari_lain')
-    }
-
-    // Translate any jam_kerja inside where query
-    conds = conds.map(c => {
-      if (!c.includes('jam_kerja')) return c
-      return c.replace(/(?:this\.|m_jam_kerja\.)?jam_kerja\s*(?:=|ilike|like)\s*['"]%?([^%'"]*)%?['"]/gi, (match, raw) => {
-        const val = raw.replace(/\./g, ':').trim()
-        if (!val) return '1=1'
-        if (val.includes('-')) {
-          const [s, e] = val.split('-').map(x => x.trim())
-          if (s && e) {
-            return `(m_jam_kerja.waktu_mulai::text ilike '%${s}%' and m_jam_kerja.waktu_akhir::text ilike '%${e}%')`
-          } else if (s) {
-            return `m_jam_kerja.waktu_mulai::text ilike '%${s}%'`
-          } else if (e) {
-            return `m_jam_kerja.waktu_akhir::text ilike '%${e}%'`
-          }
-        }
-        return `(m_jam_kerja.waktu_mulai::text ilike '%${val}%' or m_jam_kerja.waktu_akhir::text ilike '%${val}%')`
-      })
-    })
-
-    if (jamKerja !== null) {
-      const val = String(jamKerja).replace(/\./g, ':').trim()
-      conds = conds.filter(c => !/(?:this|m_jam_kerja)\.waktu_mulai/i.test(c))
-      if (val !== '') {
-        if (val.includes('-')) {
-          const [s, e] = val.split('-').map(x => x.trim())
-          if (s && e) {
-            conds.push(`(m_jam_kerja.waktu_mulai::text ilike '%${s}%' and m_jam_kerja.waktu_akhir::text ilike '%${e}%')`)
-          } else if (s) {
-            conds.push(`m_jam_kerja.waktu_mulai::text ilike '%${s}%'`)
-          } else if (e) {
-            conds.push(`m_jam_kerja.waktu_akhir::text ilike '%${e}%'`)
-          }
-        } else {
-          conds.push(`(m_jam_kerja.waktu_mulai::text ilike '%${val}%' or m_jam_kerja.waktu_akhir::text ilike '%${val}%')`)
-        }
-      }
-      urlObj.searchParams.delete('filter_jam_kerja')
-    }
-
-    if (conds.length > 0) {
-      urlObj.searchParams.set('where', conds.join(' and '))
-    } else {
-      urlObj.searchParams.delete('where')
-    }
-
-    const cleanSearch = decodeURIComponent(urlObj.search).replace(/\+/g, ' ')
-    return isRelative ? (urlObj.pathname + cleanSearch) : (urlObj.origin + urlObj.pathname + cleanSearch)
-  } catch (e) {
-    console.error('Error transforming m_jam_kerja filter:', e)
-    return url
-  }
-}
-
-// Intercept fetch & XMLHttpRequest
-if (typeof window !== 'undefined' && !window.__m_jam_kerja_filter_intercepted__) {
-  window.__m_jam_kerja_filter_intercepted__ = true
-
-  if (window.fetch) {
-    const originalFetch = window.fetch
-    window.fetch = async function (input, init) {
-      if (typeof input === 'string') {
-        input = transformJamKerjaUrl(input)
-      } else if (input && input.url) {
-        const newUrl = transformJamKerjaUrl(input.url)
-        if (newUrl !== input.url && typeof Request !== 'undefined') {
-          input = new Request(newUrl, input)
-        }
-      }
-      return originalFetch.call(this, input, init)
-    }
-  }
-
-  if (typeof XMLHttpRequest !== 'undefined' && XMLHttpRequest.prototype && XMLHttpRequest.prototype.open) {
-    const originalXhrOpen = XMLHttpRequest.prototype.open
-    XMLHttpRequest.prototype.open = function (method, url, ...rest) {
-      if (typeof url === 'string') {
-        url = transformJamKerjaUrl(url)
-      }
-      return originalXhrOpen.call(this, method, url, ...rest)
-    }
-  }
-
-  if (window.axios && window.axios.interceptors && window.axios.interceptors.request) {
-    window.axios.interceptors.request.use(function (config) {
-      if (config && config.url) {
-        config.url = transformJamKerjaUrl(config.url)
-      }
-      return config
-    })
-  }
-}
-
-if (store && store.axios && store.axios.interceptors && store.axios.interceptors.request) {
-  store.axios.interceptors.request.use(function (config) {
-    if (config && config.url) {
-      config.url = transformJamKerjaUrl(config.url)
-    }
-    return config
-  })
-}
-
 const activeBtn = ref(null)
-
-function attachJamKerjaTimeFilter() {
-  if (typeof document === 'undefined') return false
-
-  // Find floating filter cell or input for jam_kerja in the table
-  const cells = document.querySelectorAll(
-    '[col-id="jam_kerja"], ' +
-    '.ag-header-cell[col-id="jam_kerja"], ' +
-    '.ag-floating-filter[col-id="jam_kerja"], ' +
-    '.ag-floating-filter-cell[col-id="jam_kerja"]'
-  )
-
-  let targetInput = null
-  let container = null
-
-  cells.forEach(c => {
-    const inp = c.querySelector('input')
-    if (inp && !inp.classList.contains('time-filter-custom-input')) {
-      targetInput = inp
-      container = inp.parentElement || c
-    }
-  })
-
-  if (!targetInput || !container) return false
-  if (container.querySelector('.time-range-filter-wrapper')) return true
-
-  // Set placeholder on default input for keyboard typing
-  targetInput.placeholder = '07:00 - 16:00'
-  targetInput.title = 'Pilih atau ketik jam kerja (contoh: 07:00 - 16:00 atau 07:00)'
-
-  // Hide the default text input to mount dual time picker
-  targetInput.style.display = 'none'
-
-  const wrapper = document.createElement('div')
-  wrapper.className = 'time-range-filter-wrapper'
-  wrapper.style.display = 'flex'
-  wrapper.style.alignItems = 'center'
-  wrapper.style.justifyContent = 'center'
-  wrapper.style.gap = '2px'
-  wrapper.style.width = '100%'
-  wrapper.style.height = '100%'
-  wrapper.style.padding = '0 2px'
-
-  const inStart = document.createElement('input')
-  inStart.type = 'time'
-  inStart.className = 'time-filter-custom-input'
-  inStart.style.width = 'calc(50% - 9px)'
-  inStart.style.height = '24px'
-  inStart.style.fontSize = '11px'
-  inStart.style.padding = '0 2px'
-  inStart.style.border = '1px solid #d1d5db'
-  inStart.style.borderRadius = '4px'
-  inStart.style.backgroundColor = '#ffffff'
-  inStart.style.color = '#374151'
-  inStart.style.textAlign = 'center'
-  inStart.title = 'Jam Mulai'
-
-  const sep = document.createElement('span')
-  sep.textContent = '-'
-  sep.style.fontWeight = 'bold'
-  sep.style.color = '#6b7280'
-  sep.style.fontSize = '12px'
-  sep.style.userSelect = 'none'
-
-  const inEnd = document.createElement('input')
-  inEnd.type = 'time'
-  inEnd.className = 'time-filter-custom-input'
-  inEnd.style.width = 'calc(50% - 9px)'
-  inEnd.style.height = '24px'
-  inEnd.style.fontSize = '11px'
-  inEnd.style.padding = '0 2px'
-  inEnd.style.border = '1px solid #d1d5db'
-  inEnd.style.borderRadius = '4px'
-  inEnd.style.backgroundColor = '#ffffff'
-  inEnd.style.color = '#374151'
-  inEnd.style.textAlign = 'center'
-  inEnd.title = 'Jam Selesai'
-
-  const btnReset = document.createElement('button')
-  btnReset.type = 'button'
-  btnReset.innerHTML = '&times;'
-  btnReset.style.border = 'none'
-  btnReset.style.background = 'transparent'
-  btnReset.style.color = '#9ca3af'
-  btnReset.style.fontSize = '14px'
-  btnReset.style.fontWeight = 'bold'
-  btnReset.style.cursor = 'pointer'
-  btnReset.style.padding = '0 1px'
-  btnReset.style.lineHeight = '1'
-  btnReset.title = 'Reset Jam'
-
-  wrapper.appendChild(inStart)
-  wrapper.appendChild(sep)
-  wrapper.appendChild(inEnd)
-  wrapper.appendChild(btnReset)
-
-  if (targetInput.value && targetInput.value.includes('-')) {
-    const parts = targetInput.value.split('-').map(x => x.trim())
-    inStart.value = parts[0] || ''
-    inEnd.value = parts[1] || ''
-  }
-
-  const onTimeChange = () => {
-    const s = inStart.value || ''
-    const e = inEnd.value || ''
-    let val = ''
-    if (s && e) {
-      val = `${s} - ${e}`
-    } else if (s) {
-      val = `${s} -`
-    } else if (e) {
-      val = `- ${e}`
-    }
-
-    targetInput.value = val
-    targetInput.dispatchEvent(new Event('input', { bubbles: true }))
-    targetInput.dispatchEvent(new Event('change', { bubbles: true }))
-  }
-
-  inStart.addEventListener('change', onTimeChange)
-  inEnd.addEventListener('change', onTimeChange)
-
-  btnReset.addEventListener('click', (ev) => {
-    ev.stopPropagation()
-    inStart.value = ''
-    inEnd.value = ''
-    targetInput.value = ''
-    targetInput.dispatchEvent(new Event('input', { bubbles: true }))
-    targetInput.dispatchEvent(new Event('change', { bubbles: true }))
-  })
-
-  container.appendChild(wrapper)
-  return true
-}
-
-function initJamKerjaFilterObserver() {
-  if (typeof window === 'undefined') return
-  attachJamKerjaTimeFilter()
-
-  let retries = 0
-  const interval = setInterval(() => {
-    const attached = attachJamKerjaTimeFilter()
-    retries++
-    if (attached || retries > 25) {
-      clearInterval(interval)
-    }
-  }, 200)
-
-  const target = document.querySelector('.bg-white') || document.body
-  if (target && window.MutationObserver) {
-    const observer = new MutationObserver(() => {
-      attachJamKerjaTimeFilter()
-    })
-    observer.observe(target, { childList: true, subtree: true })
-  }
-}
 
 function filterShowData(params, noBtn) {
   if (activeBtn.value === noBtn) {
@@ -593,7 +291,8 @@ const landing = reactive({
     params: {
       simplest: true,
       join: true,
-      searchfield: 'this.id, this.kode, m_dir.nama, this.waktu_mulai, this.waktu_akhir, this.desc, tipe_jam_kerja.value, this.is_active, this.is_hari_berikutnya',
+      scopes: 'filter',
+      searchfield: 'this.id, this.kode, m_dir.nama, this.desc, tipe_jam_kerja.value',
     },
     onsuccess(response) {
       if (response && response.data) {
@@ -616,7 +315,6 @@ const landing = reactive({
       }
       response.page = response.current_page
       response.hasNext = response.has_next
-      setTimeout(attachJamKerjaTimeFilter, 50)
       return response
     }
   },
@@ -668,21 +366,15 @@ const landing = reactive({
   {
     headerName: 'Jam Kerja',
     field: 'jam_kerja',
+    filter: true,
     sortable: true,
     filter: 'ColFilter',
     filterParams: {
-      placeholder: '07:00 - 16:00'
+      placeholder: '07:00, 16:00, 07:00 - 16:00'
     },
     resizable: true,
     flex: 1,
     cellClass: ['border-r', '!border-gray-200', 'justify-start'],
-    filterValueGetter: (params) => {
-      if (params.data?.jam_kerja) return params.data.jam_kerja
-      const mulai = params.data?.waktu_mulai ? (params.data.waktu_mulai.length >= 5 ? params.data.waktu_mulai.slice(0, 5) : params.data.waktu_mulai) : ''
-      const akhir = params.data?.waktu_akhir ? (params.data.waktu_akhir.length >= 5 ? params.data.waktu_akhir.slice(0, 5) : params.data.waktu_akhir) : ''
-      if (mulai && akhir) return `${mulai} - ${akhir}`
-      return mulai || akhir || ''
-    },
     valueGetter: (params) => {
       if (params.data?.jam_kerja) return params.data.jam_kerja
       const mulai = params.data?.waktu_mulai ? (params.data.waktu_mulai.length >= 5 ? params.data.waktu_mulai.slice(0, 5) : params.data.waktu_mulai) : ''
@@ -695,13 +387,11 @@ const landing = reactive({
   {
     headerName: 'Hari Lain',
     field: 'hari_lain',
+    filter: true,
+    sortable: true,
     filter: 'ColFilter',
     filterParams: {
       options: ['Ada', 'Tidak Ada']
-    },
-    filterValueGetter: (params) => {
-      const val = params.data ? (params.data.hari_lain !== undefined ? params.data.hari_lain : params.data.is_hari_berikutnya) : params.value
-      return (val === 'Ada' || val === true || val === 1 || val === '1' || val === 'true') ? 'Ada' : 'Tidak Ada'
     },
     valueGetter: (params) => {
       const val = params.data ? (params.data.hari_lain !== undefined ? params.data.hari_lain : params.data.is_hari_berikutnya) : params.value
@@ -730,22 +420,19 @@ const landing = reactive({
   {
     headerName: 'Status',
     field: 'status',
+    filter: true,
+    sortable: true,
     filter: 'ColFilter',
     filterParams: {
       options: ['Active', 'Inactive']
     },
-    filterValueGetter: (params) => {
-      const val = params.data ? (params.data.status !== undefined ? params.data.status : params.data.is_active) : params.value
-      return (val === 'Active' || val === true || val === 1 || val === '1' || val === 'true' || val === 't') ? 'Active' : 'Inactive'
-    },
+    flex: 1,
+    resizable: true,
+    cellClass: ['border-r', '!border-gray-200', 'justify-center'],
     valueGetter: (params) => {
       const val = params.data ? (params.data.status !== undefined ? params.data.status : params.data.is_active) : params.value
       return (val === 'Active' || val === true || val === 1 || val === '1' || val === 'true' || val === 't') ? 'Active' : 'Inactive'
     },
-    sortable: true,
-    flex: 1,
-    resizable: true,
-    cellClass: ['border-r', '!border-gray-200', 'justify-center'],
     cellRenderer: ({ value }) => {
       return value === 'Active' || value === true
         ? `<span class="text-green-500 rounded-md text-xs font-medium px-4 py-1 inline-block capitalize">Active</span>`
@@ -755,91 +442,6 @@ const landing = reactive({
   ]
 })
 
-watch(() => ({ ...(landing.api && landing.api.params) }), (newParams) => {
-  if (!newParams || !landing.api || !landing.api.params) return
-  let isActive = newParams.filter_is_active ?? newParams.filter_status
-  let isHariLain = newParams.filter_is_hari_berikutnya ?? newParams.filter_hari_lain
-  let jamKerja = newParams.filter_jam_kerja
-  let modified = false
-  let currentWhere = landing.api.params.where || ''
-  let conds = currentWhere ? currentWhere.split(/\s+and\s+/i).map(c => c.trim()).filter(Boolean) : []
-
-  if (isActive !== undefined) {
-    const val = String(isActive).toLowerCase().trim()
-    const boolVal = (val === 'active' || val === 'true' || val === '1') ? 'true' : ((val === 'inactive' || val === 'false' || val === '0') ? 'false' : null)
-    conds = conds.filter(c => !/\bthis\.is_active\b/i.test(c))
-    if (boolVal !== null) {
-      conds.push('this.is_active=' + boolVal)
-    }
-    delete landing.api.params.filter_is_active
-    delete landing.api.params.filter_status
-    modified = true
-  }
-
-  if (isHariLain !== undefined) {
-    const val = String(isHariLain).toLowerCase().trim()
-    const boolVal = (val === 'ada' || val === 'yes' || val === 'true' || val === '1') ? 'true' : ((val === 'tidak ada' || val === 'no' || val === 'false' || val === '0') ? 'false' : null)
-    conds = conds.filter(c => !/\bthis\.is_hari_berikutnya\b/i.test(c))
-    if (boolVal !== null) {
-      conds.push('this.is_hari_berikutnya=' + boolVal)
-    }
-    delete landing.api.params.filter_is_hari_berikutnya
-    delete landing.api.params.filter_hari_lain
-    modified = true
-  }
-
-  if (currentWhere && currentWhere.includes('jam_kerja')) {
-    conds = conds.map(c => {
-      if (!c.includes('jam_kerja')) return c
-      return c.replace(/(?:this\.|m_jam_kerja\.)?jam_kerja\s*(?:=|ilike|like)\s*['"]%?([^%'"]*)%?['"]/gi, (match, raw) => {
-        const val = raw.replace(/\./g, ':').trim()
-        if (!val) return '1=1'
-        if (val.includes('-')) {
-          const [s, e] = val.split('-').map(x => x.trim())
-          if (s && e) {
-            return `(m_jam_kerja.waktu_mulai::text ilike '%${s}%' and m_jam_kerja.waktu_akhir::text ilike '%${e}%')`
-          } else if (s) {
-            return `m_jam_kerja.waktu_mulai::text ilike '%${s}%'`
-          } else if (e) {
-            return `m_jam_kerja.waktu_akhir::text ilike '%${e}%'`
-          }
-        }
-        return `(m_jam_kerja.waktu_mulai::text ilike '%${val}%' or m_jam_kerja.waktu_akhir::text ilike '%${val}%')`
-      })
-    })
-    modified = true
-  }
-
-  if (jamKerja !== undefined) {
-    const val = String(jamKerja).replace(/\./g, ':').trim()
-    conds = conds.filter(c => !/(?:this|m_jam_kerja)\.waktu_mulai/i.test(c))
-    if (val !== '') {
-      if (val.includes('-')) {
-        const [s, e] = val.split('-').map(x => x.trim())
-        if (s && e) {
-          conds.push(`(m_jam_kerja.waktu_mulai::text ilike '%${s}%' and m_jam_kerja.waktu_akhir::text ilike '%${e}%')`)
-        } else if (s) {
-          conds.push(`m_jam_kerja.waktu_mulai::text ilike '%${s}%'`)
-        } else if (e) {
-          conds.push(`m_jam_kerja.waktu_akhir::text ilike '%${e}%'`)
-        }
-      } else {
-        conds.push(`(m_jam_kerja.waktu_mulai::text ilike '%${val}%' or m_jam_kerja.waktu_akhir::text ilike '%${val}%')`)
-      }
-    }
-    delete landing.api.params.filter_jam_kerja
-    modified = true
-  }
-
-  if (modified) {
-    landing.api.params.where = conds.length > 0 ? conds.join(' and ') : null
-  }
-}, { deep: true })
-
-onMounted(() => {
-  initJamKerjaFilterObserver()
-})
-
 onActivated(() => {
   //  reload table api landing
   if (apiTable.value) {
@@ -847,7 +449,6 @@ onActivated(() => {
       apiTable.value.reload()
     }
   }
-  setTimeout(attachJamKerjaTimeFilter, 50)
 })
 
 //  @endif -------------------------------------------------END
