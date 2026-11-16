@@ -117,9 +117,26 @@ function onReset() {
 }
 
 async function onSave() {
-  //values.tags = JSON.stringify(values.tags)
-      try {
-        const isCreating = ['Create','Copy','Tambah'].includes(actionText.value)
+  formErrors.value = {}
+  if (!values.m_dir_id) {
+    formErrors.value.m_dir_id = ['Kolom Company wajib dipilih']
+  }
+  if (!values.m_divisi_id) {
+    formErrors.value.m_divisi_id = ['Kolom Divisi wajib dipilih']
+  }
+  if (!values.nama || String(values.nama).trim() === '') {
+    formErrors.value.nama = ['Kolom Nama wajib diisi']
+  }
+
+  if (Object.keys(formErrors.value).length > 0) {
+    return swal.fire({
+      icon: 'error',
+      text: 'Harap lengkapi semua kolom yang bertanda bintang (*)'
+    })
+  }
+
+  try {
+    const isCreating = ['Create','Copy','Tambah'].includes(actionText.value)
         const dataURL = `${store.server.url_backend}/operation${endpointApi}${isCreating ? '' : ('/' + route.params.id)}`
         values.is_active = values.is_active ? 1 : 0
         isRequesting.value = true

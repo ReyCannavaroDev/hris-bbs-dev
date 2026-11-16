@@ -38,19 +38,19 @@
       <!-- FORM START -->
       <div class="grid grid-cols-1 gap-2 mb-5">
         <div>
-            <label>Company <label class="text-red-500 space-x-0 pl-0">*</label>
+            <label>Company <label class="text-red-500 space-x-0 pl-0">*</label></label>
             <FieldSelect 
                 :bind="{ readonly: !actionText }" 
                 class="!mt-0"
                 :value="values.m_dir_id" 
                 :errorText="formErrors.m_dir_id ? 'failed' : ''"
-                @input="v => values.m_dir_id = v" 
+                @input="v => {
+                  values.m_dir_id = v
+                  values.m_divisi_id = null
+                }" 
                 :hints="formErrors.m_dir_id" 
                 :check="false"
                 label=""
-                @update:valueFull="(objVal)=>{
-                  values.m_divisi_id = null
-                }"
                 placeholder="Pilih Company"
                 valueField="id" 
                 displayField="nama"
@@ -72,29 +72,28 @@
           <label>Divisi <label class="text-red-500 space-x-0 pl-0">*</label></label>
           <FieldSelect
             class="!mt-0"
-            :bind="{ disabled: !actionText, clearable:false }"
+            :bind="{ disabled: !actionText || !values.m_dir_id, clearable:false }"
             :value="values.m_divisi_id" 
             @input="(v)=>{
-              //$log(v)
               values.m_divisi_id=v
-              //$log(values.grading)
             }"
             :errorText="formErrors.m_divisi_id?'failed':''"
             :hints="formErrors.m_divisi_id"
             displayField="nama"
             valueField="id"
             label=""
-            placeholder="Cari"
+            :placeholder="values.m_dir_id ? 'Pilih Divisi' : 'Pilih Company terlebih dahulu'"
             :api="{
                 url: `${store.server.url_backend}/operation/m_divisi`,
                 headers: {
-                  //'Content-Type': 'Application/json',
+                  'Content-Type': 'Application/json',
                   Authorization: `${store.user.token_type} ${store.user.token}`
                 },
                 params: {
                   simplest:true,
                   single:true,
                   transform:false,
+                  where: values.m_dir_id ? `this.m_dir_id=${values.m_dir_id} and this.is_active='true'` : '1=0'
                 }
             }"
             fa-icon="search" :check="true" />

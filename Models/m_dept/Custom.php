@@ -11,8 +11,38 @@ class m_dept extends \App\Models\BasicModels\m_dept
     
     public $fileColumns    = [ /*file_column*/ ];
 
-    //public $createAdditionalData = ["creator_id"=>"auth:id"];
-    //public $updateAdditionalData = ["last_editor_id"=>"auth:id"];
+    public $createAdditionalData = ["creator_id" => "auth:id"];
+    public $updateAdditionalData = ["last_editor_id" => "auth:id"];
+
+    public function createBefore($model, $arrayData, $metaData, $id = null)
+    {
+        if (empty($arrayData['m_dir_id']) && !empty($arrayData['m_divisi_id'])) {
+            $divisi = \DB::table('m_divisi')->where('id', $arrayData['m_divisi_id'])->first();
+            if ($divisi && !empty($divisi->m_dir_id)) {
+                $arrayData['m_dir_id'] = $divisi->m_dir_id;
+            }
+        }
+
+        return [
+            "model" => $model,
+            "data"  => $arrayData,
+        ];
+    }
+
+    public function updateBefore($model, $arrayData, $metaData, $id = null)
+    {
+        if (empty($arrayData['m_dir_id']) && !empty($arrayData['m_divisi_id'])) {
+            $divisi = \DB::table('m_divisi')->where('id', $arrayData['m_divisi_id'])->first();
+            if ($divisi && !empty($divisi->m_dir_id)) {
+                $arrayData['m_dir_id'] = $divisi->m_dir_id;
+            }
+        }
+
+        return [
+            "model" => $model,
+            "data"  => $arrayData,
+        ];
+    }
 
 
     public function scopeFilterDivisi($model)
