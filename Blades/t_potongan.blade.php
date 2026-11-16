@@ -65,8 +65,9 @@
           <label class="font-semibold">Karyawan<span class="text-red-500 space-x-0 pl-0" v-if="!values.is_all_kary">*</span> <small v-if="values.is_all_kary" class="text-blue-600 font-normal text-xs">(Semua Karyawan)</small></label>
           <FieldPopup :bind="{ readonly: !actionText || values.is_all_kary || !respoScope.isHrdOrAdmin }" class="w-full py-2 !mt-0" :value="values.m_kary_id"
             @input="(v)=>values.m_kary_id=v" :errorText="formErrors.m_kary_id?'failed':''" :hints="formErrors.m_kary_id"
-            valueField="id" displayField="nama_depan" @update:valueFull="(objVal)=>{
+            valueField="id" displayField="nama_lengkap" @update:valueFull="(objVal)=>{
           if (!objVal) return
+          if (!objVal.nama_lengkap) objVal.nama_lengkap = objVal.nama_depan || ''
           values.m_divisi_lama_id = objVal['m_divisi.id']
           values.m_dept_lama_id = objVal['m_dept.id']
           values.m_posisi_lama_id = objVal['m_posisi.id']
@@ -79,9 +80,9 @@
           params: {
             simplest:true,
             where: respoScope.isLockedMissing ? '1=0' : ((values.m_dir_id ? `this.m_dir_id=${values.m_dir_id} AND ` : (!respoScope.isUnrestricted && respoScope.dirId ? `this.m_dir_id=${respoScope.dirId} AND ` : '')) + (!respoScope.isUnrestricted && respoScope.divId ? `this.m_divisi_id=${respoScope.divId} AND ` : '') + (!respoScope.isUnrestricted && respoScope.deptId ? `this.m_dept_id=${respoScope.deptId} AND ` : '') + `this.is_active='true'`),
-            searchfield:'nik, kode, nama_depan, m_dir.nama, m_divisi.nama, id'
+            searchfield:'kode, nik, nama_depan, nama_lengkap, m_dir.nama, m_divisi.nama, m_zona.nama, m_dept.nama, id'
           }
-        }"  placeholder="Pilih Karyawan" label="" :check="false" :columns="[
+        }" placeholder="Pilih Karyawan" label="" :check="false" :columns="[
           {
             headerName: 'No',
             valueGetter: (p) => p.node.rowIndex + 1,
@@ -89,26 +90,27 @@
             sortable: false, 
             resizable: false, 
             filter: false,
-            cellClass: ['justify-center', 'bg-gray-50']
+            cellClass: ['justify-start', 'bg-gray-50']
           },
           {
             flex: 1,
-            field: 'nik',
+            field: 'kode',
             headerName: 'NIK',
             sortable: false, 
             resizable: true, 
             filter: 'ColFilter',
-            cellClass: ['border-r', '!border-gray-200', 'justify-center'],
-            valueGetter: (p) => p.data?.nik || p.data?.kode || ''
+            cellClass: ['border-r', '!border-gray-200', 'justify-start'],
+            valueGetter: (p) => p.data?.kode || p.data?.nik || ''
           },
           {
             flex: 1,
-            field: 'nama_depan',
+            field: 'nama_lengkap',
             headerName: 'Nama',
             sortable: false, 
             resizable: true, 
             filter: 'ColFilter',
-            cellClass: ['border-r', '!border-gray-200', 'justify-center']
+            cellClass: ['border-r', '!border-gray-200', 'justify-start'],
+            valueGetter: (p) => p.data?.nama_lengkap || p.data?.nama_depan || ''
           },
           {
             flex: 1,
@@ -117,7 +119,7 @@
             sortable: false, 
             resizable: true, 
             filter: 'ColFilter',
-            cellClass: ['border-r', '!border-gray-200', 'justify-center']
+            cellClass: ['border-r', '!border-gray-200', 'justify-start']
           },              
           {
             flex: 1,
@@ -126,7 +128,7 @@
             sortable: false, 
             resizable: true, 
             filter: 'ColFilter',
-            cellClass: ['border-r', '!border-gray-200', 'justify-center']
+            cellClass: ['border-r', '!border-gray-200', 'justify-start']
           },
           {
             flex: 1,
@@ -135,7 +137,7 @@
             sortable: false, 
             resizable: true, 
             filter: 'ColFilter',
-            cellClass: ['border-r', '!border-gray-200', 'justify-center']
+            cellClass: ['border-r', '!border-gray-200', 'justify-start']
           },      
           {
             flex: 1,
@@ -144,7 +146,7 @@
             sortable: false, 
             resizable: true, 
             filter: 'ColFilter',
-            cellClass: ['border-r', '!border-gray-200', 'justify-center']
+            cellClass: ['border-r', '!border-gray-200', 'justify-start']
           },
         
           // Add columns for m_posisi data if needed
@@ -258,19 +260,29 @@
           />
         </div>                  
         <div class="grid grid-cols-12">
-          <label class="col-span-12">Potongan Seluruh Karyawan <label class="text-red-500 space-x-0 pl-0">*</label></label>
-            <div class="col-span-12">
-              <div class="grid grid-cols-12">
-                <div class="flex items-center col-span-6">
-                  <input type="radio" :value="true" v-model="values.is_all_kary" :disabled="!actionText || !respoScope.isHrdOrAdmin" @change="values.m_kary_id = null" class="w-4 h-4 text-blue-600 bg-gray-100 border-gray-300 focus:ring-blue-500 dark:focus:ring-blue-600 dark:ring-offset-gray-800 focus:ring-2 dark:bg-gray-700 dark:border-gray-600"/>
-                  <label class="ml-2  font-medium text-gray-900 dark:text-gray-300">Iya</label>
-                </div>
-                <div class="flex items-center col-span-6">
-                  <input type="radio" :value="false" v-model="values.is_all_kary" :disabled="!actionText || !respoScope.isHrdOrAdmin" class="w-4 h-4 text-blue-600 bg-gray-100 border-gray-300 focus:ring-blue-500 dark:focus:ring-blue-600 dark:ring-offset-gray-800 focus:ring-2 dark:bg-gray-700 dark:border-gray-600"/>
-                  <label class="ml-2  font-medium text-gray-900 dark:text-gray-300">Tidak</label>
-                </div>
+          <label class="col-span-12 font-semibold">Potongan Seluruh Karyawan <label class="text-red-500 space-x-0 pl-0">*</label></label>
+          <!-- Tampilan Mode View (Read-Only) -->
+          <div v-if="!actionText" class="col-span-12 py-2">
+            <span v-if="values.is_all_kary" class="inline-flex items-center px-3 py-1.5 rounded-md text-xs font-semibold bg-blue-100 text-blue-800 border border-blue-200">
+              <icon fa="users" class="mr-1.5" /> Ya (Berlaku untuk Seluruh Karyawan)
+            </span>
+            <span v-else class="inline-flex items-center px-3 py-1.5 rounded-md text-xs font-semibold bg-gray-100 text-gray-700 border border-gray-200">
+              <icon fa="user" class="mr-1.5" /> Tidak (Hanya Karyawan Tertentu)
+            </span>
+          </div>
+          <!-- Tampilan Mode Edit / Tambah -->
+          <div v-else class="col-span-12 py-2">
+            <div class="grid grid-cols-12">
+              <div class="flex items-center col-span-6 cursor-pointer" @click="values.is_all_kary = true; values.m_kary_id = null;">
+                <input type="radio" :value="true" v-model="values.is_all_kary" @change="values.m_kary_id = null" class="w-4 h-4 text-blue-600 bg-gray-100 border-gray-300 focus:ring-blue-500 dark:focus:ring-blue-600 dark:ring-offset-gray-800 focus:ring-2 dark:bg-gray-700 dark:border-gray-600 cursor-pointer"/>
+                <label class="ml-2 font-medium text-gray-900 dark:text-gray-300 cursor-pointer">Iya</label>
+              </div>
+              <div class="flex items-center col-span-6 cursor-pointer" @click="values.is_all_kary = false;">
+                <input type="radio" :value="false" v-model="values.is_all_kary" class="w-4 h-4 text-blue-600 bg-gray-100 border-gray-300 focus:ring-blue-500 dark:focus:ring-blue-600 dark:ring-offset-gray-800 focus:ring-2 dark:bg-gray-700 dark:border-gray-600 cursor-pointer"/>
+                <label class="ml-2 font-medium text-gray-900 dark:text-gray-300 cursor-pointer">Tidak</label>
               </div>
             </div>
+          </div>
         </div>
         <div class="flex flex-col gap-2">
           <label
