@@ -100,6 +100,24 @@ onBeforeMount(async () => {
         delete initialValues.nomor
         initialValues.tgl = new Date().toISOString().split('T')[0]
       }
+
+      if (initialValues.m_kary_id) {
+        try {
+          const karyRes = await fetch(`${store.server.url_backend}/operation/m_kary/${initialValues.m_kary_id}?simplest=true`, {
+            headers: {
+              'Content-Type': 'Application/json',
+              Authorization: `${store.user.token_type} ${store.user.token}`
+            }
+          })
+          if (karyRes.ok) {
+            const karyJson = await karyRes.json()
+            const karyData = karyJson.data || karyJson
+            initialValues.nama_karyawan = karyData.nama_lengkap || karyData.nama_depan || ''
+          }
+        } catch (e) {
+          // fallback jika fetch detail gagal
+        }
+      }
     } catch (err) {
       isBadForm.value = true
       swal.fire({
@@ -194,9 +212,35 @@ function onReset() {
 
 function onSave() {
   try {
+    formErrors.value = {}
+    const errors = {}
+
+    if (!values.m_kary_id) errors.m_kary_id = ['NIK / Karyawan wajib dipilih']
+    if (!values.tgl) errors.tgl = ['Tanggal Mutasi wajib diisi']
+    if (!values.tipe_mutasi) errors.tipe_mutasi = ['Tipe Mutasi wajib dipilih terlebih dahulu']
+    if (!values.m_devisi_baru_id) errors.m_devisi_baru_id = ['Divisi Baru wajib dipilih']
+    if (!values.m_dept_baru_id) errors.m_dept_baru_id = ['Departemen Baru wajib dipilih']
+    if (!values.m_posisi_baru_id) errors.m_posisi_baru_id = ['Posisi Baru wajib dipilih']
+    if (!values.m_standart_baru_id) errors.m_standart_baru_id = ['Standar Gaji Baru wajib dipilih']
+    if (!values.no_dokumen) errors.no_dokumen = ['Nomor Dokumen wajib diisi']
+    if (!values.file_dokumen) errors.file_dokumen = ['File Dokumen wajib diunggah']
+
+    if (Object.keys(errors).length > 0) {
+      formErrors.value = errors
+      swal.fire({
+        icon: 'error',
+        title: 'Data Belum Lengkap',
+        text: 'Harap lengkapi seluruh kolom wajib bertanda bintang (*).'
+      })
+      return
+    }
+
     const isCreating = ['Create', 'Copy', 'Tambah'].includes(actionText.value)
     const dataURL = `${store.server.url_backend}/operation${endpointApi}${isCreating ? '' : ('/' + route.params.id)}`
     isRequesting.value = true
+
+    const payload = { ...values }
+    delete payload.nama_karyawan
 
     fetch(dataURL, {
       method: isCreating ? 'POST' : 'PUT',
@@ -204,7 +248,7 @@ function onSave() {
         'Content-Type': 'Application/json',
         Authorization: `${store.user.token_type} ${store.user.token}`
       },
-      body: JSON.stringify(values)
+      body: JSON.stringify(payload)
     }).then(async (res) => {
       if (!res.ok) {
         const responseJson = await res.json().catch(() => ({}))
