@@ -219,6 +219,10 @@ onBeforeMount(async () => {
       })
     }
     isRequesting.value = false
+  } else {
+    if (!scope.isUnrestricted && scope.dirId) {
+      initialValues.m_dir_id = scope.dirId
+    }
   }
   for (const key in initialValues) {
     values[key] = initialValues[key]
@@ -239,6 +243,9 @@ function onReset() {
     if (res.isConfirmed) {
       for (const key in initialValues) {
         values[key] = initialValues[key]
+      }
+      if (!isRead && !respoScope.value.isUnrestricted && respoScope.value.dirId) {
+        values.m_dir_id = respoScope.value.dirId
       }
     }
   })

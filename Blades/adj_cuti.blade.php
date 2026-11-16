@@ -41,24 +41,40 @@
             :errorText="formErrors.nomor?'failed':''" @input="v=>values.nomor=v" :hints="formErrors.nomor"
             :check="false" label="" placeholder="Nomor" />
         </div>
-        <div v-show="adjKary" class="grid grid-cols-2 gap-2">
-          <div>
-            <label class="col-span-12">Jatah Cuti Tahunan<label class="text-red-500 space-x-0 pl-0"></label></label>
-            <FieldX :bind="{ readonly: true }" type="number" class="col-span-12 py-2 !mt-0 w-full"
-              :value="values.cuti_reguler" label="" placeholder="Tuliskan Jatah Cuti Reguler" :errorText="formErrors.cuti_reguler?'failed':''"
-              @input="v=>values.cuti_reguler=v" :hints="formErrors.cuti_reguler" :check="false"
-            />
-          </div>
-          <div>
-            <label class="col-span-12">Sisa Cuti Tahunan<label class="text-red-500 space-x-0 pl-0"></label></label>
-            <FieldX :bind="{ readonly: true }" type="number" class="col-span-12 py-2 !mt-0 w-full"
-              :value="values.sisa_cuti_reguler" label="" placeholder="Tuliskan Sisa Jatah Cuti Reguler" :errorText="formErrors.sisa_cuti_reguler?'failed':''"
-              @input="v=>values.sisa_cuti_reguler=v" :hints="formErrors.sisa_cuti_reguler" :check="false"
-            />
-            <h5 v-show="values.tipe_key == '02' || !values.tipe_key" class="text-red-600 !mt-[-0.5rem] text-right">Hasil Sisa Cuti Tahunan : {{informasiCuti.sisa_cuti_reguler}}</h5>
-          </div>
+        <div>
+          <label class="font-semibold">Company<span class="text-red-500 space-x-0 pl-0"></span></label>
+          <FieldSelect
+            :bind="{ disabled: isRead || !(respoScope.isUnrestricted && respoScope.isHrdOrAdmin), clearable: Boolean(!isRead && respoScope.isUnrestricted && respoScope.isHrdOrAdmin) }"
+            class="w-full py-2 !mt-0"
+            :value="values.m_dir_id"
+            @input="(v)=>{
+              values.m_dir_id = v
+              if(!v){
+                values.m_kary_id = null
+                adjKary = false
+              }
+            }"
+            :errorText="formErrors.m_dir_id?'failed':''"
+            :hints="formErrors.m_dir_id"
+            placeholder="Pilih Company"
+            label=""
+            displayField="nama"
+            valueField="id"
+            :api="{
+                url: `${store.server.url_backend}/operation/m_dir`,
+                headers: {
+                  'Content-Type': 'Application/json',
+                  Authorization: `${store.user.token_type} ${store.user.token}`
+                },
+                params: {
+                  simplest:true,
+                  where: respoScope.isLockedMissing ? '1=0' : ((!respoScope.isUnrestricted && respoScope.dirId) ? `this.id=${respoScope.dirId} AND this.is_active='true'` : `this.is_active='true'`),
+                  transform:false,
+                }
+            }"
+            :check="false"
+          />
         </div>
-        <!-- Field Cuti Masa Kerja dan Cuti P24 disembunyikan (P24 langsung memotong cuti tahunan dan cuti masa kerja tidak digunakan) -->
         <div>
           <label class="col-span-12">Tanggal<label class="text-red-500 space-x-0 pl-0">*</label></label>
           <FieldX :bind="{ readonly: true, disabled:true }" type='date' class="w-full py-2 !mt-0" :value="values.date"
@@ -83,7 +99,7 @@
                 }else{              
                   infoCuti(v.id)
                   values.value=null
-                  values.m_dir_id = v['m_dir.id'] || v.m_dir_id || (v.m_dir ? v.m_dir.id : null)
+                  values.m_dir_id = v['m_dir.id'] || v.m_dir_id || (v.m_dir ? v.m_dir.id : values.m_dir_id)
                   values.m_comp_id = v['m_comp.id'] || v.m_comp_id || store.user.data?.m_comp_id || 1
                 }
               }"
@@ -93,7 +109,7 @@
                   headers: { 'Content-Type': 'Application/json', Authorization: `${store.user.token_type} ${store.user.token}`},
                   params: {
                     simplest:true,
-                    where: respoScope.isLockedMissing ? '1=0' : ((!respoScope.isUnrestricted && respoScope.dirId ? `this.m_dir_id=${respoScope.dirId} AND ` : '') + (!respoScope.isUnrestricted && respoScope.divId ? `this.m_divisi_id=${respoScope.divId} AND ` : '') + (!respoScope.isUnrestricted && respoScope.deptId ? `this.m_dept_id=${respoScope.deptId} AND ` : '') + `this.is_active='true'`),
+                    where: respoScope.isLockedMissing ? '1=0' : ((values.m_dir_id ? `this.m_dir_id=${values.m_dir_id} AND ` : (!respoScope.isUnrestricted && respoScope.dirId ? `this.m_dir_id=${respoScope.dirId} AND ` : '')) + (!respoScope.isUnrestricted && respoScope.divId ? `this.m_divisi_id=${respoScope.divId} AND ` : '') + (!respoScope.isUnrestricted && respoScope.deptId ? `this.m_dept_id=${respoScope.deptId} AND ` : '') + `this.is_active='true'`),
                     searchfield:'this.id, this.nama_depan, this.nama_belakang, this.nama_lengkap, this.nik, m_divisi.nama, m_zona.nama, m_dir.nama',
                   }
                 }" placeholder="Pilih Karyawan" label="" :check="false" :columns="[
@@ -161,6 +177,24 @@
                 cellClass: ['border-r', '!border-gray-200', 'justify-center']
               },                                         
             ]" />
+        </div>
+
+        <div v-show="adjKary" class="col-span-2 grid grid-cols-2 gap-2">
+          <div>
+            <label class="col-span-12 font-semibold">Jatah Cuti Tahunan<label class="text-red-500 space-x-0 pl-0"></label></label>
+            <FieldX :bind="{ readonly: true }" type="number" class="col-span-12 py-2 !mt-0 w-full"
+              :value="values.cuti_reguler" label="" placeholder="Tuliskan Jatah Cuti Reguler" :errorText="formErrors.cuti_reguler?'failed':''"
+              @input="v=>values.cuti_reguler=v" :hints="formErrors.cuti_reguler" :check="false"
+            />
+          </div>
+          <div>
+            <label class="col-span-12 font-semibold">Sisa Cuti Tahunan<label class="text-red-500 space-x-0 pl-0"></label></label>
+            <FieldX :bind="{ readonly: true }" type="number" class="col-span-12 py-2 !mt-0 w-full"
+              :value="values.sisa_cuti_reguler" label="" placeholder="Tuliskan Sisa Jatah Cuti Reguler" :errorText="formErrors.sisa_cuti_reguler?'failed':''"
+              @input="v=>values.sisa_cuti_reguler=v" :hints="formErrors.sisa_cuti_reguler" :check="false"
+            />
+            <h5 v-show="values.tipe_key == '02' || !values.tipe_key" class="text-red-600 !mt-[-0.5rem] text-right">Hasil Sisa Cuti Tahunan : {{informasiCuti.sisa_cuti_reguler}}</h5>
+          </div>
         </div>
 
         <div>
