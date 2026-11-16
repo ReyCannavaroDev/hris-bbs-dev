@@ -58,8 +58,20 @@
                 headers: { 'Content-Type': 'Application/json', Authorization: `${store.user.token_type} ${store.user.token}`},
                 params: {
                   simplest:true,
-                  where: `this.is_active = 'true'`,
-                  selectfield: 'id,modul,menu'
+                  where: `this.is_active = 'true' AND (this.modul LIKE 't_%' OR this.endpoint LIKE '/t_%' OR this.path LIKE 't_%' OR this.modul ILIKE '%transaksi%') AND this.path NOT LIKE '%_det%'`,
+                  selectfield: 'id,modul,menu,path,endpoint'
+                },
+                onsuccess:(response)=>{
+                  if (response && Array.isArray(response.data)) {
+                    response.data = response.data.filter(item => {
+                      const path = (item.path || item.endpoint || item.modul || '').toLowerCase().replace(/^\//, '')
+                      const modul = (item.modul || '').toLowerCase()
+                      const isDet = path.includes('_det') || path.endsWith('_d')
+                      const isTrans = path.startsWith('t_') || modul.includes('transaksi') || modul.startsWith('t_')
+                      return isTrans && !isDet
+                    })
+                  }
+                  return response
                 }
             }" valueField="id" displayField="menu" :check="false" />
         </div>
@@ -206,8 +218,8 @@
                   valueField:'id',
                   bind: { clearable:true },
                   input(val, api){
-                    api.data['m_role_id']=val.id
-                    api.data['m_role.name']=val.name
+                    api.data['m_role_id']=val?.id ?? val
+                    api.data['m_role.name']=val?.name ?? ''
                   }
                 },
                 editable: Boolean(actionText),
@@ -238,8 +250,8 @@
                   valueField:'id',
                   bind: { clearable:true },
                   input(val, api){
-                    api.data['default_user.username']=val.text
-                    api.data['default_user_id']=val.id
+                    api.data['default_user.username']=val?.username ?? val?.text ?? ''
+                    api.data['default_user_id']=val?.id ?? val
                   }
                 },
                 editable: Boolean(actionText),

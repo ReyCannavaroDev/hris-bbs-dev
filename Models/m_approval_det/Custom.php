@@ -11,8 +11,8 @@ class m_approval_det extends \App\Models\BasicModels\m_approval_det
     
     public $fileColumns    = [ /*file_column*/ ];
 
-    //public $createAdditionalData = ["creator_id"=>"auth:id"];
-    //public $updateAdditionalData = ["last_editor_id"=>"auth:id"];
+    public $createAdditionalData = ["creator_id" => "auth:id"];
+    public $updateAdditionalData = ["last_editor_id" => "auth:id"];
 
     
 }

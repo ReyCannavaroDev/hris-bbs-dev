@@ -93,6 +93,8 @@ function populateFromInitial() {
     values.m_menu_id = null
     values.desc = ''
     values.is_active = true
+    values.m_comp_id = currentUser?.m_comp_id || 1
+    values.m_dir_id = currentUser?.m_dir_id || null
     detailArr.value = [{ tipe: 'MENGAJUKAN', level: 1, is_full_approve: false, is_skippable: false }]
   } else {
     values.nama = actionText.value === 'Copy' ? (initialData.nama ? `${initialData.nama} - Copy` : '') : (initialData.nama || '')
@@ -296,10 +298,10 @@ function onSave() {
           m_menu_id: values.m_menu_id,
           desc: values.desc || null,
           is_active: values.is_active ? 1 : 0,
+          m_comp_id: values.m_comp_id || currentUser?.m_comp_id || 1,
+          m_dir_id: values.m_dir_id || currentUser?.m_dir_id || null,
           m_approval_det: cleanDetails
         }
-        if (values.m_comp_id) payload.m_comp_id = values.m_comp_id
-        if (values.m_dir_id) payload.m_dir_id = values.m_dir_id
 
         const res = await fetch(dataURL, {
           method: isCreating ? 'POST' : 'PUT',
@@ -313,7 +315,8 @@ function onSave() {
           if ([400, 422].includes(res.status)) {
             const responseJson = await res.json()
             formErrors.value = responseJson.errors || {}
-            throw new Error(responseJson.message || (Array.isArray(responseJson.errors) ? responseJson.errors[0] : "Failed when trying to post data"))
+            const errorMsg = responseJson.message || (Array.isArray(responseJson.errors) ? responseJson.errors[0] : (responseJson.errors && typeof responseJson.errors === 'object' ? Object.values(responseJson.errors).flat()[0] : "Failed when trying to post data"))
+            throw new Error(errorMsg)
           } else {
             throw new Error("Failed when trying to post data")
           }
