@@ -98,6 +98,7 @@ onBeforeMount(async () => {
       if (route.query.action === 'Copy') {
         initialValues.status = 'DRAFT'
         delete initialValues.nomor
+        delete initialValues.id
         initialValues.tgl = new Date().toISOString().split('T')[0]
       }
 
@@ -113,6 +114,14 @@ onBeforeMount(async () => {
             const karyJson = await karyRes.json()
             const karyData = karyJson.data || karyJson
             initialValues.nama_karyawan = karyData.nama_lengkap || karyData.nama_depan || ''
+            if (route.query.action === 'Copy') {
+              initialValues.m_divisi_lama_id = karyData.m_divisi_id || initialValues.m_divisi_lama_id
+              initialValues.m_dept_lama_id = karyData.m_dept_id || null
+              initialValues.m_posisi_lama_id = karyData.m_posisi_id || initialValues.m_posisi_lama_id
+              initialValues.m_standart_posisi_id = karyData.m_standart_gaji_id || initialValues.m_standart_posisi_id
+              initialValues.gaji_pokok_lama = karyData.gaji_pokok || 0
+              initialValues.gaji_acuan_lama = karyData.gaji_acuan || 0
+            }
           }
         } catch (e) {
           // fallback jika fetch detail gagal
@@ -241,6 +250,10 @@ function onSave() {
 
     const payload = { ...values }
     delete payload.nama_karyawan
+    if (isCreating) {
+      delete payload.id
+      delete payload.nomor
+    }
 
     fetch(dataURL, {
       method: isCreating ? 'POST' : 'PUT',
@@ -338,7 +351,6 @@ const landing = reactive({
       icon: 'copy',
       title: "Copy",
       class: 'bg-gray-600 text-light-100',
-            show: (row) => row.status?.toUpperCase() !== 'POSTED',
       click(row) {
         router.push(`${route.path}/${row.id}?action=Copy&`+tsId)
       }

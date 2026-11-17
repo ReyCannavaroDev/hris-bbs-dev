@@ -33,21 +33,44 @@ class t_mutasi extends \App\Models\BasicModels\t_mutasi
     public function createBefore($model, $arrayData, $metaData, $id = null)
     {
         $karyId = $arrayData['m_kary_id'] ?? null;
-        $mDirId = $arrayData['m_dir_id'] ?? null;
-        $mCompId = $arrayData['m_comp_id'] ?? null;
-        $kary = null;
-
-        if ($karyId) {
-            $kary = \DB::table('m_kary')->where('id', $karyId)->first();
-            if ($kary) {
-                $mDirId = $mDirId ?: $kary->m_dir_id;
-                $mCompId = $mCompId ?: ($kary->m_comp_id ?: 1);
-            }
+        if (empty($karyId)) {
+            return [
+                "status" => "error",
+                "message" => "NIK / Karyawan wajib dipilih.",
+                "errors" => ["m_kary_id" => ["NIK / Karyawan wajib dipilih."]]
+            ];
         }
 
-        // Ambil nilai gaji pokok & acuan lama dari master karyawan
-        $gajiPokokLama = $arrayData['gaji_pokok_lama'] ?? ($kary ? ($kary->gaji_pokok ?: 0) : 0);
-        $gajiAcuanLama = $arrayData['gaji_acuan_lama'] ?? ($kary ? ($kary->gaji_acuan ?: 0) : 0);
+        // Cek apakah karyawan masih memiliki transaksi mutasi aktif berstatus DRAFT
+        $existingDraft = \DB::table('t_mutasi')
+            ->where('m_kary_id', $karyId)
+            ->where('status', 'DRAFT')
+            ->first();
+        if ($existingDraft) {
+            return [
+                "status" => "error",
+                "message" => "Karyawan ini masih memiliki transaksi mutasi aktif berstatus DRAFT (Nomor: " . ($existingDraft->nomor ?: '-') . "). Selesaikan atau batalkan transaksi tersebut terlebih dahulu sebelum membuat mutasi baru.",
+                "errors" => ["m_kary_id" => ["Karyawan ini masih memiliki transaksi mutasi aktif berstatus DRAFT."]]
+            ];
+        }
+
+        $mDirId = $arrayData['m_dir_id'] ?? null;
+        $mCompId = $arrayData['m_comp_id'] ?? null;
+        $kary = \DB::table('m_kary')->where('id', $karyId)->first();
+
+        if ($kary) {
+            $mDirId = $mDirId ?: $kary->m_dir_id;
+            $mCompId = $mCompId ?: ($kary->m_comp_id ?: 1);
+        }
+
+        // Ambil data divisi, departemen, posisi, dan gaji aktual dari master karyawan
+        $divisiLamaId   = $kary ? $kary->m_divisi_id : ($arrayData['m_divisi_lama_id'] ?? null);
+        $deptLamaId     = $kary ? $kary->m_dept_id : ($arrayData['m_dept_lama_id'] ?? null);
+        $posisiLamaId   = $kary ? $kary->m_posisi_id : ($arrayData['m_posisi_lama_id'] ?? null);
+        $standartLamaId = $kary ? $kary->m_standart_gaji_id : ($arrayData['m_standart_posisi_id'] ?? null);
+        $gajiPokokLama  = $kary ? ($kary->gaji_pokok ?: 0) : ($arrayData['gaji_pokok_lama'] ?? 0);
+        $gajiAcuanLama  = $kary ? ($kary->gaji_acuan ?: 0) : ($arrayData['gaji_acuan_lama'] ?? 0);
+
         $gajiPokokBaru = $arrayData['gaji_pokok_baru'] ?? $gajiPokokLama;
         $gajiAcuanBaru = $arrayData['gaji_acuan_baru'] ?? $gajiAcuanLama;
 
@@ -65,11 +88,21 @@ class t_mutasi extends \App\Models\BasicModels\t_mutasi
             "status" => "DRAFT",
             "m_dir_id" => $mDirId,
             "m_comp_id" => $mCompId ?: 1,
+            "m_divisi_lama_id" => $divisiLamaId,
+            "m_dept_lama_id" => $deptLamaId,
+            "m_posisi_lama_id" => $posisiLamaId,
+            "m_standart_posisi_id" => $standartLamaId,
             "gaji_pokok_lama" => (float)$gajiPokokLama,
             "gaji_pokok_baru" => (float)$gajiPokokBaru,
             "gaji_acuan_lama" => (float)$gajiAcuanLama,
             "gaji_acuan_baru" => (float)$gajiAcuanBaru,
         ]);
+
+        unset(
+            $newArrayData['id'],
+            $newArrayData['created_at'],
+            $newArrayData['updated_at']
+        );
 
         return [
             "model" => $model,
@@ -82,13 +115,49 @@ class t_mutasi extends \App\Models\BasicModels\t_mutasi
         $existing = \DB::table('t_mutasi')->where('id', $id)->first();
         if ($existing && strtoupper($existing->status) === 'POSTED') {
             return [
-                "model" => $model,
-                "data" => $arrayData,
-                "errors" => ["Data transaksi yang sudah berstatus POSTED tidak dapat diubah."],
+                "status" => "error",
+                "message" => "Data transaksi yang sudah berstatus POSTED tidak dapat diubah.",
+                "errors" => ["status" => ["Data transaksi yang sudah berstatus POSTED tidak dapat diubah."]],
             ];
         }
 
         $karyId = $arrayData['m_kary_id'] ?? ($existing ? $existing->m_kary_id : null);
+        if ($karyId) {
+            // Cek apakah ada draft mutasi lain untuk karyawan ini selain ID transaksi ini
+            $otherDraft = \DB::table('t_mutasi')
+                ->where('m_kary_id', $karyId)
+                ->where('status', 'DRAFT')
+                ->where('id', '!=', $id)
+                ->first();
+            if ($otherDraft) {
+                return [
+                    "status" => "error",
+                    "message" => "Terdapat transaksi mutasi DRAFT lain untuk karyawan ini (Nomor: " . ($otherDraft->nomor ?: '-') . ").",
+                    "errors" => ["m_kary_id" => ["Terdapat transaksi mutasi DRAFT lain untuk karyawan ini."]]
+                ];
+            }
+
+            // Validasi integritas: pastikan data aktual karyawan saat ini di m_kary masih cocok dengan data lama pada transaksi ini
+            $kary = \DB::table('m_kary')->where('id', $karyId)->first();
+            if ($kary) {
+                $divisiLama = $arrayData['m_divisi_lama_id'] ?? ($existing ? $existing->m_divisi_lama_id : null);
+                $deptLama   = $arrayData['m_dept_lama_id'] ?? ($existing ? $existing->m_dept_lama_id : null);
+                $posisiLama = $arrayData['m_posisi_lama_id'] ?? ($existing ? $existing->m_posisi_lama_id : null);
+
+                $isDivisiBeda = (int)($kary->m_divisi_id ?? 0) !== (int)($divisiLama ?? 0);
+                $isDeptBeda   = (int)($kary->m_dept_id ?? 0) !== (int)($deptLama ?? 0);
+                $isPosisiBeda = (int)($kary->m_posisi_id ?? 0) !== (int)($posisiLama ?? 0);
+
+                if ($isDivisiBeda || $isDeptBeda || $isPosisiBeda) {
+                    return [
+                        "status" => "error",
+                        "message" => "Data transaksi mutasi ini sudah tidak valid karena data divisi, departemen, atau posisi aktual karyawan saat ini telah berubah (telah dimutasi pada transaksi lain). Transaksi ini tidak dapat disimpan.",
+                        "errors" => ["m_divisi_lama_id" => ["Divisi/Departemen/Posisi lama sudah tidak sesuai dengan data aktual karyawan saat ini."]]
+                    ];
+                }
+            }
+        }
+
         $mDirId = $arrayData['m_dir_id'] ?? ($existing ? $existing->m_dir_id : null);
         $mCompId = $arrayData['m_comp_id'] ?? ($existing ? $existing->m_comp_id : null);
 
@@ -117,8 +186,9 @@ class t_mutasi extends \App\Models\BasicModels\t_mutasi
             // Begin a database transaction
             \DB::beginTransaction();
 
-            $data = t_mutasi::find($request->id);
+            $data = \DB::table('t_mutasi')->where('id', $request->id)->first();
             if (!$data) {
+                \DB::rollBack();
                 return response()->json(
                     ["error" => "Data tidak ditemukan."],
                     404
@@ -126,60 +196,64 @@ class t_mutasi extends \App\Models\BasicModels\t_mutasi
             }
 
             if (strtoupper($data->status) === 'POSTED') {
+                \DB::rollBack();
                 return response()->json(
                     ["error" => "Data transaksi mutasi ini sudah berstatus POSTED."],
                     422
                 );
             }
 
-            $karyawan = \App\Models\CustomModels\m_kary::find($data["m_kary_id"]);
+            $karyawan = \DB::table('m_kary')->where('id', $data->m_kary_id)->first();
             if (!$karyawan) {
+                \DB::rollBack();
                 return response()->json(
                     ["error" => "Data karyawan tidak ditemukan."],
                     404
                 );
             }
 
-            // Validasi integritas: pastikan kondisi karyawan saat ini di m_kary masih sama dengan data lama di transaksi ini
-            if (
-                $karyawan->m_divisi_id != $data["m_divisi_lama_id"] ||
-                ($data["m_dept_lama_id"] && $karyawan->m_dept_id != $data["m_dept_lama_id"]) ||
-                $karyawan->m_posisi_id != $data["m_posisi_lama_id"]
-            ) {
+            // Validasi integritas: pastikan kondisi divisi, departemen, dan posisi karyawan saat ini di m_kary masih sama dengan data lama di transaksi ini
+            $isDivisiBeda = (int)($karyawan->m_divisi_id ?? 0) !== (int)($data->m_divisi_lama_id ?? 0);
+            $isDeptBeda   = (int)($karyawan->m_dept_id ?? 0) !== (int)($data->m_dept_lama_id ?? 0);
+            $isPosisiBeda = (int)($karyawan->m_posisi_id ?? 0) !== (int)($data->m_posisi_lama_id ?? 0);
+
+            if ($isDivisiBeda || $isDeptBeda || $isPosisiBeda) {
                 \DB::rollBack();
                 return response()->json(
-                    ["error" => "Data karyawan saat ini sudah berubah atau telah dimutasi sebelumnya. Divisi/Departemen/Posisi lama pada data ini sudah tidak sesuai dengan data karyawan saat ini, sehingga tidak dapat diposting."],
+                    ["error" => "Data transaksi mutasi ini sudah tidak valid karena karyawan bersangkutan telah dimutasi sebelumnya (Divisi/Departemen/Posisi lama pada data ini sudah tidak sesuai dengan data aktual karyawan saat ini). Transaksi ini tidak dapat diposting."],
                     422
                 );
             }
 
-            $update = $data->update([
+            $update = \DB::table('t_mutasi')->where('id', $data->id)->update([
                 "status" => "POSTED",
+                "updated_at" => date('Y-m-d H:i:s'),
             ]);
 
             $updateKaryPayload = [
-                "m_divisi_id" => $data["m_devisi_baru_id"],
-                "m_dept_id" => $data["m_dept_baru_id"],
-                "m_posisi_id" => $data["m_posisi_baru_id"],
-                "m_standart_gaji_id" => $data["m_standart_baru_id"],
+                "m_divisi_id" => $data->m_devisi_baru_id,
+                "m_dept_id" => $data->m_dept_baru_id,
+                "m_posisi_id" => $data->m_posisi_baru_id,
+                "m_standart_gaji_id" => $data->m_standart_baru_id,
+                "updated_at" => date('Y-m-d H:i:s'),
             ];
-            if ($data["m_dir_id"]) {
-                $updateKaryPayload["m_dir_id"] = $data["m_dir_id"];
+            if ($data->m_dir_id) {
+                $updateKaryPayload["m_dir_id"] = $data->m_dir_id;
             }
-            if ($data["m_comp_id"]) {
-                $updateKaryPayload["m_comp_id"] = $data["m_comp_id"];
+            if ($data->m_comp_id) {
+                $updateKaryPayload["m_comp_id"] = $data->m_comp_id;
             }
             // Sinkronisasi gaji pokok baru dan gaji acuan baru ke master karyawan
-            if (isset($data["gaji_pokok_baru"]) && (float)$data["gaji_pokok_baru"] > 0) {
-                $updateKaryPayload["gaji_pokok"] = (float)$data["gaji_pokok_baru"];
+            if (isset($data->gaji_pokok_baru) && (float)$data->gaji_pokok_baru > 0) {
+                $updateKaryPayload["gaji_pokok"] = (float)$data->gaji_pokok_baru;
             }
-            if (isset($data["gaji_acuan_baru"]) && (float)$data["gaji_acuan_baru"] > 0) {
-                $updateKaryPayload["gaji_acuan"] = (float)$data["gaji_acuan_baru"];
+            if (isset($data->gaji_acuan_baru) && (float)$data->gaji_acuan_baru > 0) {
+                $updateKaryPayload["gaji_acuan"] = (float)$data->gaji_acuan_baru;
             }
 
-            $updateKary = $karyawan->update($updateKaryPayload);
+            $updateKary = \DB::table('m_kary')->where('id', $karyawan->id)->update($updateKaryPayload);
 
-            if ($update && $updateKary) {
+            if ($update !== false && $updateKary !== false) {
                 // If both updates are successful, commit the transaction
                 \DB::commit();
 
@@ -191,7 +265,7 @@ class t_mutasi extends \App\Models\BasicModels\t_mutasi
                 \DB::rollBack();
 
                 return response()->json(
-                    ["error" => "Gagal memperbarui status."],
+                    ["error" => "Gagal memperbarui status transaksi atau data master karyawan."],
                     500
                 );
             }
