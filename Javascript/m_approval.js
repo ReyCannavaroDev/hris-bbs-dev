@@ -141,7 +141,7 @@ onBeforeMount(async () => {
       const dataURL = `${store.server.url_backend}/operation${endpointApi}/${editedId}`
       isRequesting.value = true
 
-      const params = {}
+      const params = { join: true, transform: false, detail: true }
       const fixedParams = new URLSearchParams(params)
       const res = await fetch(dataURL + '?' + fixedParams, {
         headers: {
@@ -281,8 +281,8 @@ function onSave() {
             tipe: idx === 0 ? 'MENGAJUKAN' : dt.tipe,
             m_role_id: dt.m_role_id ? parseInt(dt.m_role_id) : null,
             default_user_id: dt.default_user_id ? parseInt(dt.default_user_id) : null,
-            is_full_approve: dt.is_full_approve ? 1 : 0,
-            is_skippable: dt.is_skippable ? 1 : 0
+            is_full_approve: Boolean(dt.is_full_approve),
+            is_skippable: Boolean(dt.is_skippable)
           }
           if (!isCreating && dt.id) {
             row.id = dt.id
@@ -297,7 +297,7 @@ function onSave() {
           nama: values.nama,
           m_menu_id: values.m_menu_id,
           desc: values.desc || null,
-          is_active: values.is_active ? 1 : 0,
+          is_active: Boolean(values.is_active),
           m_comp_id: values.m_comp_id || currentUser?.m_comp_id || 1,
           m_dir_id: values.m_dir_id || currentUser?.m_dir_id || null,
           m_approval_det: cleanDetails

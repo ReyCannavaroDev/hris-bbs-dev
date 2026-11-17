@@ -7,6 +7,9 @@ class m_approval extends \App\Models\BasicModels\m_approval
     public function __construct()
     {
         parent::__construct();
+        $this->casts = array_merge($this->casts, [
+            'is_active' => 'boolean',
+        ]);
     }
     
     public $fileColumns    = [ /*file_column*/ ];
@@ -17,19 +20,19 @@ class m_approval extends \App\Models\BasicModels\m_approval
     public function createBefore($model, $arrayData, $metaData, $id = null)
     {
         if (empty($arrayData['nama']) || trim((string)$arrayData['nama']) === '') {
-            return response([
+            return [
                 "status" => "error",
                 "message" => "Kolom Nama wajib diisi",
                 "errors" => ["nama" => ["Kolom Nama wajib diisi"]]
-            ], 422);
+            ];
         }
 
         if (empty($arrayData['m_menu_id'])) {
-            return response([
+            return [
                 "status" => "error",
                 "message" => "Kolom Menu wajib dipilih",
                 "errors" => ["m_menu_id" => ["Kolom Menu wajib dipilih"]]
-            ], 422);
+            ];
         }
 
         $details = $arrayData['m_approval_det'] ?? [];
@@ -40,11 +43,11 @@ class m_approval extends \App\Models\BasicModels\m_approval
         }, ARRAY_FILTER_USE_BOTH);
 
         if (count($details) <= 1 || empty($approvers)) {
-            return response([
+            return [
                 "status" => "error",
                 "message" => "Detail Approval wajib diisi minimal 1 level persetujuan (Mengetahui / Menyetujui)",
                 "errors" => ["m_approval_det" => ["Detail Approval wajib diisi minimal 1 level persetujuan (Mengetahui / Menyetujui)"]]
-            ], 422);
+            ];
         }
 
         if (empty($arrayData['m_comp_id'])) {
@@ -59,6 +62,8 @@ class m_approval extends \App\Models\BasicModels\m_approval
             $arrayData['creator_id'] = auth()->id();
         }
 
+        $arrayData['is_active'] = !empty($arrayData['is_active']) ? true : false;
+
         // Sanitize detail rows: ensure only valid columns for m_approval_det
         $currentUserId = auth()->check() ? auth()->id() : 1;
         $cleanedDetails = [];
@@ -66,11 +71,11 @@ class m_approval extends \App\Models\BasicModels\m_approval
             $row = is_array($d) ? $d : (array)$d;
             $cleanedDetails[] = [
                 'level' => (int)($row['level'] ?? ($idx + 1)),
-                'tipe' => $idx === 0 ? 'MENGAJUKAN' : ($row['tipe'] ?? 'MENGETAHUI'),
+                'tipe' => substr(trim((string)($idx === 0 ? 'MENGAJUKAN' : ($row['tipe'] ?? 'MENGETAHUI'))), 0, 10),
                 'm_role_id' => !empty($row['m_role_id']) ? (int)$row['m_role_id'] : null,
                 'default_user_id' => !empty($row['default_user_id']) ? (int)$row['default_user_id'] : null,
-                'is_full_approve' => !empty($row['is_full_approve']) ? 1 : 0,
-                'is_skippable' => !empty($row['is_skippable']) ? 1 : 0,
+                'is_full_approve' => !empty($row['is_full_approve']) ? true : false,
+                'is_skippable' => !empty($row['is_skippable']) ? true : false,
                 'creator_id' => $currentUserId,
                 'last_editor_id' => $currentUserId,
             ];
@@ -98,19 +103,19 @@ class m_approval extends \App\Models\BasicModels\m_approval
     public function updateBefore($model, $arrayData, $metaData, $id = null)
     {
         if (isset($arrayData['nama']) && trim((string)$arrayData['nama']) === '') {
-            return response([
+            return [
                 "status" => "error",
                 "message" => "Kolom Nama wajib diisi",
                 "errors" => ["nama" => ["Kolom Nama wajib diisi"]]
-            ], 422);
+            ];
         }
 
         if (isset($arrayData['m_menu_id']) && empty($arrayData['m_menu_id'])) {
-            return response([
+            return [
                 "status" => "error",
                 "message" => "Kolom Menu wajib dipilih",
                 "errors" => ["m_menu_id" => ["Kolom Menu wajib dipilih"]]
-            ], 422);
+            ];
         }
 
         if (empty($arrayData['m_comp_id'])) {
@@ -119,6 +124,10 @@ class m_approval extends \App\Models\BasicModels\m_approval
 
         if (empty($arrayData['last_editor_id']) && auth()->check()) {
             $arrayData['last_editor_id'] = auth()->id();
+        }
+
+        if (isset($arrayData['is_active'])) {
+            $arrayData['is_active'] = !empty($arrayData['is_active']) ? true : false;
         }
 
         if (isset($arrayData['m_approval_det'])) {
@@ -130,11 +139,11 @@ class m_approval extends \App\Models\BasicModels\m_approval
             }, ARRAY_FILTER_USE_BOTH);
 
             if (count($details) <= 1 || empty($approvers)) {
-                return response([
+                return [
                     "status" => "error",
                     "message" => "Detail Approval wajib diisi minimal 1 level persetujuan (Mengetahui / Menyetujui)",
                     "errors" => ["m_approval_det" => ["Detail Approval wajib diisi minimal 1 level persetujuan (Mengetahui / Menyetujui)"]]
-                ], 422);
+                ];
             }
 
             $currentUserId = auth()->check() ? auth()->id() : 1;
@@ -143,11 +152,11 @@ class m_approval extends \App\Models\BasicModels\m_approval
                 $row = is_array($d) ? $d : (array)$d;
                 $item = [
                     'level' => (int)($row['level'] ?? ($idx + 1)),
-                    'tipe' => $idx === 0 ? 'MENGAJUKAN' : ($row['tipe'] ?? 'MENGETAHUI'),
+                    'tipe' => substr(trim((string)($idx === 0 ? 'MENGAJUKAN' : ($row['tipe'] ?? 'MENGETAHUI'))), 0, 10),
                     'm_role_id' => !empty($row['m_role_id']) ? (int)$row['m_role_id'] : null,
                     'default_user_id' => !empty($row['default_user_id']) ? (int)$row['default_user_id'] : null,
-                    'is_full_approve' => !empty($row['is_full_approve']) ? 1 : 0,
-                    'is_skippable' => !empty($row['is_skippable']) ? 1 : 0,
+                    'is_full_approve' => !empty($row['is_full_approve']) ? true : false,
+                    'is_skippable' => !empty($row['is_skippable']) ? true : false,
                     'last_editor_id' => $currentUserId,
                 ];
                 if (!empty($row['id'])) {
